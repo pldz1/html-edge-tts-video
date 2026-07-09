@@ -1,0 +1,254 @@
+﻿# HTML edge-tts Video Factory
+
+This repo is a factory: it loads a video source folder, generates Chinese TTS and caption timing,
+records a stable HTML theme shell, then writes an MP4 under `.local/output/`.
+
+AI output is intentionally small:
+
+```text
+my-video-source/
+  scenes.json
+  body.html
+  media/ optional
+  captions.json optional after manual subtitle edits
+```
+
+The factory owns the runtime:
+
+```text
+themes/default/
+  index.html
+  runtime.js
+  theme.css
+```
+
+The rendered video is clean: preview controls, scrubbers, headers, timecodes, and transport bars are
+hidden in render mode. The bottom chapter rail reads labels from `scenes.json.category`, reads timing
+from the generated `timeline.json`, and renders as one continuous progress rail.
+
+## Start Now
+
+Render the tracked starter:
+
+```bash
+python main.py tts --source templates/starter
+python main.py check
+python main.py render --output starter.mp4
+```
+
+Create an editable source folder:
+
+```bash
+python main.py init --target .local/work/my-video
+```
+
+Then edit:
+
+```text
+.local/work/my-video/scenes.json
+.local/work/my-video/body.html
+.local/work/my-video/media/ optional
+.local/work/my-video/captions.json optional, created by caption editor
+```
+
+Build it:
+
+```bash
+python main.py tts --source .local/work/my-video
+python main.py check
+python main.py render --output my-video.mp4
+```
+
+Edit generated captions like a meeting transcript:
+
+```bash
+python main.py captions --source .local/work/my-video
+```
+
+Open:
+
+```text
+http://127.0.0.1:8765/tools/captions.html
+```
+
+This creates or updates `captions.json`. It changes only on-screen subtitles, not narration audio.
+
+Use files downloaded from a web AI:
+
+```bash
+python main.py tts --source C:\Users\you\Downloads\my-video-source
+python main.py check
+python main.py render --output my-video.mp4
+```
+
+Final MP4 appears in:
+
+```text
+.local/output/
+```
+
+## Source Format
+
+`scenes.json` is the narration, scene order, and chapter rail source:
+
+```json
+[
+  {
+    "id": "intro",
+    "category": "总览",
+    "title": "视频从哪里开始",
+    "summary": "先说明本视频的切入点和路线。",
+    "narration": "中文旁白。"
+  }
+]
+```
+
+Rules:
+
+- The first scene must use `id: "intro"` and introduce what the video will cover.
+- Every scene needs `category`, `title`, `summary`, and `narration`.
+- `category` should be a short Chinese label, 2 to 12 characters.
+
+`body.html` is the visual content. Add one section per scene:
+
+```html
+<section class="content-scene scene" data-scene="intro">
+  <div class="scene-copy">
+    <div class="eyebrow">INTRO</div>
+    <h1>标题</h1>
+    <p class="summary">画面摘要。</p>
+  </div>
+</section>
+```
+
+Prefer visual explanation over text-only slides. Put structured HTML/CSS/SVG graphics inside
+`visual-board`: `diagram-flow`, `comparison-grid`, `metric-grid`, `formula-strip`, `concept-map`, or
+small inline SVG diagrams. Do not use canvas that needs JavaScript.
+
+Do not put app/runtime behavior into `body.html`. Avoid:
+
+```text
+<script>
+app.js
+play buttons
+scrubbers
+timecodes
+top bars
+transport bars
+progress-line
+chapter rail markup
+```
+
+Local media can be referenced relative to the source folder:
+
+```html
+<img src="media/diagram.png" alt="">
+```
+
+The theme runtime rebases these URLs when it loads `body.html`.
+
+`captions.json` is optional. It is created by the local caption editor after TTS has generated real
+WordBoundary timing. Do not ask a web AI to generate it.
+
+## Normal Loop
+
+When narration changes:
+
+```bash
+python main.py tts --source <source-folder>
+python main.py check
+python main.py render --output my-video.mp4
+```
+
+When only `body.html` or media changes:
+
+```bash
+python main.py load --source <source-folder>
+python main.py check
+python main.py preview
+python main.py render --output my-video.mp4
+```
+
+Preview URL:
+
+```text
+http://127.0.0.1:8765/themes/default/index.html
+```
+
+Voice preview URL:
+
+```text
+http://127.0.0.1:8765/tools/voices.html
+```
+
+## Commands
+
+```bash
+python main.py install        # install dependencies and Playwright browser
+python main.py init           # copy templates/starter to .local/work/starter
+python main.py load --source <folder>
+python main.py voices         # list Chinese edge-tts voices
+python main.py voice-preview  # generate local voice samples
+python main.py tts --source <folder>
+python main.py offline --source <folder>
+python main.py preview
+python main.py captions       # edit on-screen subtitles from timeline cues
+python main.py check
+python main.py render --output my-video.mp4
+```
+
+Render size examples:
+
+```bash
+python main.py render --size 1080p --output tutorial-1080p.mp4
+python main.py render --width 1080 --height 1920 --output vertical.mp4
+```
+
+## Build Workspace
+
+`main.py tts --source <folder>` copies source files into:
+
+```text
+.local/current/source/
+```
+
+and writes generated audio/timeline into:
+
+```text
+.local/current/assets/
+```
+
+These folders are ignored. They are build state, not source.
+
+## Git Boundary
+
+Do not commit generated or local work:
+
+```text
+.local/
+```
+
+Legacy generated folders are also ignored for older checkouts:
+
+```text
+.factory/
+work/
+assets/
+output/
+```
+
+Commit reusable factory changes here:
+
+```text
+SKILL.md
+agents/
+DESIGN.md
+docs/
+main.py
+pipeline/
+templates/starter/
+themes/
+tools/
+```
+
+`main.py` is the single CLI entrypoint.

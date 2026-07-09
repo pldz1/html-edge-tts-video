@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Video Studio</title>
+  <link rel="stylesheet" href="studio.css" />
+</head>
+<body>
+  <main class="studio-shell">
+    <header class="studio-header">
+      <div>
+        <div class="eyebrow">LOCAL VIDEO FACTORY</div>
+        <h1>Video Studio</h1>
+      </div>
+      <nav class="studio-actions">
+        <a href="../themes/default/index.html">Preview</a>
+        <a href="captions.html">Captions</a>
+        <a href="voices.html">Voices</a>
+      </nav>
+    </header>
+
+    <section class="studio-grid">
+      <section class="panel prompt-panel">
+        <div class="panel-title">
+          <span>Prompt Composer</span>
+          <button id="copyPromptButton" type="button">Copy</button>
+        </div>
+        <div class="field-grid">
+          <label>Topic<input id="topicInput" type="text" value="介绍一个本地 HTML edge-tts 视频工厂" /></label>
+          <label>Audience<input id="audienceInput" type="text" value="想用 AI 快速做中文说明视频的创作者" /></label>
+          <label>Tone<input id="toneInput" type="text" value="清晰、工程化、少废话" /></label>
+          <label>Scenes<input id="sceneCountInput" type="number" min="3" max="8" value="5" /></label>
+        </div>
+        <label class="wide-label">Notes<textarea id="notesInput">强调只生成 scenes.json 和 body.html，不要生成 app.js、播放控件、章节栏或字幕文件。</textarea></label>
+        <textarea id="promptOutput" class="prompt-output" spellcheck="false"></textarea>
+        <div class="provider-row">
+          <button data-provider="https://chat.openai.com/" type="button">ChatGPT</button>
+          <button data-provider="https://claude.ai/new" type="button">Claude</button>
+          <button data-provider="https://gemini.google.com/app" type="button">Gemini</button>
+        </div>
+      </section>
+
+      <section class="panel paste-panel">
+        <div class="panel-title">
+          <span>AI Response</span>
+          <button id="extractButton" type="button">Extract</button>
+        </div>
+        <textarea id="aiResponseInput" class="response-input" spellcheck="false" placeholder="Paste the AI response here."></textarea>
+        <div class="extract-grid">
+          <label>scenes.json<textarea id="scenesOutput" spellcheck="false"></textarea></label>
+          <label>body.html<textarea id="bodyOutput" spellcheck="false"></textarea></label>
+        </div>
+        <p id="statusText" class="status-text">Ready.</p>
+      </section>
+    </section>
+  </main>
+  <script src="studio.js"></script>
+</body>
+</html>

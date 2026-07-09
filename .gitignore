@@ -1,0 +1,30 @@
+# Python caches and virtualenvs
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# JavaScript dependencies and logs
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Factory workspace, local projects, generated media, and render outputs.
+.local/
+
+# Legacy generated folders kept ignored for older checkouts.
+.factory/
+work/
+content/
+renderer/
+output/
+assets/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

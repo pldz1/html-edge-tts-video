@@ -1,0 +1,133 @@
+:root {
+  --bg: #101114;
+  --surface: #1b1d22;
+  --line: rgba(246, 240, 230, .18);
+  --text: #fffaf0;
+  --muted: #b8b0a1;
+  --green: #78d7a2;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+body {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.voice-shell {
+  width: min(1080px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: 42px 0 56px;
+}
+
+.voice-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding-bottom: 28px;
+  border-bottom: 1px solid var(--line);
+}
+
+.eyebrow {
+  margin-bottom: 12px;
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .16em;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(40px, 6vw, 72px);
+  line-height: 1;
+}
+
+.voice-link {
+  padding: 10px 13px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--green);
+  text-decoration: none;
+  font-size: 12px;
+}
+
+.voice-summary {
+  display: grid;
+  grid-template-columns: 1fr 120px 120px;
+  gap: 12px;
+  margin: 22px 0;
+}
+
+.voice-summary div,
+.voice-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 250, 240, .06);
+}
+
+.voice-summary div {
+  padding: 14px;
+}
+
+.voice-summary span {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: .16em;
+}
+
+.voice-summary p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.voice-list {
+  display: grid;
+  gap: 10px;
+}
+
+.voice-card {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  align-items: center;
+  gap: 18px;
+  padding: 16px;
+}
+
+.voice-card h2 {
+  margin: 0 0 8px;
+  font-size: 17px;
+}
+
+.voice-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.voice-card audio {
+  width: 100%;
+}
+
+@media (max-width: 760px) {
+  .voice-header,
+  .voice-card {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .voice-summary {
+    grid-template-columns: 1fr;
+  }
+}

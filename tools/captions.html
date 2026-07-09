@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Caption Editor</title>
+  <link rel="stylesheet" href="captions.css" />
+</head>
+<body>
+  <main class="caption-shell">
+    <header class="caption-header">
+      <div>
+        <div class="eyebrow">CAPTION SOURCE / MANUAL PASS</div>
+        <h1>Caption editor</h1>
+      </div>
+      <nav class="caption-actions">
+        <a href="../themes/default/index.html">Preview</a>
+        <a href="voices.html">Voices</a>
+      </nav>
+    </header>
+
+    <section class="caption-status">
+      <div><span>STATUS</span><p id="statusText">loading...</p></div>
+      <div><span>CUES</span><p id="cueCount">--</p></div>
+      <div><span>DURATION</span><p id="durationText">--</p></div>
+    </section>
+
+    <section class="caption-editor">
+      <aside class="cue-list-panel">
+        <div class="panel-title">
+          <span>Transcript</span>
+          <input id="cueSearch" type="search" placeholder="Search text" />
+        </div>
+        <div id="cueList" class="cue-list" aria-live="polite"></div>
+      </aside>
+
+      <section class="cue-detail">
+        <div class="detail-meta">
+          <span id="cueIndex">--</span>
+          <span id="cueTime">--</span>
+          <span id="cueScene">--</span>
+        </div>
+        <div class="timing-editor">
+          <label for="cueStart">Start</label>
+          <input id="cueStart" type="number" min="0" step="0.01" />
+          <label for="cueEnd">End</label>
+          <input id="cueEnd" type="number" min="0" step="0.01" />
+          <button id="shiftEarlierButton" type="button">-0.1s</button>
+          <button id="shiftLaterButton" type="button">+0.1s</button>
+        </div>
+        <label for="cueText">Caption text</label>
+        <textarea id="cueText" spellcheck="false"></textarea>
+        <div class="detail-actions">
+          <button id="restoreButton" type="button">Restore generated</button>
+          <button id="saveButton" type="button">Save captions.json</button>
+        </div>
+        <audio id="narrationAudio" controls preload="metadata" src="/.local/current/assets/narration.mp3"></audio>
+      </section>
+    </section>
+  </main>
+  <script src="captions.js"></script>
+</body>
+</html>

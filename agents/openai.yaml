@@ -1,0 +1,7 @@
+interface:
+  display_name: "HTML edge-tts Video"
+  short_description: "Generate narrated HTML videos locally"
+  default_prompt: "Use $html-edge-tts-video to build a Chinese narrated MP4 from a scenes.json and body.html source folder."
+
+policy:
+  allow_implicit_invocation: true

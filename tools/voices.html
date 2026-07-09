@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>edge-tts Voice Preview</title>
+  <link rel="stylesheet" href="voices.css" />
+</head>
+<body class="voice-page">
+  <main class="voice-shell">
+    <header class="voice-header">
+      <div>
+        <div class="eyebrow">EDGE TTS / VOICE PREVIEW</div>
+        <h1>Chinese voice preview</h1>
+      </div>
+      <a class="voice-link" href="../themes/default/index.html">Back to video preview</a>
+    </header>
+
+    <section class="voice-summary">
+      <div><span>TEXT</span><p id="previewText">loading...</p></div>
+      <div><span>RATE</span><p id="previewRate">--</p></div>
+      <div><span>PITCH</span><p id="previewPitch">--</p></div>
+    </section>
+
+    <section id="voiceList" class="voice-list" aria-live="polite"></section>
+  </main>
+  <script src="voices.js"></script>
+</body>
+</html>
