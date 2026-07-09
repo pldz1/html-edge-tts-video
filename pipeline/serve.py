@@ -6,10 +6,12 @@ import json
 import os
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from typing import Any
+from urllib.parse import parse_qs, urlparse
 
 from captions import default_doc, load_effective_doc, load_timeline, save_doc
 from factory import ROOT, active_theme, theme_url
+from studio_api import ApiError, handle_get, handle_post
 
 
 class FactoryHandler(SimpleHTTPRequestHandler):
@@ -27,8 +29,41 @@ class FactoryHandler(SimpleHTTPRequestHandler):
     def send_error_json(self, status: int, message: str) -> None:
         self.send_json(status, {"error": message})
 
+    def send_redirect(self, location: str) -> None:
+        self.send_response(302)
+        self.send_header("Location", location)
+        self.end_headers()
+
+    def read_json_body(self) -> Any:
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError as exc:
+            raise ApiError(400, "invalid content length") from exc
+        if length <= 0 or length > 2_000_000:
+            raise ApiError(400, "invalid request body size")
+        try:
+            return json.loads(self.rfile.read(length).decode("utf-8"))
+        except json.JSONDecodeError as exc:
+            raise ApiError(400, str(exc)) from exc
+
     def do_GET(self) -> None:
-        path = urlparse(self.path).path
+        parsed = urlparse(self.path)
+        path = parsed.path
+        query = parse_qs(parsed.query)
+        if path in {"", "/"}:
+            self.send_redirect("/tools/studio.html")
+            return
+
+        try:
+            studio_response = handle_get(path, query)
+        except ApiError as exc:
+            self.send_error_json(exc.status, exc.message)
+            return
+        if studio_response:
+            status, payload = studio_response
+            self.send_json(status, payload)
+            return
+
         if path == "/api/captions":
             try:
                 timeline = load_timeline()
@@ -51,30 +86,40 @@ class FactoryHandler(SimpleHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = urlparse(self.path).path
-        if path != "/api/captions":
-            self.send_error_json(404, "unknown endpoint")
+        try:
+            payload = self.read_json_body()
+        except ApiError as exc:
+            self.send_error_json(exc.status, exc.message)
+            return
+
+        if not isinstance(payload, dict) and path != "/api/captions":
+            self.send_error_json(400, "request body must be a JSON object")
             return
 
         try:
-            length = int(self.headers.get("Content-Length", "0"))
-        except ValueError:
-            self.send_error_json(400, "invalid content length")
+            studio_response = handle_post(path, payload if isinstance(payload, dict) else {})
+        except ApiError as exc:
+            self.send_error_json(exc.status, exc.message)
             return
-        if length <= 0 or length > 2_000_000:
-            self.send_error_json(400, "invalid request body size")
-            return
-
-        try:
-            payload = json.loads(self.rfile.read(length).decode("utf-8"))
-            result = save_doc(payload)
-        except (json.JSONDecodeError, TypeError, ValueError) as exc:
-            self.send_error_json(400, str(exc))
-            return
-        except SystemExit as exc:
-            self.send_error_json(409, str(exc))
+        if studio_response:
+            status, result = studio_response
+            self.send_json(status, result)
             return
 
-        self.send_json(200, result)
+        if path == "/api/captions":
+            try:
+                result = save_doc(payload)
+            except (TypeError, ValueError) as exc:
+                self.send_error_json(400, str(exc))
+                return
+            except SystemExit as exc:
+                self.send_error_json(409, str(exc))
+                return
+
+            self.send_json(200, result)
+            return
+
+        self.send_error_json(404, "unknown endpoint")
 
 
 def main() -> None:

@@ -8,6 +8,7 @@
   --amber: #f0c46a;
   --red: #ef8f7d;
   --shadow: 0 28px 90px rgba(0, 0, 0, .42);
+  --preview-chrome-height: 76px;
 }
 
 * {
@@ -43,6 +44,19 @@ input {
   background-size: 36px 36px, 36px 36px, auto, auto;
 }
 
+html.preview-mode body {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+html.preview-mode .composition-shell {
+  width: min(100vw, calc((100vh - var(--preview-chrome-height)) * 16 / 9));
+  height: auto;
+  aspect-ratio: 16 / 9;
+  place-self: center;
+  overflow: hidden;
+}
+
 .stage {
   position: absolute;
   inset: 0;
@@ -50,7 +64,7 @@ input {
   min-height: 0;
   display: grid;
   place-items: center;
-  padding: clamp(32px, 6vh, 82px) clamp(26px, 5vw, 72px) clamp(132px, 22vh, 220px);
+  padding: clamp(32px, 6vh, 82px) clamp(26px, 5vw, 72px) clamp(126px, 19vh, 190px);
 }
 
 .content-scene {
@@ -401,36 +415,43 @@ html.render-mode .chapter-rail-fill {
   isolation: isolate;
   left: clamp(18px, 5vw, 76px);
   right: clamp(18px, 5vw, 76px);
-  bottom: clamp(16px, 4vh, 38px);
+  bottom: clamp(18px, 4vh, 34px);
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
-  gap: clamp(7px, 1vw, 12px);
+  align-items: end;
+  height: 54px;
+  gap: 0;
+}
+
+html.preview-mode .chapter-rail {
+  bottom: clamp(18px, 4vh, 34px);
 }
 
 .chapter-rail::before,
 .chapter-rail-fill {
   content: "";
   position: absolute;
-  inset: 0;
-  border-radius: 8px;
+  left: 0;
+  right: 0;
+  bottom: 10px;
+  border-radius: 999px;
   pointer-events: none;
 }
 
 .chapter-rail::before {
   z-index: 0;
-  border: 1px solid rgba(255, 250, 240, .12);
-  background: rgba(10, 11, 13, .34);
-  box-shadow: 0 16px 44px rgba(0, 0, 0, .2);
+  height: 3px;
+  background: rgba(255, 250, 240, .22);
+  transform: translateY(-50%);
 }
 
 .chapter-rail-fill {
   z-index: 0;
-  transform: scaleX(var(--rail-progress, 0));
+  height: 4px;
+  transform: translateY(-50%) scaleX(var(--rail-progress, 0));
   transform-origin: left center;
-  background:
-    linear-gradient(90deg, rgba(120, 215, 162, .36), rgba(240, 196, 106, .28)),
-    linear-gradient(90deg, transparent calc(100% - 2px), rgba(255, 250, 240, .5));
-  opacity: .86;
+  background: linear-gradient(90deg, rgba(120, 215, 162, .82), rgba(240, 196, 106, .78));
+  opacity: .78;
   transition: transform .12s linear;
 }
 
@@ -438,49 +459,79 @@ html.render-mode .chapter-rail-fill {
   position: relative;
   z-index: 1;
   min-width: 0;
-  min-height: clamp(42px, 6.4vh, 64px);
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  gap: 10px;
-  overflow: hidden;
-  padding: 10px 12px;
-  border: 1px solid rgba(255, 250, 240, .16);
-  border-radius: 8px;
-  background: rgba(10, 11, 13, .42);
+  min-height: 54px;
+  display: block;
+  overflow: visible;
+  padding: 0 8px 18px;
+  border: 0;
+  border-left: 1px solid rgba(255, 250, 240, .34);
+  border-radius: 0;
+  background: transparent;
   color: rgba(255, 250, 240, .58);
-  backdrop-filter: blur(5px);
+  backdrop-filter: none;
 }
 
-.chapter-index,
-.chapter-label {
-  position: relative;
+.chapter-tile:last-child {
+  border-right: 1px solid rgba(255, 250, 240, .28);
+}
+
+.chapter-tile::after {
+  content: "";
+  position: absolute;
   z-index: 1;
+  left: -4px;
+  bottom: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 250, 240, .48);
 }
 
 .chapter-index {
-  color: var(--amber);
-  font-size: clamp(10px, 1.2vw, 13px);
+  display: block;
+  color: rgba(255, 250, 240, .62);
+  font-size: clamp(8px, .9vw, 10px);
   font-weight: 820;
   font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 
 .chapter-label {
+  display: block;
   min-width: 0;
-  overflow-wrap: anywhere;
+  max-width: 100%;
+  overflow: hidden;
   color: inherit;
-  font-size: clamp(12px, 1.35vw, 15px);
-  font-weight: 760;
-  line-height: 1.2;
+  font-size: clamp(9px, 1vw, 11px);
+  font-weight: 720;
+  line-height: 1.25;
+  opacity: .88;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .chapter-tile.is-active {
-  border-color: rgba(120, 215, 162, .7);
+  border-left-color: rgba(120, 215, 162, .92);
   color: var(--text);
 }
 
+.chapter-tile.is-active::after {
+  background: var(--green);
+  box-shadow: 0 0 0 5px rgba(120, 215, 162, .16);
+}
+
+.chapter-tile.is-active .chapter-index,
+.chapter-tile.is-active .chapter-label {
+  opacity: 1;
+}
+
 .chapter-tile.is-done {
-  color: rgba(255, 250, 240, .78);
+  border-left-color: rgba(120, 215, 162, .55);
+  color: rgba(255, 250, 240, .7);
+}
+
+.chapter-tile.is-done::after {
+  background: rgba(120, 215, 162, .72);
 }
 
 .preview-chrome {
@@ -498,6 +549,14 @@ html.render-mode .chapter-rail-fill {
   border-radius: 8px;
   background: rgba(16, 17, 20, .82);
   backdrop-filter: blur(18px);
+}
+
+html.preview-mode .preview-chrome {
+  position: static;
+  width: min(calc(100vw - 16px), calc((100vh - var(--preview-chrome-height)) * 16 / 9));
+  min-height: calc(var(--preview-chrome-height) - 8px);
+  margin: 0 auto 8px;
+  align-self: end;
 }
 
 html.render-mode .preview-chrome {
@@ -561,7 +620,7 @@ html.render-mode .preview-chrome {
   }
 
   .stage {
-    padding: clamp(58px, 6vh, 128px) clamp(70px, 6vw, 150px) clamp(220px, 22vh, 360px);
+    padding: clamp(58px, 6vh, 128px) clamp(70px, 6vw, 150px) clamp(170px, 18vh, 290px);
   }
 
   .scene {
@@ -739,22 +798,33 @@ html.render-mode .preview-chrome {
   .chapter-rail {
     left: clamp(60px, 5vw, 150px);
     right: clamp(60px, 5vw, 150px);
-    bottom: clamp(36px, 4vh, 82px);
-    gap: 18px;
+    bottom: clamp(34px, 4vh, 68px);
+    height: 72px;
+  }
+
+  html.preview-mode .chapter-rail {
+    bottom: clamp(34px, 4vh, 68px);
   }
 
   .chapter-tile {
-    min-height: clamp(72px, 6.4vh, 120px);
-    gap: 16px;
-    padding: 18px 22px;
+    min-height: 72px;
+    padding: 0 12px 24px;
+  }
+
+  .chapter-tile::after {
+    left: -5px;
+    bottom: 7px;
+    width: 9px;
+    height: 9px;
   }
 
   .chapter-index {
-    font-size: clamp(15px, 1.5vh, 22px);
+    font-size: clamp(12px, 1vh, 16px);
   }
 
   .chapter-label {
-    font-size: clamp(18px, 1.8vh, 26px);
+    max-width: 180px;
+    font-size: clamp(11px, 1vh, 15px);
   }
 }
 
@@ -764,7 +834,7 @@ html.render-mode .preview-chrome {
   }
 
   .stage {
-    padding: clamp(110px, 6vh, 190px) clamp(140px, 6vw, 260px) clamp(350px, 22vh, 520px);
+    padding: clamp(110px, 6vh, 190px) clamp(140px, 6vw, 260px) clamp(300px, 18vh, 460px);
   }
 
   .scene {
@@ -853,17 +923,29 @@ html.render-mode .preview-chrome {
     font-size: clamp(48px, 2.8vh, 72px);
   }
 
+  .chapter-rail {
+    height: 104px;
+  }
+
   .chapter-tile {
-    min-height: clamp(118px, 6.4vh, 170px);
-    padding: 30px 36px;
+    min-height: 98px;
+    padding: 0 20px 32px;
+  }
+
+  .chapter-tile::after {
+    left: -7px;
+    bottom: 5px;
+    width: 13px;
+    height: 13px;
   }
 
   .chapter-index {
-    font-size: clamp(25px, 1.5vh, 36px);
+    font-size: clamp(20px, 1.1vh, 28px);
   }
 
   .chapter-label {
-    font-size: clamp(30px, 1.8vh, 42px);
+    max-width: 260px;
+    font-size: clamp(18px, 1.1vh, 26px);
   }
 }
 
@@ -927,7 +1009,8 @@ html.render-mode .preview-chrome {
   }
 
   .chapter-tile {
-    min-height: 40px;
+    min-height: 44px;
+    padding-bottom: 16px;
   }
 }
 
@@ -942,7 +1025,7 @@ html.render-mode .preview-chrome {
   }
 
   .stage {
-    padding-bottom: clamp(190px, 34vh, 280px);
+    padding-bottom: clamp(150px, 28vh, 230px);
   }
 
   .preview-chrome {

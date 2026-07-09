@@ -283,8 +283,8 @@ mode, FPS, CRF, preset, frame format, and JPEG quality.
 `ensure_render_assets_match_source()` requires `timeline.json` and `narration.mp3`, parses the
 timeline, and compares `(scene.id, scene.narration)` pairs against the current source.
 
-`launch_browser(playwright)` prefers an explicit `CHROME_EXECUTABLE` when valid, otherwise uses
-Playwright bundled Chromium, then falls back to installed Chrome or Edge paths.
+`launch_browser(playwright)` uses Playwright bundled Chromium by default. `CHROME_EXECUTABLE` is an
+explicit opt-in override for special environments and is not used as an automatic fallback.
 
 `resolved_capture_mode(value, width, height)` keeps explicit `video` or `frames`; `auto` chooses
 frame capture for 1080p and above, and Playwright video recording for lower sizes.

@@ -19,12 +19,6 @@ from playwright.async_api import Error as PlaywrightError
 from factory import CURRENT_ASSETS, LOCAL_PLAYWRIGHT, ROOT, active_theme, load_scenes, load_source, output_path, theme_url
 
 
-SYSTEM_BROWSERS = [
-    str(Path(os.environ.get("ProgramFiles", "")) / "Google/Chrome/Application/chrome.exe"),
-    str(Path(os.environ.get("ProgramFiles(x86)", "")) / "Google/Chrome/Application/chrome.exe"),
-    str(Path(os.environ.get("ProgramFiles", "")) / "Microsoft/Edge/Application/msedge.exe"),
-    str(Path(os.environ.get("ProgramFiles(x86)", "")) / "Microsoft/Edge/Application/msedge.exe"),
-]
 SIZES = {
     "480p": (854, 480),
     "720p": (1280, 720),
@@ -43,7 +37,10 @@ class QuietHandler(SimpleHTTPRequestHandler):
 
 def serve() -> None:
     os.chdir(ROOT)
-    ThreadingHTTPServer(("127.0.0.1", 8765), QuietHandler).serve_forever()
+    try:
+        ThreadingHTTPServer(("127.0.0.1", 8765), QuietHandler).serve_forever()
+    except OSError:
+        print("Using existing server on http://127.0.0.1:8765")
 
 
 def parse_args() -> argparse.Namespace:
@@ -87,37 +84,36 @@ def ensure_render_assets_match_source() -> None:
 async def launch_browser(playwright: object) -> object:
     base_args: dict[str, object] = {"headless": True}
     explicit_browser = os.environ.get("CHROME_EXECUTABLE")
-    candidates = [Path(path) for path in SYSTEM_BROWSERS if path and Path(path).is_file()]
 
-    if explicit_browser and Path(explicit_browser).is_file():
-        launch_args = {**base_args, "executable_path": explicit_browser}
+    if explicit_browser:
+        executable = Path(explicit_browser).expanduser()
+        if not executable.is_file():
+            raise SystemExit(
+                f"CHROME_EXECUTABLE is set but does not point to a browser: {explicit_browser}\n"
+                "Unset CHROME_EXECUTABLE to use Playwright bundled Chromium, "
+                "or run: python main.py install"
+            )
+        launch_args = {**base_args, "executable_path": str(executable)}
         try:
-            print(f"Using browser: {explicit_browser}")
+            print(f"Using browser from CHROME_EXECUTABLE: {executable}")
             return await playwright.chromium.launch(**launch_args)
         except PlaywrightError as exc:
             reason = str(exc).splitlines()[0]
-            print(f"Explicit browser launch failed, trying bundled Chromium: {explicit_browser} ({reason})")
+            raise SystemExit(
+                f"Could not launch CHROME_EXECUTABLE browser: {explicit_browser} ({reason})\n"
+                "Unset CHROME_EXECUTABLE to use Playwright bundled Chromium."
+            ) from exc
 
     try:
         print("Using browser: Playwright bundled Chromium")
         return await playwright.chromium.launch(**base_args)
     except PlaywrightError as exc:
         reason = str(exc).splitlines()[0]
-        print(f"Bundled Chromium launch failed, trying system browsers ({reason})")
-
-    for executable in candidates:
-        launch_args = {**base_args, "executable_path": str(executable)}
-        try:
-            print(f"Using browser: {executable}")
-            return await playwright.chromium.launch(**launch_args)
-        except PlaywrightError as exc:
-            reason = str(exc).splitlines()[0]
-            print(f"Browser launch failed, trying next option: {executable} ({reason})")
-
-    raise SystemExit(
-        "Could not launch a browser. Run: python main.py install "
-        "or set CHROME_EXECUTABLE to a working Chrome/Edge executable."
-    )
+        raise SystemExit(
+            f"Could not launch Playwright bundled Chromium ({reason}).\n"
+            "Run: python main.py install\n"
+            "If you intentionally want a system browser, set CHROME_EXECUTABLE to its executable path."
+        ) from exc
 
 
 def resolved_capture_mode(value: str, width: int, height: int) -> str:

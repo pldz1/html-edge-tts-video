@@ -15,7 +15,10 @@ PYTHON = sys.executable
 
 
 def run(command: list[str]) -> None:
-    subprocess.run(command, cwd=ROOT, check=True)
+    try:
+        subprocess.run(command, cwd=ROOT, check=True)
+    except subprocess.CalledProcessError as exc:
+        raise SystemExit(exc.returncode)
 
 
 def copy_source_template(args: argparse.Namespace) -> None:

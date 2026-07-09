@@ -9,11 +9,19 @@
 <body class="voice-page">
   <main class="voice-shell">
     <header class="voice-header">
-      <div>
-        <div class="eyebrow">EDGE TTS / VOICE PREVIEW</div>
-        <h1>Chinese voice preview</h1>
+      <div class="brand-block">
+        <div class="brand-mark">VO</div>
+        <div>
+          <div class="eyebrow">EDGE TTS / VOICE PREVIEW</div>
+          <h1>Voice Preview</h1>
+          <p class="header-copy">试听 edge-tts 中文声线，选定后用于 Studio 的 TTS 生成。</p>
+        </div>
       </div>
-      <a class="voice-link" href="../themes/default/index.html">Back to video preview</a>
+      <nav class="voice-actions">
+        <a href="studio.html">Studio</a>
+        <a href="../themes/default/index.html">Preview</a>
+        <a href="captions.html">Captions</a>
+      </nav>
     </header>
 
     <section class="voice-summary">
@@ -22,7 +30,15 @@
       <div><span>PITCH</span><p id="previewPitch">--</p></div>
     </section>
 
-    <section id="voiceList" class="voice-list" aria-live="polite"></section>
+    <section class="voice-workspace">
+      <aside class="voice-help">
+        <div class="section-label">How it works</div>
+        <h2>先生成试听，再打开此页</h2>
+        <p>这个页面读取本地生成的 voice preview manifest，不会在线实时请求 edge-tts。</p>
+        <code>python main.py voice-preview</code>
+      </aside>
+      <section id="voiceList" class="voice-list" aria-live="polite"></section>
+    </section>
   </main>
   <script src="voices.js"></script>
 </body>

@@ -32,10 +32,10 @@ async function init() {
     `).join('');
   } catch {
     list.innerHTML = `
-      <article class="voice-card">
+      <article class="voice-card voice-empty">
         <div>
-          <h2>No voice samples yet</h2>
-          <p>Run python main.py voice-preview, then refresh this page.</p>
+          <h2>还没有生成声音试听</h2>
+          <p>这个页面用于比较 edge-tts 中文声线。先在终端运行 python main.py voice-preview，生成本地试听音频后刷新页面。</p>
         </div>
       </article>
     `;

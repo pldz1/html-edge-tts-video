@@ -14,7 +14,7 @@ Use two different browser roles:
 - User browser: opens the Studio, preview, caption editor, and external AI chat pages.
 - Render browser: uses Playwright bundled Chromium by default for deterministic capture.
 
-The render browser should not depend on a user's installed Chrome or Edge. System browsers are only a fallback, and `CHROME_EXECUTABLE` is an explicit override for debugging or special environments. This keeps render behavior consistent across machines after `python main.py install`.
+The render browser should not depend on a user's installed Chrome or Edge. `CHROME_EXECUTABLE` is an explicit opt-in override for debugging or special environments, not an automatic fallback. This keeps render behavior consistent across machines after `python main.py install`.
 
 ## Recommended Shape
 
