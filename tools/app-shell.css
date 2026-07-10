@@ -1,0 +1,305 @@
+:root {
+  --app-shell-width: 164px;
+  --app-shell-line: #e0e8f3;
+  --app-shell-text: #14233b;
+  --app-shell-muted: #68788e;
+  --app-shell-blue: #3479f6;
+  --app-shell-blue-strong: #1764ec;
+  --app-shell-blue-soft: #edf4ff;
+  --app-shell-green: #35b85e;
+}
+
+.studio-app,
+.voice-app,
+.caption-app {
+  grid-template-columns: var(--app-shell-width) minmax(0, 1fr);
+  grid-template-rows: 58px minmax(0, 1fr);
+}
+
+.app-sidebar {
+  grid-column: 1;
+  grid-row: 1 / -1;
+  display: grid;
+  grid-template-rows: 58px auto minmax(0, 1fr) auto auto;
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+  padding: 10px 8px 12px;
+  overflow: hidden;
+  border-right: 1px solid rgba(220, 229, 240, .9);
+  background: rgba(253, 254, 255, .94);
+  box-shadow: 8px 0 28px rgba(83, 115, 156, .045);
+}
+
+.app-sidebar .sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 0;
+}
+
+.app-sidebar .brand-mark {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  border-radius: 9px;
+  background: linear-gradient(145deg, #256cf2, #6c4df5);
+  box-shadow: 0 8px 18px rgba(64, 91, 238, .2);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 780;
+}
+
+.app-sidebar .eyebrow,
+.app-sidebar .nav-label {
+  margin: 0 0 3px;
+  color: #77879b;
+  font-size: 9px;
+  font-weight: 720;
+  letter-spacing: .04em;
+  text-transform: none;
+}
+
+.app-sidebar h1 {
+  margin: 0;
+  color: var(--app-shell-text);
+  font-size: 16px;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.app-sidebar .product-nav {
+  display: grid;
+  gap: 5px;
+  padding-top: 14px;
+}
+
+.app-sidebar .nav-label {
+  margin: 0 7px 5px;
+  font-size: 10px;
+}
+
+.app-sidebar .product-nav a,
+.app-sidebar .settings-link {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 9px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #53667e;
+  font-size: 11px;
+  font-weight: 400;
+  text-decoration: none;
+  transition: border-color .1s ease, background-color .1s ease, color .1s ease;
+}
+
+.app-sidebar .product-nav a:hover,
+.app-sidebar .settings-link:hover {
+  border-color: #dbe6f4;
+  background: #f5f8fd;
+  color: var(--app-shell-blue-strong);
+}
+
+.app-sidebar .product-nav a.active {
+  border-color: #d8e5fa;
+  background: var(--app-shell-blue-soft);
+  color: var(--app-shell-blue-strong);
+}
+
+.app-sidebar .product-nav a.active::before {
+  position: absolute;
+  left: -6px;
+  width: 3px;
+  height: 23px;
+  border-radius: 999px;
+  background: var(--app-shell-blue);
+  content: "";
+}
+
+.app-sidebar [data-lucide],
+.app-sidebar .lucide {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  stroke-width: 1.8;
+}
+
+.app-sidebar .engine-card {
+  padding: 11px;
+  border: 1px solid var(--app-shell-line);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, .7);
+  box-shadow: 0 6px 18px rgba(72, 104, 151, .05);
+}
+
+.app-sidebar .engine-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.app-sidebar .engine-row strong {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--app-shell-text);
+  font-size: 11px;
+}
+
+.app-sidebar .engine-row p {
+  margin: 0;
+  color: var(--app-shell-green);
+  font-size: 10px;
+}
+
+.app-sidebar .engine-card small {
+  display: block;
+  margin: 9px 0 0 20px;
+  color: var(--app-shell-muted);
+  font-size: 9px;
+}
+
+.app-sidebar .status-dot {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  border: 4px solid #dbf4e2;
+  border-radius: 50%;
+  background: var(--app-shell-green);
+}
+
+.app-sidebar .status-dot.error {
+  border-color: #fde5e8;
+  background: #d14f5d;
+}
+
+.app-sidebar .settings-link {
+  border-color: var(--app-shell-line);
+  background: rgba(255, 255, 255, .62);
+}
+
+.studio-header,
+.voice-topbar,
+.caption-topbar {
+  grid-column: 2;
+  grid-row: 1;
+  min-height: 45px;
+  margin: 9px 10px 0 8px;
+}
+
+.studio-app .workspace,
+.voice-workspace,
+.caption-workspace {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.project-drawer {
+  position: fixed !important;
+  z-index: 65;
+  top: 66px;
+  bottom: 12px;
+  left: calc(var(--app-shell-width) + 8px);
+  display: grid !important;
+  grid-template-rows: minmax(0, 1fr) auto !important;
+  width: 294px;
+  min-width: 0;
+  padding: 0 !important;
+  overflow: hidden;
+  border: 1px solid var(--app-shell-line) !important;
+  border-radius: 10px;
+  background: rgba(250, 252, 255, .98) !important;
+  box-shadow: 0 22px 60px rgba(36, 61, 94, .18) !important;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-10px);
+  transition: opacity .12s ease, transform .12s ease;
+}
+
+.project-drawer > .sidebar-brand {
+  display: none !important;
+}
+
+.projects-open .project-drawer {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+
+.project-drawer-backdrop {
+  position: fixed;
+  z-index: 60;
+  inset: 58px 0 0 var(--app-shell-width);
+  display: none;
+  width: auto;
+  height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: rgba(34, 51, 73, .12);
+}
+
+.projects-open .project-drawer-backdrop {
+  display: block;
+}
+
+.studio-app .sidebar-toggle {
+  display: inline-flex;
+  border-color: #d9e4f1;
+  background: rgba(255, 255, 255, .76);
+}
+
+@media (max-width: 1120px) and (min-width: 761px) {
+  :root { --app-shell-width: 170px; }
+}
+
+@media (max-width: 760px) {
+  .studio-app,
+  .voice-app,
+  .caption-app {
+    grid-template-columns: 1fr;
+  }
+
+  .app-sidebar {
+    position: static;
+    display: grid;
+    grid-template-rows: auto auto;
+    width: 100%;
+    padding-bottom: 8px;
+  }
+
+  .app-sidebar .sidebar-spacer,
+  .app-sidebar .engine-card,
+  .app-sidebar .settings-link {
+    display: none;
+  }
+
+  .app-sidebar .product-nav {
+    display: flex;
+    padding-top: 4px;
+    overflow-x: auto;
+  }
+
+  .app-sidebar .nav-label {
+    display: none;
+  }
+
+  :root { --app-shell-width: 148px; }
+
+  .project-drawer {
+    top: 120px;
+    bottom: 8px;
+    left: 8px;
+    width: min(320px, calc(100vw - 16px));
+  }
+
+  .project-drawer-backdrop {
+    inset: 112px 0 0;
+  }
+}

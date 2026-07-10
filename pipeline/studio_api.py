@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -19,6 +21,7 @@ from factory import (
     CURRENT_META,
     CURRENT_SOURCE,
     DEFAULT_THEME,
+    LOCAL_ASSETS,
     LOCAL_OUTPUT,
     LOCAL_WORK,
     ROOT,
@@ -39,6 +42,19 @@ OUTPUT_EXTENSIONS = {".mp4", ".webm"}
 JOB_LOG_LIMIT = 500
 RENDER_SIZES = {"480p", "720p", "1080p", "2k", "1440p", "4k", "2160p"}
 CAPTURE_MODES = {"auto", "video", "frames"}
+VOICE_PREVIEW_DIR = LOCAL_ASSETS / "voice-preview"
+VOICE_OPTIONS = [
+    {"id": "zh-CN-XiaoxiaoNeural", "label": "晓晓", "locale": "zh-CN", "gender": "Female"},
+    {"id": "zh-CN-XiaoyiNeural", "label": "晓伊", "locale": "zh-CN", "gender": "Female"},
+    {"id": "zh-CN-YunjianNeural", "label": "云健", "locale": "zh-CN", "gender": "Male"},
+    {"id": "zh-CN-YunxiNeural", "label": "云希", "locale": "zh-CN", "gender": "Male"},
+    {"id": "zh-CN-YunxiaNeural", "label": "云夏", "locale": "zh-CN", "gender": "Male"},
+    {"id": "zh-CN-YunyangNeural", "label": "云扬", "locale": "zh-CN", "gender": "Male"},
+    {"id": "zh-CN-liaoning-XiaobeiNeural", "label": "晓北（东北）", "locale": "zh-CN-liaoning", "gender": "Female"},
+    {"id": "zh-CN-shaanxi-XiaoniNeural", "label": "晓妮（陕西）", "locale": "zh-CN-shaanxi", "gender": "Female"},
+    {"id": "zh-HK-HiuGaaiNeural", "label": "晓佳（粤语）", "locale": "zh-HK", "gender": "Female"},
+    {"id": "zh-TW-HsiaoChenNeural", "label": "晓臻（台湾）", "locale": "zh-TW", "gender": "Female"},
+]
 
 
 class ApiError(Exception):
@@ -270,10 +286,13 @@ def studio_state() -> dict[str, Any]:
         "projectCount": len(list_projects()),
         "outputs": list_outputs(limit=5),
         "urls": {
-            "studio": "/tools/studio.html",
+            "studio": "/studio",
+            "studioPrompt": "/studio/prompt",
+            "studioImport": "/studio/import",
+            "studioNew": "/studio/new",
             "preview": theme_url(theme),
-            "captions": "/tools/captions.html",
-            "voices": "/tools/voices.html",
+            "captions": "/captions",
+            "voices": "/voices",
         },
     }
     state["guide"] = guide_state(state)
@@ -343,6 +362,40 @@ def create_project(payload: dict[str, Any]) -> dict[str, Any]:
     return {"project": source_summary(target), "validation": validation}
 
 
+def create_blank_project(payload: dict[str, Any]) -> dict[str, Any]:
+    raw_slug = str(payload.get("slug") or payload.get("name") or "").strip()
+    target = safe_project_path(raw_slug or "new-video")
+    if target.exists() and any(target.iterdir()):
+        raise ApiError(409, f"project already exists: {target.name}")
+
+    scenes = [
+        {
+            "id": "intro",
+            "category": "总览",
+            "title": "新建视频项目",
+            "summary": "从这里开始规划主题、场景和旁白。",
+            "narration": "这是一个新建的视频项目。接下来请说明主题、受众和需要讲述的内容。",
+        }
+    ]
+    body_html = """<section class=\"content-scene scene\" data-scene=\"intro\">
+  <div class=\"scene-copy\">
+    <div class=\"eyebrow\">INTRO</div>
+    <h1>新建视频项目</h1>
+    <p class=\"summary\">从这里开始规划主题、场景和旁白。</p>
+  </div>
+  <div class=\"visual-board\"></div>
+</section>
+"""
+    target.mkdir(parents=True, exist_ok=True)
+    (target / "scenes.json").write_text(json.dumps(scenes, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    (target / "body.html").write_text(body_html, encoding="utf-8")
+    try:
+        load_source(target, str(payload.get("theme") or DEFAULT_THEME))
+    except SystemExit as exc:
+        raise ApiError(422, str(exc)) from exc
+    return {"project": source_summary(target), "state": studio_state()}
+
+
 def load_project(payload: dict[str, Any]) -> dict[str, Any]:
     value = str(payload.get("project") or payload.get("slug") or "").strip()
     if value in {"starter", "templates/starter"}:
@@ -354,6 +407,27 @@ def load_project(payload: dict[str, Any]) -> dict[str, Any]:
     except SystemExit as exc:
         raise ApiError(422, str(exc)) from exc
     return {"project": source_summary(source_root), "state": studio_state()}
+
+
+def delete_project(payload: dict[str, Any]) -> dict[str, Any]:
+    value = str(payload.get("project") or payload.get("slug") or "").strip()
+    if not value:
+        raise ApiError(400, "project slug is required")
+    if value in {"starter", "templates/starter"}:
+        raise ApiError(400, "starter cannot be deleted")
+    target = safe_project_path(value)
+    if not target.exists() or not target.is_dir():
+        raise ApiError(404, f"project not found: {target.name}")
+    active = active_source_root()
+    was_active = bool(active and active.resolve() == target.resolve())
+    shutil.rmtree(target)
+    if was_active and CURRENT_META.exists():
+        CURRENT_META.unlink()
+    if was_active:
+        remaining = [LOCAL_WORK / item["slug"] for item in list_projects()]
+        if remaining:
+            load_source(remaining[0], active_theme())
+    return {"deleted": target.name, "wasActive": was_active, "state": studio_state()}
 
 
 def active_job() -> dict[str, Any] | None:
@@ -379,13 +453,18 @@ def job_snapshot(job: dict[str, Any]) -> dict[str, Any]:
 
 
 def append_job_log(job_id: str, line: str) -> None:
+    clean_line = line.rstrip()
+    task = "job"
     with JOBS_LOCK:
         job = JOBS.get(job_id)
         if not job:
             return
-        job["log"].append(line.rstrip())
+        task = str(job.get("task") or task)
+        job["log"].append(clean_line)
         if len(job["log"]) > JOB_LOG_LIMIT:
             job["log"] = job["log"][-JOB_LOG_LIMIT:]
+    if clean_line:
+        print(f"[job:{job_id} {task}] {clean_line}", flush=True)
 
 
 def set_job_fields(job_id: str, **fields: Any) -> None:
@@ -399,6 +478,7 @@ def run_job(job_id: str) -> None:
         job = JOBS[job_id]
         command = list(job["command"])
     set_job_fields(job_id, status="running", startedAt=utc_now())
+    print(f"[job:{job_id} {job['task']}] started: {' '.join(command)}", flush=True)
     try:
         process = subprocess.Popen(
             command,
@@ -421,6 +501,7 @@ def run_job(job_id: str) -> None:
             exitCode=exit_code,
             finishedAt=utc_now(),
         )
+        print(f"[job:{job_id} {job['task']}] {'completed' if exit_code == 0 else 'failed'} (exit {exit_code})", flush=True)
     except Exception as exc:  # noqa: BLE001 - surface background failures to the UI.
         append_job_log(job_id, f"Job failed before completion: {exc}")
         set_job_fields(job_id, status="failed", exitCode=-1, finishedAt=utc_now())
@@ -434,8 +515,35 @@ def clean_output_name(value: str) -> str:
 
 def command_for_job(payload: dict[str, Any]) -> tuple[str, list[str]]:
     task = str(payload.get("task") or "").strip().lower()
-    if task not in {"tts", "offline", "check", "render"}:
+    if task not in {"tts", "offline", "check", "render", "voice-preview"}:
         raise ApiError(400, "unknown job task")
+
+    if task == "voice-preview":
+        text = str(payload.get("text") or "").strip()
+        voice = str(payload.get("voice") or "zh-CN-XiaoxiaoNeural").strip()
+        rate = str(payload.get("rate") or "+0%").strip()
+        pitch = str(payload.get("pitch") or "+0Hz").strip()
+        if not text or len(text) > 3000:
+            raise ApiError(400, "voice preview text must contain 1 to 3000 characters")
+        if voice not in {item["id"] for item in VOICE_OPTIONS}:
+            raise ApiError(400, "unsupported voice")
+        if not re.fullmatch(r"[+-](?:[0-9]|[1-4][0-9]|50)%", rate):
+            raise ApiError(400, "rate must be between -50% and +50%")
+        if not re.fullmatch(r"[+-](?:[0-9]|1[0-9]|2[0-4])Hz", pitch):
+            raise ApiError(400, "pitch must be between -24Hz and +24Hz")
+        return task, [
+            PYTHON,
+            "main.py",
+            "voice-preview",
+            "--voice",
+            voice,
+            "--text",
+            text,
+            "--rate",
+            rate,
+            "--pitch",
+            pitch,
+        ]
 
     if task == "tts":
         command = [
@@ -524,6 +632,21 @@ def get_job(query: dict[str, list[str]]) -> dict[str, Any]:
         return {"job": job_snapshot(job)}
 
 
+def voice_preview_state() -> dict[str, Any]:
+    manifest = read_json_file(VOICE_PREVIEW_DIR / "manifest.json")
+    if not isinstance(manifest, dict):
+        manifest = {"samples": [], "history": []}
+    history = manifest.get("history")
+    if not isinstance(history, list):
+        history = manifest.get("samples") if isinstance(manifest.get("samples"), list) else []
+    return {
+        "voices": VOICE_OPTIONS,
+        "manifest": manifest,
+        "history": history[:20],
+        "outputUrl": "/.local/assets/voice-preview/",
+    }
+
+
 def handle_get(path: str, query: dict[str, list[str]]) -> tuple[int, Any] | None:
     if path == "/api/studio/state":
         return 200, studio_state()
@@ -531,6 +654,8 @@ def handle_get(path: str, query: dict[str, list[str]]) -> tuple[int, Any] | None
         return 200, {"projects": list_projects()}
     if path == "/api/outputs":
         return 200, {"outputs": list_outputs()}
+    if path == "/api/voice-preview":
+        return 200, voice_preview_state()
     if path == "/api/jobs":
         return 200, get_job(query)
     return None
@@ -539,8 +664,12 @@ def handle_get(path: str, query: dict[str, list[str]]) -> tuple[int, Any] | None
 def handle_post(path: str, payload: dict[str, Any]) -> tuple[int, Any] | None:
     if path == "/api/projects":
         return 201, create_project(payload)
+    if path == "/api/projects/blank":
+        return 201, create_blank_project(payload)
     if path == "/api/projects/load":
         return 200, load_project(payload)
+    if path == "/api/projects/delete":
+        return 200, delete_project(payload)
     if path == "/api/source/validate":
         if payload.get("project") or payload.get("slug"):
             return 200, validate_project(safe_project_path(str(payload.get("project") or payload.get("slug"))))

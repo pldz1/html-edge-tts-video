@@ -9,13 +9,30 @@ const els = {
   guideBody: $('#guideBody'),
   guideBadge: $('#guideBadge'),
   projectList: $('#projectList'),
+  mainProjectGrid: $('#mainProjectGrid'),
   outputList: $('#outputList'),
   outputPlayer: $('#outputPlayer'),
   previewFrame: $('#previewFrame'),
   tourButton: $('#tourButton'),
+  sidebarToggle: $('#sidebarToggle'),
+  projectDrawerBackdrop: $('#projectDrawerBackdrop'),
+  settingsButton: $('#settingsButton'),
+  settingsDrawer: $('#settingsDrawer'),
+  settingsBackdrop: $('#settingsBackdrop'),
+  closeSettingsButton: $('#closeSettingsButton'),
+  settingsVoice: $('#settingsVoice'),
+  settingsRate: $('#settingsRate'),
+  settingsPitch: $('#settingsPitch'),
+  settingsGap: $('#settingsGap'),
+  settingsReducedMotion: $('#settingsReducedMotion'),
+  saveSettingsButton: $('#saveSettingsButton'),
+  resetSettingsButton: $('#resetSettingsButton'),
   refreshButton: $('#refreshButton'),
   refreshOutputsButton: $('#refreshOutputsButton'),
   loadStarterButton: $('#loadStarterButton'),
+  newProjectSlugInput: $('#newProjectSlugInput'),
+  newProjectButton: $('#newProjectButton'),
+  openProjectsShortcut: $('#openProjectsShortcut'),
   topicInput: $('#topicInput'),
   audienceInput: $('#audienceInput'),
   toneInput: $('#toneInput'),
@@ -51,8 +68,171 @@ let currentJobId = '';
 let pollTimer = 0;
 let tourAutoStarted = false;
 let activeView = 'compose';
+let promptRefreshFrame = 0;
 
 const TOUR_STORAGE_KEY = 'html-edge-tts-video:studio-tour-seen:v1';
+const PROJECT_DRAWER_STORAGE_KEY = 'html-edge-tts-video:studio-project-drawer-open:v1';
+const STUDIO_SETTINGS_KEY = 'html-edge-tts-video:studio-settings:v1';
+const DEFAULT_STUDIO_SETTINGS = Object.freeze({
+  voice: 'zh-CN-XiaoxiaoNeural',
+  rate: '+12%',
+  pitch: '+0Hz',
+  gap: '0.28',
+  reducedMotion: false,
+});
+const INITIAL_FORM_VALUES = Object.freeze({
+  topic: els.topicInput?.value || '',
+  audience: els.audienceInput?.value || '',
+  tone: els.toneInput?.value || '',
+  sceneCount: els.sceneCountInput?.value || '',
+  notes: els.notesInput?.value || '',
+  projectSlug: els.projectSlugInput?.value || 'my-video',
+  renderOutput: els.renderOutputInput?.value || 'studio-render.mp4',
+});
+
+function routeKey() {
+  const path = window.location.pathname.replace(/\/+$/, '');
+  if (path.endsWith('/prompt')) return 'prompt';
+  if (path.endsWith('/import')) return 'import';
+  if (path.endsWith('/new')) return 'new';
+  return 'main';
+}
+
+function studioRoutePath(route = 'main') {
+  const cleanRoute = route === 'main' ? '' : `/${route}`;
+  return `/studio${cleanRoute}`;
+}
+
+function setStudioRoute(route = 'main', replace = false) {
+  const nextPath = studioRoutePath(route);
+  if (window.location.pathname === nextPath) return;
+  const method = replace ? 'replaceState' : 'pushState';
+  window.history[method]({}, '', nextPath);
+}
+
+function applyRouteFocus(route = routeKey()) {
+  document.body.dataset.studioRoute = route;
+  document.querySelectorAll('[data-studio-route]').forEach(link => {
+    link.classList.toggle('active', link.dataset.studioRoute === route);
+  });
+  if (route === 'new') setActiveView('compose');
+  if (route === 'new') setProjectDrawerOpen(true);
+}
+
+function cleanSlug(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\u4e00-\u9fa5_-]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'new-video';
+}
+
+function resetPromptComposer() {
+  if (!els.topicInput || !els.promptOutput) return;
+  els.topicInput.value = INITIAL_FORM_VALUES.topic;
+  els.audienceInput.value = INITIAL_FORM_VALUES.audience;
+  els.toneInput.value = INITIAL_FORM_VALUES.tone;
+  els.sceneCountInput.value = INITIAL_FORM_VALUES.sceneCount;
+  els.notesInput.value = INITIAL_FORM_VALUES.notes;
+  refreshPrompt();
+}
+
+function resetImportComposer(slug = INITIAL_FORM_VALUES.projectSlug) {
+  if (!els.aiResponseInput || !els.scenesOutput || !els.bodyOutput || !els.projectSlugInput) return;
+  els.aiResponseInput.value = '';
+  els.scenesOutput.value = '';
+  els.bodyOutput.value = '';
+  els.projectSlugInput.value = cleanSlug(slug || INITIAL_FORM_VALUES.projectSlug);
+}
+
+function resetBuildState(slug = '') {
+  window.clearTimeout(pollTimer);
+  pollTimer = 0;
+  currentJobId = '';
+  setJobBusy(false);
+  els.jobStatus.textContent = '空闲';
+  els.jobStatus.className = 'job-status';
+  els.jobLog.textContent = '等待任务。';
+  els.renderSizeInput.value = '720p';
+  els.renderOutputInput.value = `${cleanSlug(slug || INITIAL_FORM_VALUES.renderOutput.replace(/\.mp4$/i, ''))}.mp4`;
+}
+
+function resetPreviewState() {
+  selectedOutputUrl = '';
+  els.outputPlayer.removeAttribute('src');
+  els.outputPlayer.load();
+}
+
+function resetWorkspaceUi({ slug = '', resetPrompt = false, resetImport = true } = {}) {
+  if (resetPrompt) resetPromptComposer();
+  if (resetImport) resetImportComposer(slug);
+  resetBuildState(slug);
+  resetPreviewState();
+  setActiveView('compose');
+}
+
+function setProjectDrawerOpen(open) {
+  document.body.classList.toggle('projects-open', open);
+  els.sidebarToggle.setAttribute('aria-expanded', String(open));
+  const label = els.sidebarToggle.querySelector('span');
+  if (label) label.textContent = open ? '关闭项目' : '项目';
+  localStorage.setItem(PROJECT_DRAWER_STORAGE_KEY, open ? '1' : '0');
+}
+
+function settingsFromStorage() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(STUDIO_SETTINGS_KEY) || 'null');
+    return { ...DEFAULT_STUDIO_SETTINGS, ...(parsed && typeof parsed === 'object' ? parsed : {}) };
+  } catch {
+    return { ...DEFAULT_STUDIO_SETTINGS };
+  }
+}
+
+function applyStudioSettings(settings) {
+  els.settingsVoice.value = settings.voice;
+  els.settingsRate.value = settings.rate;
+  els.settingsPitch.value = settings.pitch;
+  els.settingsGap.value = settings.gap;
+  els.settingsReducedMotion.checked = Boolean(settings.reducedMotion);
+  document.body.classList.toggle('reduce-motion', Boolean(settings.reducedMotion));
+}
+
+function getStudioSettings() {
+  return {
+    voice: els.settingsVoice.value,
+    rate: els.settingsRate.value.trim(),
+    pitch: els.settingsPitch.value.trim(),
+    gap: els.settingsGap.value,
+    reducedMotion: els.settingsReducedMotion.checked,
+  };
+}
+
+function setSettingsOpen(open) {
+  document.body.classList.toggle('settings-open', open);
+  els.settingsDrawer.setAttribute('aria-hidden', String(!open));
+}
+
+function saveStudioSettings() {
+  const settings = getStudioSettings();
+  if (!/^[+-](?:\d|[1-9]\d)%$/.test(settings.rate)) {
+    setStatus('语速格式应类似 +12%', 'error');
+    return;
+  }
+  if (!/^[+-](?:\d|[1-9]\d)Hz$/.test(settings.pitch)) {
+    setStatus('音调格式应类似 +0Hz', 'error');
+    return;
+  }
+  const gap = Number(settings.gap);
+  if (!Number.isFinite(gap) || gap < 0 || gap > 3) {
+    setStatus('场景间隔需要在 0 到 3 秒之间', 'error');
+    return;
+  }
+  settings.gap = String(gap);
+  localStorage.setItem(STUDIO_SETTINGS_KEY, JSON.stringify(settings));
+  applyStudioSettings(settings);
+  setSettingsOpen(false);
+  setStatus(`已保存 TTS 默认参数：${settings.voice}`, 'success');
+}
 
 function renderIcons() {
   if (window.lucide) {
@@ -68,7 +248,6 @@ function setActiveView(view) {
   els.viewPanels.forEach(panel => {
     panel.classList.toggle('is-active', panel.dataset.viewPanel === view);
   });
-  renderIcons();
 }
 
 function setStatus(message, tone = 'neutral') {
@@ -180,6 +359,14 @@ function refreshPrompt() {
   els.promptOutput.value = buildPrompt();
 }
 
+function schedulePromptRefresh() {
+  if (promptRefreshFrame) return;
+  promptRefreshFrame = window.requestAnimationFrame(() => {
+    promptRefreshFrame = 0;
+    refreshPrompt();
+  });
+}
+
 async function copyPrompt() {
   refreshPrompt();
   try {
@@ -285,17 +472,70 @@ function projectCard(project) {
   return button;
 }
 
+function mainProjectCard(project) {
+  const article = document.createElement('article');
+  article.className = `main-project-card${project.active ? ' active' : ''}`;
+  article.dataset.project = project.slug;
+
+  const head = document.createElement('div');
+  head.className = 'main-project-head';
+
+  const titleWrap = document.createElement('div');
+  const label = document.createElement('p');
+  label.className = 'section-label';
+  label.textContent = project.active ? '当前项目' : '本地项目';
+  const title = document.createElement('h3');
+  title.textContent = project.title || project.slug;
+  titleWrap.append(label, title);
+
+  const badge = document.createElement('span');
+  badge.className = 'project-badge';
+  badge.textContent = project.slug;
+  head.append(titleWrap, badge);
+
+  const meta = document.createElement('div');
+  meta.className = 'main-project-meta';
+  meta.innerHTML = `
+    <span><i data-lucide="layers-3"></i>${project.sceneCount} scenes</span>
+    <span><i data-lucide="type"></i>${project.narrationChars} 字</span>
+    <span><i data-lucide="clock-3"></i>${formatDate(project.updatedAt)}</span>
+  `;
+
+  const path = document.createElement('p');
+  path.className = 'main-project-path';
+  path.textContent = project.relativePath;
+
+  const actions = document.createElement('div');
+  actions.className = 'main-project-actions';
+  actions.innerHTML = `
+    <button type="button" data-project-action="preview"><i data-lucide="monitor-play"></i><span>Preview</span></button>
+    <button type="button" data-project-action="export"><i data-lucide="download"></i><span>Export</span></button>
+    <button type="button" data-project-action="captions"><i data-lucide="captions"></i><span>Captions</span></button>
+    <button type="button" class="danger-button" data-project-action="delete"><i data-lucide="trash-2"></i><span>Delete</span></button>
+  `;
+
+  article.append(head, meta, path, actions);
+  return article;
+}
+
 function renderProjects() {
   els.projectList.replaceChildren();
+  els.mainProjectGrid?.replaceChildren();
   if (!projects.length) {
     const empty = document.createElement('p');
     empty.className = 'empty-text';
     empty.textContent = '还没有 .local/work 项目。';
     els.projectList.append(empty);
+    if (els.mainProjectGrid) {
+      const mainEmpty = empty.cloneNode(true);
+      mainEmpty.textContent = '还没有项目。可以点击右上角新建，或进入 Import 创建一个项目。';
+      els.mainProjectGrid.append(mainEmpty);
+    }
     return;
   }
   projects.forEach(project => {
     els.projectList.append(projectCard(project));
+    els.mainProjectGrid?.append(mainProjectCard(project));
   });
 }
 
@@ -469,6 +709,7 @@ function startDriverTour(steps) {
     steps,
     onHighlightStarted: (_element, step) => {
       if (step?.view) setActiveView(step.view);
+      setProjectDrawerOpen(step?.element === '.sidebar');
     },
   });
   driverObj.drive();
@@ -509,6 +750,7 @@ function startFallbackTour(steps) {
 
   function cleanup() {
     clearHighlight();
+    setProjectDrawerOpen(false);
     overlay.remove();
   }
 
@@ -516,6 +758,7 @@ function startFallbackTour(steps) {
     clearHighlight();
     const step = steps[index];
     if (step.view) setActiveView(step.view);
+    setProjectDrawerOpen(step.element === '.sidebar');
     const target = document.querySelector(step.element);
     if (target) {
       target.classList.add('tour-fallback-highlight');
@@ -586,16 +829,53 @@ async function refreshAll() {
   }
 }
 
-async function loadProject(project) {
+async function loadProject(project, { view = 'compose', closeDrawer = true } = {}) {
   try {
     setStatus('正在加载项目...');
-    await postJson('/api/projects/load', { project });
+    const data = await postJson('/api/projects/load', { project });
+    resetWorkspaceUi({ slug: data.project?.slug || project, resetPrompt: false, resetImport: true });
+    if (closeDrawer) setProjectDrawerOpen(false);
+    setStudioRoute('main');
     reloadPreview();
     await refreshAll();
+    setActiveView(view);
     setStatus('项目已加载。', 'success');
+    return data.project;
+  } catch (error) {
+    setStatus(error.message, 'error');
+    return null;
+  }
+}
+
+async function deleteProject(project) {
+  const confirmed = window.confirm(`确定删除项目 ${project} 吗？这个操作会删除 .local/work 中的源文件。`);
+  if (!confirmed) return;
+  try {
+    setStatus(`正在删除项目：${project}...`);
+    await postJson('/api/projects/delete', { project });
+    await refreshAll();
+    reloadPreview();
+    setStatus(`已删除项目：${project}`, 'success');
   } catch (error) {
     setStatus(error.message, 'error');
   }
+}
+
+async function previewProject(project) {
+  const loaded = await loadProject(project, { view: 'review' });
+  if (loaded) setActiveView('review');
+}
+
+async function openProjectCaptions(project) {
+  const loaded = await loadProject(project, { view: 'review' });
+  if (loaded) window.location.href = '/captions';
+}
+
+async function exportProject(project) {
+  const loaded = await loadProject(project, { view: 'build' });
+  if (!loaded) return;
+  els.renderOutputInput.value = `${cleanSlug(project)}.mp4`;
+  await startJob('render');
 }
 
 async function validateExtracted() {
@@ -626,11 +906,37 @@ async function saveProject() {
       bodyHtml: els.bodyOutput.value,
     });
     await postJson('/api/projects/load', { project: created.project.slug });
+    resetWorkspaceUi({ slug: created.project.slug, resetPrompt: false, resetImport: true });
+    setStudioRoute('main');
     reloadPreview();
     await refreshAll();
     setStatus(`已保存并加载：${created.project.slug}`, 'success');
   } catch (error) {
     setStatus(error.message, 'error');
+  }
+}
+
+async function createBlankProject() {
+  const slug = els.newProjectSlugInput.value.trim();
+  if (!slug) {
+    setStatus('请输入新项目的 slug', 'error');
+    els.newProjectSlugInput.focus();
+    return;
+  }
+  els.newProjectButton.disabled = true;
+  try {
+    const data = await postJson('/api/projects/blank', { slug });
+    appState = data.state;
+    resetWorkspaceUi({ slug: data.project?.slug || slug, resetPrompt: true, resetImport: true });
+    setProjectDrawerOpen(false);
+    setStudioRoute('main');
+    reloadPreview();
+    await refreshAll();
+    setStatus(`已新建并加载项目：${data.project.slug}`, 'success');
+  } catch (error) {
+    setStatus(error.message, 'error');
+  } finally {
+    els.newProjectButton.disabled = false;
   }
 }
 
@@ -683,6 +989,13 @@ async function pollJob() {
 async function startJob(task) {
   const payload = { task };
   setActiveView('build');
+  if (task === 'tts') {
+    const settings = getStudioSettings();
+    payload.voice = settings.voice;
+    payload.rate = settings.rate;
+    payload.pitch = settings.pitch;
+    payload.gap = settings.gap;
+  }
   if (task === 'render') {
     payload.size = els.renderSizeInput.value;
     payload.output = els.renderOutputInput.value;
@@ -694,27 +1007,59 @@ async function startJob(task) {
     renderJob(data.job);
     pollTimer = window.setTimeout(pollJob, 500);
     setStatus(`${task} 已开始。`);
+    return data.job;
   } catch (error) {
     setJobBusy(false);
     setStatus(error.message, 'error');
+    return null;
   }
 }
 
 function bindEvents() {
-  [els.topicInput, els.audienceInput, els.toneInput, els.sceneCountInput, els.notesInput].forEach(input => {
-    input.addEventListener('input', refreshPrompt);
+  [els.topicInput, els.audienceInput, els.toneInput, els.sceneCountInput, els.notesInput].filter(Boolean).forEach(input => {
+    input.addEventListener('input', schedulePromptRefresh);
   });
-  els.copyPromptButton.addEventListener('click', copyPrompt);
+  els.copyPromptButton?.addEventListener('click', copyPrompt);
   els.tourButton.addEventListener('click', startTour);
-  els.extractButton.addEventListener('click', extractResponse);
-  els.validateExtractedButton.addEventListener('click', validateExtracted);
-  els.saveProjectButton.addEventListener('click', saveProject);
+  document.querySelectorAll('[data-studio-route]').forEach(link => {
+    link.addEventListener('click', event => {
+      event.preventDefault();
+      const route = link.dataset.studioRoute || 'main';
+      setStudioRoute(route);
+      applyRouteFocus(route);
+    });
+  });
+  els.sidebarToggle.addEventListener('click', () => {
+    setProjectDrawerOpen(!document.body.classList.contains('projects-open'));
+  });
+  els.projectDrawerBackdrop.addEventListener('click', () => setProjectDrawerOpen(false));
+  els.settingsButton.addEventListener('click', () => setSettingsOpen(true));
+  els.closeSettingsButton.addEventListener('click', () => setSettingsOpen(false));
+  els.settingsBackdrop.addEventListener('click', () => setSettingsOpen(false));
+  els.saveSettingsButton.addEventListener('click', saveStudioSettings);
+  els.resetSettingsButton.addEventListener('click', () => applyStudioSettings(DEFAULT_STUDIO_SETTINGS));
+  els.extractButton?.addEventListener('click', () => {
+    setStudioRoute('import');
+    applyRouteFocus('import');
+    extractResponse();
+  });
+  els.validateExtractedButton?.addEventListener('click', () => {
+    setStudioRoute('import');
+    applyRouteFocus('import');
+    validateExtracted();
+  });
+  els.saveProjectButton?.addEventListener('click', saveProject);
+  els.openProjectsShortcut?.addEventListener('click', () => setProjectDrawerOpen(true));
   els.refreshButton.addEventListener('click', refreshAll);
   els.refreshOutputsButton.addEventListener('click', refreshAll);
   els.viewTabs.forEach(tab => {
     tab.addEventListener('click', () => setActiveView(tab.dataset.viewTab));
   });
   els.loadStarterButton.addEventListener('click', () => loadProject('templates/starter'));
+  els.newProjectButton.addEventListener('click', createBlankProject);
+  els.newProjectSlugInput.addEventListener('keydown', event => {
+    if (event.key === 'Enter') createBlankProject();
+  });
   els.checkButton.addEventListener('click', () => startJob('check'));
   els.offlineButton.addEventListener('click', () => startJob('offline'));
   els.ttsButton.addEventListener('click', () => startJob('tts'));
@@ -723,6 +1068,18 @@ function bindEvents() {
   els.projectList.addEventListener('click', event => {
     const card = event.target.closest('[data-project]');
     if (card) loadProject(card.dataset.project);
+  });
+
+  els.mainProjectGrid?.addEventListener('click', event => {
+    const action = event.target.closest('[data-project-action]');
+    const card = event.target.closest('[data-project]');
+    if (!action || !card) return;
+    const project = card.dataset.project;
+    const type = action.dataset.projectAction;
+    if (type === 'preview') previewProject(project);
+    if (type === 'export') exportProject(project);
+    if (type === 'captions') openProjectCaptions(project);
+    if (type === 'delete') deleteProject(project);
   });
 
   els.outputList.addEventListener('click', event => {
@@ -735,13 +1092,25 @@ function bindEvents() {
 
   document.querySelectorAll('[data-provider]').forEach(button => {
     button.addEventListener('click', async () => {
+      setStudioRoute('prompt');
+      applyRouteFocus('prompt');
       await copyPrompt();
       window.open(button.dataset.provider, '_blank', 'noopener,noreferrer');
     });
   });
+  window.addEventListener('popstate', () => applyRouteFocus());
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') {
+      setProjectDrawerOpen(false);
+      setSettingsOpen(false);
+    }
+  });
 }
 
 bindEvents();
-refreshPrompt();
+setProjectDrawerOpen(false);
+applyStudioSettings(settingsFromStorage());
+applyRouteFocus();
+if (els.promptOutput) refreshPrompt();
 refreshAll();
 renderIcons();

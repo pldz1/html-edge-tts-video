@@ -15,8 +15,9 @@ from studio_api import ApiError, handle_get, handle_post
 
 
 class FactoryHandler(SimpleHTTPRequestHandler):
-    def log_message(self, *_: object) -> None:
-        pass
+    def log_message(self, message: str, *args: object) -> None:
+        if self.path.startswith("/api/"):
+            print(f"[http] {self.command} {self.path} - {message % args}", flush=True)
 
     def send_json(self, status: int, payload: object) -> None:
         body = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
@@ -50,8 +51,20 @@ class FactoryHandler(SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path
         query = parse_qs(parsed.query)
-        if path in {"", "/"}:
-            self.send_redirect("/tools/studio.html")
+        tool_routes = {
+            "": "/tools/studio.html",
+            "/": "/tools/studio.html",
+            "/studio": "/tools/studio.html",
+            "/studio/main": "/tools/studio.html",
+            "/studio/new": "/tools/studio.html",
+            "/studio/prompt": "/tools/studio-prompt.html",
+            "/studio/import": "/tools/studio-import.html",
+            "/voices": "/tools/voices.html",
+            "/captions": "/tools/captions.html",
+        }
+        if path in tool_routes:
+            self.path = tool_routes[path]
+            super().do_GET()
             return
 
         try:
@@ -79,6 +92,8 @@ class FactoryHandler(SimpleHTTPRequestHandler):
                     "saved": saved,
                     "duration": timeline.get("duration"),
                     "scenes": timeline.get("scenes", []),
+                    "previewUrl": theme_url(active_theme()),
+                    "audioUrl": "/.local/current/assets/narration.mp3",
                 },
             )
             return
@@ -125,10 +140,18 @@ class FactoryHandler(SimpleHTTPRequestHandler):
 def main() -> None:
     os.chdir(ROOT)
     print(f"Preview: {theme_url(active_theme())}")
-    print("Studio: http://127.0.0.1:8765/tools/studio.html")
-    print("Caption editor: http://127.0.0.1:8765/tools/captions.html")
-    print("Voice preview: http://127.0.0.1:8765/tools/voices.html")
-    ThreadingHTTPServer(("127.0.0.1", 8765), FactoryHandler).serve_forever()
+    print("Studio: http://127.0.0.1:8765/")
+    print("Caption editor: http://127.0.0.1:8765/captions")
+    print("Voice preview: http://127.0.0.1:8765/voices")
+    server = ThreadingHTTPServer(("127.0.0.1", 8765), FactoryHandler)
+    try:
+        print("[server] Listening for browser and API activity. Press Ctrl+C to stop.", flush=True)
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\n[server] Shutdown requested.", flush=True)
+    finally:
+        server.server_close()
+        print("[server] Stopped.", flush=True)
 
 
 if __name__ == "__main__":

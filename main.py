@@ -17,6 +17,9 @@ PYTHON = sys.executable
 def run(command: list[str]) -> None:
     try:
         subprocess.run(command, cwd=ROOT, check=True)
+    except KeyboardInterrupt:
+        print("\nInterrupted. Shutting down…")
+        return
     except subprocess.CalledProcessError as exc:
         raise SystemExit(exc.returncode)
 
@@ -247,8 +250,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
-    args = build_parser().parse_args()
-    args.func(args)
+    try:
+        args = build_parser().parse_args()
+        args.func(args)
+    except KeyboardInterrupt:
+        print("\nCancelled.")
 
 
 if __name__ == "__main__":

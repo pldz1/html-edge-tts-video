@@ -4,64 +4,106 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Caption Editor</title>
-  <link rel="stylesheet" href="captions.css" />
+  <link rel="stylesheet" href="/tools/captions.css" />
+  <link rel="stylesheet" href="/tools/app-shell.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/lucide@0.513.0/dist/umd/lucide.min.js"></script>
+  <script defer src="/tools/captions.js"></script>
 </head>
 <body>
-  <main class="caption-shell">
-    <header class="caption-header">
-      <div class="brand-block">
-        <div class="brand-mark">CC</div>
-        <div>
-          <div class="eyebrow">CAPTION SOURCE / MANUAL PASS</div>
-          <h1>Caption Editor</h1>
-        </div>
+  <main class="caption-app">
+    <aside class="caption-sidebar app-sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-mark">VF</div>
+        <div><p class="eyebrow">LOCAL VIDEO FACTORY</p><h1>Video Factory</h1></div>
       </div>
-      <nav class="caption-actions">
-        <a href="studio.html">Studio</a>
-        <a href="../themes/default/index.html">Preview</a>
-        <a href="voices.html">Voices</a>
+      <nav class="product-nav" aria-label="产品工具">
+        <p class="nav-label">产品工具</p>
+        <a href="/studio"><i data-lucide="folder"></i><span>Studio</span></a>
+        <a href="/voices"><i data-lucide="audio-lines"></i><span>Voice Preview</span></a>
+        <a class="active" href="/captions" aria-current="page"><i data-lucide="captions"></i><span>Captions</span></a>
       </nav>
+      <div class="sidebar-spacer"></div>
+      <section class="engine-card">
+        <div class="engine-row"><span id="engineDot" class="status-dot"></span><div><strong>引擎状态</strong><p id="engineStatus">正在连接</p></div></div>
+        <small>TTS · 本地 · AI 引擎</small>
+      </section>
+      <a class="settings-link" href="/studio"><i data-lucide="settings"></i><span>设置</span></a>
+    </aside>
+
+    <header class="caption-topbar">
+      <div class="project-title">
+        <i data-lucide="folder"></i><strong>caption-editor</strong><span class="tool-badge">本地工具</span>
+        <span class="ready-state"><i></i><span id="statusText">正在加载</span></span>
+      </div>
+      <label class="caption-project-picker"><span>项目</span><select id="captionProjectSelect"></select></label>
+      <a class="open-output-button" href="/.local/current/source/" target="_blank" rel="noreferrer"><i data-lucide="folder-open"></i><span>打开源目录</span></a>
     </header>
 
-    <section class="caption-status">
-      <div><span>STATUS</span><p id="statusText">loading...</p></div>
-      <div><span>CUES</span><p id="cueCount">--</p></div>
-      <div><span>DURATION</span><p id="durationText">--</p></div>
-    </section>
-
-    <section class="caption-editor">
-      <aside class="cue-list-panel">
-        <div class="panel-title">
-          <span>Transcript</span>
-          <input id="cueSearch" type="search" placeholder="Search text" />
+    <section class="caption-workspace">
+      <section class="panel scene-panel">
+        <div class="section-heading">
+          <span class="step-number">01</span>
+          <div><h2>片段与场景</h2><p>切换画面并定位字幕所在场景</p></div>
+          <div class="heading-tools"><label class="search-field"><i data-lucide="search"></i><input id="sceneSearch" type="search" placeholder="搜索场景" /></label></div>
         </div>
-        <div id="cueList" class="cue-list" aria-live="polite"></div>
-      </aside>
-
-      <section class="cue-detail">
-        <div class="detail-meta">
-          <span id="cueIndex">--</span>
-          <span id="cueTime">--</span>
-          <span id="cueScene">--</span>
+        <div class="scene-strip-wrap">
+          <button id="sceneScrollLeft" class="round-button" type="button" aria-label="向左滚动"><i data-lucide="chevron-left"></i></button>
+          <div id="sceneList" class="scene-list" aria-live="polite"></div>
+          <button id="sceneScrollRight" class="round-button" type="button" aria-label="向右滚动"><i data-lucide="chevron-right"></i></button>
         </div>
-        <div class="timing-editor">
-          <label for="cueStart">Start</label>
-          <input id="cueStart" type="number" min="0" step="0.01" />
-          <label for="cueEnd">End</label>
-          <input id="cueEnd" type="number" min="0" step="0.01" />
-          <button id="shiftEarlierButton" type="button">-0.1s</button>
-          <button id="shiftLaterButton" type="button">+0.1s</button>
+        <div class="master-timeline">
+          <div class="timeline-labels"><span id="currentTimeText">00:00.000</span><span id="durationText">00:00.000</span></div>
+          <div class="timeline-track" id="timelineTrack"><div id="timelineProgress" class="timeline-progress"></div><div id="timelineCues" class="timeline-cues"></div><button id="timelinePlayhead" class="timeline-playhead" type="button" aria-label="当前时间"></button></div>
+          <div class="timeline-actions"><button id="timelinePlayButton" class="icon-button" type="button"><i data-lucide="play"></i></button><span><i class="legend-dot cue-dot"></i>字幕节点</span><span><i class="legend-dot current-dot"></i>当前字幕</span><div></div><button id="previousSceneButton" type="button"><i data-lucide="arrow-left"></i>上一场景</button><button id="nextSceneButton" type="button">下一场景<i data-lucide="arrow-right"></i></button></div>
         </div>
-        <label for="cueText">Caption text</label>
-        <textarea id="cueText" spellcheck="false"></textarea>
-        <div class="detail-actions">
-          <button id="restoreButton" type="button">Restore generated</button>
-          <button id="saveButton" type="button">Save captions.json</button>
-        </div>
-        <audio id="narrationAudio" controls preload="metadata" src="/.local/current/assets/narration.mp3"></audio>
       </section>
+
+      <section class="panel preview-panel">
+        <div class="section-heading"><span class="step-number">02</span><div><h2>画面预览</h2><p>在当前画面中预览字幕效果</p></div></div>
+        <div class="preview-frame-wrap">
+          <iframe id="previewFrame" title="当前视频画面" src="../themes/default/index.html?render=1&amp;caption-editor=1"></iframe>
+          <span id="sceneBadge" class="scene-badge">Scene --</span>
+          <div id="liveCaption" class="live-caption">字幕将在这里预览</div>
+        </div>
+        <div class="preview-controls">
+          <button id="previewPlayButton" type="button"><i data-lucide="play"></i><span>播放</span></button>
+          <button id="previousCueButton" type="button"><i data-lucide="arrow-up"></i><span>上一条</span></button>
+          <button id="nextCueButton" type="button"><i data-lucide="arrow-down"></i><span>下一条</span></button>
+          <button id="locateCueButton" type="button"><i data-lucide="locate-fixed"></i><span>定位到当前字幕</span></button>
+        </div>
+        <audio id="narrationAudio" preload="metadata" src="/.local/current/assets/narration.mp3"></audio>
+      </section>
+
+      <section class="panel cue-list-panel">
+        <div class="section-heading list-heading">
+          <span class="step-number">03</span><div><h2>字幕列表</h2><p>浏览全部字幕片段并快速检索</p></div>
+          <div class="list-stats"><strong id="cueCount">-- cues</strong><span id="totalDuration">--</span></div>
+        </div>
+        <div class="list-toolbar"><label class="search-field"><i data-lucide="search"></i><input id="cueSearch" type="search" placeholder="搜索字幕内容" /></label><button id="filterSceneButton" type="button"><i data-lucide="list-filter"></i><span>当前场景</span></button></div>
+        <div class="cue-table-head"><span>#</span><span>开始时间</span><span>结束时间</span><span>字幕内容</span><span>状态</span></div>
+        <div id="cueList" class="cue-list" aria-live="polite"></div>
+        <div class="list-footer"><button id="exportButton" type="button"><i data-lucide="upload"></i><span>导出 SRT</span></button><span>共 <strong id="footerCueCount">--</strong> 条字幕</span></div>
+      </section>
+
+      <section class="panel cue-detail">
+        <div class="section-heading editor-heading"><span class="step-number">04</span><div><h2>字幕编辑</h2><p>编辑当前字幕内容与时间</p></div><button id="jumpListButton" type="button"><i data-lucide="list"></i><span>跳转到列表</span></button></div>
+        <div class="timing-editor">
+          <label>开始时间<span><input id="cueStart" type="number" min="0" step="0.01" /><button id="startEarlierButton" type="button">−0.1s</button><button id="startLaterButton" type="button">+0.1s</button></span></label>
+          <label>结束时间<span><input id="cueEnd" type="number" min="0" step="0.01" /><button id="endEarlierButton" type="button">−0.1s</button><button id="endLaterButton" type="button">+0.1s</button></span></label>
+          <label>时长<input id="cueDuration" type="text" readonly /></label>
+        </div>
+        <label class="caption-text-label">字幕内容<textarea id="cueText" maxlength="200" spellcheck="false"></textarea><span id="textCount">0 / 200</span></label>
+        <div class="editor-options"><label><span>自动换行</span><input id="autoWrapToggle" type="checkbox" checked /></label><label><span>保留标点</span><input id="punctuationToggle" type="checkbox" checked /></label><label><span>双行预览</span><input id="twoLineToggle" type="checkbox" checked /></label></div>
+        <div class="detail-actions"><button id="restoreButton" type="button"><i data-lucide="rotate-ccw"></i><span>恢复自动生成</span></button><button id="saveButton" class="primary-button" type="button"><i data-lucide="save"></i><span>保存 captions.json</span></button></div>
+      </section>
+
+      <footer class="editor-footer">
+        <div><strong>操作说明 / 快捷键</strong><span><kbd>Space</kbd> 播放 / 暂停</span><span><kbd>←</kbd><kbd>→</kbd> 上一条 / 下一条</span><span><kbd>J</kbd><kbd>K</kbd> −0.1s / +0.1s</span><span><kbd>Ctrl</kbd><kbd>S</kbd> 保存文件</span></div>
+        <div class="modified-info"><strong>最近修改</strong><span id="modifiedText">尚未修改</span><em id="saveState">已保存</em></div>
+      </footer>
     </section>
+
+    <div id="notification" class="notification" role="status" aria-live="polite"></div>
   </main>
-  <script src="captions.js"></script>
 </body>
 </html>

@@ -4,42 +4,166 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>edge-tts Voice Preview</title>
-  <link rel="stylesheet" href="voices.css" />
+  <link rel="stylesheet" href="/tools/voices.css" />
+  <link rel="stylesheet" href="/tools/app-shell.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/lucide@0.513.0/dist/umd/lucide.min.js"></script>
+  <script defer src="/tools/voices.js"></script>
 </head>
-<body class="voice-page">
-  <main class="voice-shell">
-    <header class="voice-header">
-      <div class="brand-block">
-        <div class="brand-mark">VO</div>
+<body>
+  <main class="voice-app">
+    <aside class="voice-sidebar app-sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-mark">VF</div>
         <div>
-          <div class="eyebrow">EDGE TTS / VOICE PREVIEW</div>
-          <h1>Voice Preview</h1>
-          <p class="header-copy">试听 edge-tts 中文声线，选定后用于 Studio 的 TTS 生成。</p>
+          <p class="eyebrow">LOCAL VIDEO FACTORY</p>
+          <h1>Video Factory</h1>
         </div>
       </div>
-      <nav class="voice-actions">
-        <a href="studio.html">Studio</a>
-        <a href="../themes/default/index.html">Preview</a>
-        <a href="captions.html">Captions</a>
+
+      <nav class="product-nav" aria-label="产品工具">
+        <p class="nav-label">产品工具</p>
+        <a href="/studio"><i data-lucide="folder"></i><span>Studio</span></a>
+        <a class="active" href="/voices" aria-current="page"><i data-lucide="audio-lines"></i><span>Voice Preview</span></a>
+        <a href="/captions"><i data-lucide="captions"></i><span>Captions</span></a>
       </nav>
+
+      <div class="sidebar-spacer"></div>
+
+      <section class="engine-card">
+        <div class="engine-row">
+          <span id="engineDot" class="status-dot"></span>
+          <div>
+            <strong>引擎状态</strong>
+            <p id="engineStatus">正在连接</p>
+          </div>
+        </div>
+        <small>TTS · 本地 · AI 引擎</small>
+      </section>
+
+      <a class="settings-link" href="/studio"><i data-lucide="settings"></i><span>设置</span></a>
+    </aside>
+
+    <header class="voice-topbar">
+      <div class="project-title">
+        <i data-lucide="folder"></i>
+        <strong>voice-preview</strong>
+        <span class="tool-badge">本地工具</span>
+        <span class="ready-state"><i></i><span id="topStatus">已就绪</span></span>
+      </div>
+      <a class="open-output-button" href="/.local/assets/voice-preview/" target="_blank" rel="noreferrer">
+        <i data-lucide="folder-open"></i><span>打开输出目录</span>
+      </a>
     </header>
 
-    <section class="voice-summary">
-      <div><span>TEXT</span><p id="previewText">loading...</p></div>
-      <div><span>RATE</span><p id="previewRate">--</p></div>
-      <div><span>PITCH</span><p id="previewPitch">--</p></div>
+    <section class="voice-workspace">
+      <section class="panel text-panel">
+        <div class="step-heading">
+          <span class="step-number">01</span>
+          <div>
+            <h2>文本内容</h2>
+            <p>输入或粘贴要转换为语音的文本</p>
+          </div>
+        </div>
+        <div class="text-editor-wrap">
+          <textarea id="textInput" maxlength="3000" spellcheck="false">欢迎使用 edge-tts 中文语音试听工具。
+
+在这里，您可以选择不同的中文声音，调整语速和音调，并在本地生成语音试听。
+
+所有语音生成都在本地完成，保护您的隐私与数据安全。
+
+请点击右侧“生成试听”开始体验。</textarea>
+          <span id="charCount" class="char-count">0 / 3000</span>
+        </div>
+        <div class="text-actions">
+          <button id="clearTextButton" class="quiet-button" type="button"><i data-lucide="trash-2"></i><span>清空文本</span></button>
+          <button id="insertExampleButton" class="quiet-button" type="button"><i data-lucide="text-cursor-input"></i><span>插入示例文本</span></button>
+        </div>
+      </section>
+
+      <section class="panel settings-panel">
+        <div class="step-heading">
+          <span class="step-number">02</span>
+          <div>
+            <h2>语音参数</h2>
+            <p>选择声音并调整参数</p>
+          </div>
+        </div>
+
+        <label class="field-label">声音
+          <span class="select-with-icon"><i data-lucide="volume-2"></i><select id="voiceSelect"></select></span>
+        </label>
+
+        <div class="range-grid">
+          <label class="range-field">
+            <span><span><i data-lucide="gauge"></i>语速 (Rate)</span><strong id="rateValue">+0%</strong></span>
+            <input id="rateInput" type="range" min="-50" max="50" value="0" step="1" />
+            <small><span>-50%</span><span>+50%</span></small>
+          </label>
+          <label class="range-field">
+            <span><span><i data-lucide="audio-waveform"></i>音调 (Pitch)</span><strong id="pitchValue">+0Hz</strong></span>
+            <input id="pitchInput" type="range" min="-24" max="24" value="0" step="1" />
+            <small><span>-24Hz</span><span>+24Hz</span></small>
+          </label>
+        </div>
+
+        <label class="field-label">输出格式
+          <span class="select-with-icon"><i data-lucide="music-2"></i>
+            <select id="formatSelect"><option value="mp3">MP3</option></select>
+          </span>
+        </label>
+
+        <button id="generateButton" class="primary-button" type="button"><i data-lucide="play"></i><span>生成试听</span></button>
+      </section>
+
+      <section class="panel preview-panel">
+        <div class="step-heading">
+          <span class="step-number">03</span>
+          <div>
+            <h2>声音试听</h2>
+            <p>试听将在本地生成并播放</p>
+          </div>
+        </div>
+
+        <div class="preview-stage">
+          <div class="wave-decoration" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+          <button id="largePlayButton" class="large-play" type="button" disabled aria-label="播放试听"><i data-lucide="play"></i></button>
+          <div id="previewEmpty" class="preview-message">
+            <h3>还没有生成声音试听</h3>
+            <p>选择语音参数后，点击“生成试听”即可在本地生成并试听效果</p>
+          </div>
+          <div id="previewReady" class="preview-message" hidden>
+            <h3 id="currentVoiceName">试听已生成</h3>
+            <p id="currentVoiceMeta">可以播放当前音频</p>
+          </div>
+        </div>
+        <audio id="audioPlayer" controls preload="metadata"></audio>
+        <div class="command-strip"><i data-lucide="terminal"></i><code>python main.py voice-preview</code><button id="copyCommandButton" type="button" title="复制命令"><i data-lucide="copy"></i></button></div>
+      </section>
+
+      <section class="panel guide-panel">
+        <div class="section-heading">
+          <span class="step-number">04</span>
+          <div><h2>使用说明</h2><p>了解本工具的工作流程与说明</p></div>
+        </div>
+        <ul class="guide-list">
+          <li><i data-lucide="audio-lines"></i><span>本页面用于比较 edge-tts 中文声音效果，可自由切换不同声音和参数。</span></li>
+          <li><i data-lucide="play"></i><span>点击“生成试听”后，任务将在后台执行，完成后自动载入播放器。</span></li>
+          <li><i data-lucide="refresh-cw"></i><span>生成的试听音频只保存在本地，不会上传到任何服务器。</span></li>
+        </ul>
+        <div class="log-header"><strong>接口日志</strong><span id="jobStatus" class="job-status">空闲</span><button id="clearLogButton" type="button">清空日志</button></div>
+        <pre id="jobLog" class="job-log">等待接口调用。</pre>
+      </section>
+
+      <section class="panel history-panel">
+        <div class="section-heading history-heading">
+          <div><h2>最近试听记录</h2><p>本地生成的最近音频（仅在本地保留）</p></div>
+          <button id="refreshHistoryButton" class="icon-button" type="button" title="刷新记录"><i data-lucide="refresh-cw"></i></button>
+        </div>
+        <div id="historyList" class="history-list" aria-live="polite"></div>
+      </section>
     </section>
 
-    <section class="voice-workspace">
-      <aside class="voice-help">
-        <div class="section-label">How it works</div>
-        <h2>先生成试听，再打开此页</h2>
-        <p>这个页面读取本地生成的 voice preview manifest，不会在线实时请求 edge-tts。</p>
-        <code>python main.py voice-preview</code>
-      </aside>
-      <section id="voiceList" class="voice-list" aria-live="polite"></section>
-    </section>
+    <div id="notification" class="notification" role="status" aria-live="polite"></div>
   </main>
-  <script src="voices.js"></script>
 </body>
 </html>

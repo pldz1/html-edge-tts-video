@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AI Response Import</title>
+  <link rel="stylesheet" href="/tools/studio.css" />
+  <link rel="stylesheet" href="/tools/app-shell.css" />
+  <link rel="stylesheet" href="/tools/studio-workflow.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/lucide@0.513.0/dist/umd/lucide.min.js"></script>
+  <script defer src="/tools/studio-workflow.js"></script>
+</head>
+<body data-workflow="import">
+  <main class="studio-app workflow-app">
+    <aside class="app-sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-mark">VF</div>
+        <div><p class="eyebrow">LOCAL VIDEO FACTORY</p><h1>Video Factory</h1></div>
+      </div>
+      <nav class="product-nav" aria-label="产品工具">
+        <p class="nav-label">产品工具</p>
+        <a href="/studio"><i data-lucide="folder"></i><span>Studio</span></a>
+        <a href="/voices"><i data-lucide="audio-lines"></i><span>Voice Preview</span></a>
+        <a href="/captions"><i data-lucide="captions"></i><span>Captions</span></a>
+      </nav>
+      <div class="sidebar-spacer"></div>
+      <section class="engine-card">
+        <div class="engine-row"><span class="status-dot"></span><div><strong>引擎状态</strong><p>运行正常</p></div></div>
+        <small>TTS · 本地 · AI 引擎</small>
+      </section>
+      <a class="settings-link active" href="/studio/import"><i data-lucide="file-input"></i><span>Import AI</span></a>
+    </aside>
+
+    <header class="workflow-topbar">
+      <section class="workflow-title">
+        <i data-lucide="file-input"></i>
+        <div><p class="section-label">Studio Route</p><h1>AI Response Import</h1></div>
+      </section>
+      <nav class="workflow-actions">
+        <a class="quiet-button" href="/studio/prompt"><i data-lucide="copy"></i><span>生成 Prompt</span></a>
+        <a class="quiet-button" href="/studio"><i data-lucide="layout-dashboard"></i><span>返回 Studio</span></a>
+      </nav>
+    </header>
+
+    <section class="workflow-workspace import-workspace">
+      <section class="panel import-source-panel">
+        <div class="panel-heading">
+          <div><p class="section-label">01</p><h2>粘贴 AI 输出</h2></div>
+          <button id="extractButton" class="quiet-button" type="button"><i data-lucide="scan-text"></i><span>提取</span></button>
+        </div>
+        <div class="import-mode-tabs" role="tablist" aria-label="导入方式">
+          <button class="active" type="button" data-import-mode="response"><i data-lucide="scan-text"></i><span>AI Response</span></button>
+          <button type="button" data-import-mode="direct"><i data-lucide="columns-2"></i><span>分别粘贴</span></button>
+        </div>
+        <textarea id="aiResponseInput" class="workflow-response" spellcheck="false" placeholder="粘贴 Web AI 返回的 scenes.json 和 body.html。"></textarea>
+        <div class="direct-import-grid" hidden>
+          <label>scenes.json<textarea id="directScenesInput" class="code-field" spellcheck="false" placeholder="直接粘贴 scenes.json"></textarea></label>
+          <label>body.html<textarea id="directBodyInput" class="code-field" spellcheck="false" placeholder="直接粘贴 body.html"></textarea></label>
+        </div>
+        <div class="save-row workflow-save-row">
+          <label>项目 slug<input id="projectSlugInput" type="text" value="my-video" /></label>
+          <button id="validateExtractedButton" class="quiet-button" type="button"><i data-lucide="shield-check"></i><span>校验</span></button>
+          <button id="saveProjectButton" class="primary-button" type="button"><i data-lucide="save"></i><span>保存并加载</span></button>
+        </div>
+      </section>
+
+      <section class="panel import-preview-panel">
+        <div class="panel-heading">
+          <div><p class="section-label">02</p><h2>提取结果</h2></div>
+          <span id="extractStatus" class="job-status">等待提取</span>
+        </div>
+        <div class="extract-grid workflow-extract-grid">
+          <label>scenes.json<textarea id="scenesOutput" class="code-field" spellcheck="false"></textarea></label>
+          <label>body.html<textarea id="bodyOutput" class="code-field" spellcheck="false"></textarea></label>
+        </div>
+      </section>
+      <p id="statusText" class="toast-line workflow-toast">Ready.</p>
+    </section>
+  </main>
+</body>
+</html>
