@@ -20,13 +20,25 @@ const els = {
   bodyOutput: $('#bodyOutput'),
   statusText: $('#statusText'),
   extractStatus: $('#extractStatus'),
+  workflowGuideButton: $('#workflowGuideButton'),
+  workflowGuideDialog: $('#workflowGuideDialog'),
 };
 
 let promptRefreshFrame = 0;
-let importMode = 'response';
+let importMode = 'smart';
+let importProjectSlug = '';
 
 function renderIcons() {
   if (window.lucide) window.lucide.createIcons();
+}
+
+function bindGuideDialog() {
+  if (!els.workflowGuideButton || !els.workflowGuideDialog) return;
+  els.workflowGuideButton.addEventListener('click', () => els.workflowGuideDialog.showModal());
+  els.workflowGuideDialog.querySelector('[data-close-guide]')?.addEventListener('click', () => els.workflowGuideDialog.close());
+  els.workflowGuideDialog.addEventListener('click', event => {
+    if (event.target === els.workflowGuideDialog) els.workflowGuideDialog.close();
+  });
 }
 
 function setStatus(message, tone = 'neutral') {
@@ -54,54 +66,191 @@ function postJson(path, payload) {
   return api(path, { method: 'POST', body: JSON.stringify(payload) });
 }
 
+function cleanSlug(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\u4e00-\u9fa5_-]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'new-video';
+}
+
+function projectFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('project') || params.get('slug') || '';
+}
+
+async function initImportProjectContext() {
+  if (!els.projectSlugInput) return;
+  const urlProject = projectFromUrl();
+  if (urlProject) {
+    importProjectSlug = cleanSlug(urlProject);
+    els.projectSlugInput.value = importProjectSlug;
+    setStatus(`正在打开项目：${importProjectSlug}`);
+    try {
+      const data = await api(`/api/projects/source?project=${encodeURIComponent(importProjectSlug)}`);
+      const scenes = data?.files?.scenesJson || '';
+      const body = data?.files?.bodyHtml || '';
+      if (els.directScenesInput) els.directScenesInput.value = scenes;
+      if (els.directBodyInput) els.directBodyInput.value = body;
+      if (els.scenesOutput) els.scenesOutput.value = scenes;
+      if (els.bodyOutput) els.bodyOutput.value = body;
+      setExtractStatus(scenes && body ? '已载入' : '待补全', scenes && body ? 'succeeded' : 'running');
+      setStatus(`已载入项目：${importProjectSlug}，现在可以直接编辑并保存覆盖。`, 'success');
+    } catch (error) {
+      setStatus(error.message || `无法读取项目：${importProjectSlug}`, 'error');
+    }
+    return;
+  }
+  try {
+    const state = await api('/api/studio/state');
+    const activeSlug = state?.activeProject?.slug || '';
+    if (activeSlug) {
+      importProjectSlug = activeSlug;
+      els.projectSlugInput.value = activeSlug;
+      setStatus(`当前会保存到已加载项目：${activeSlug}`);
+    }
+  } catch {
+    // Import can still work as a standalone create flow.
+  }
+}
+
 function buildPrompt() {
   const topic = els.topicInput.value.trim();
   const audience = els.audienceInput.value.trim();
   const tone = els.toneInput.value.trim();
   const sceneCount = els.sceneCountInput.value.trim();
   const notes = els.notesInput.value.trim();
+  const preferredSceneCount = sceneCount ? `\nPreferred scene count:\n${sceneCount}` : '';
+  const additionalNotes = notes ? `\nAdditional requirement:\n${notes}` : '';
 
-  return `你是一个 HTML edge-tts video source generator。
-请为本地视频工厂生成一个中文旁白视频源。主题：${topic}
+  return `You are generating a source folder for an HTML edge-tts video factory.
 
-受众：${audience}
-风格：${tone}
-场景数量：${sceneCount}
-额外要求：${notes}
+Output only these files:
 
-必须遵守：
-- 只输出 scenes.json 和 body.html。
-- 不要生成 app.js、runtime.js、脚本标签、播放控件、进度条、章节栏、时间码或字幕文件。
-- 第一幕必须是 id 为 "intro" 的总览场景。
-- 每个 scene 必须包含 id、category、title、summary、narration。
-- category 使用 2 到 12 个中文字符。
-- body.html 必须为每个 scene id 提供一个 <section class="content-scene scene" data-scene="...">。
-- 优先使用 visual-board、diagram-flow、comparison-grid、metric-grid、formula-strip、concept-map、scene-list 等结构化视觉。
-- 重要内容避开画面底部 25%，给字幕和章节栏留空间。
-
-请按下面格式返回，不要添加解释：
-
-\`\`\`json scenes.json
-[
-  {
-    "id": "intro",
-    "category": "总览",
-    "title": "标题",
-    "summary": "摘要",
-    "narration": "中文旁白。"
-  }
-]
+\`\`\`text
+scenes.json
+body.html
+media/ optional
 \`\`\`
 
-\`\`\`html body.html
+Do not output \`app.js\`, \`runtime.js\`, JavaScript, a renderer folder, MP3, timeline JSON, or MP4.
+The factory theme owns playback, captions, the continuous chapter rail, preview controls, and rendering.
+Do not output \`captions.json\`; the local factory creates editable captions after real TTS timing exists.
+
+Topic:
+${topic || '<PUT THE VIDEO TOPIC HERE>'}
+
+Audience:
+${audience || '<PUT THE TARGET AUDIENCE HERE>'}
+
+Tone:
+${tone || '<PUT THE TONE HERE>'}${preferredSceneCount}${additionalNotes}
+
+Visual direction:
+<PUT THE VISUAL DIRECTION HERE>
+
+Important visual requirement:
+Avoid text-only slides. Each scene should include at least one explanatory visual made from HTML
+elements or a compact inline SVG: a pipeline, state diagram, comparison matrix, metric cards, concept
+map, formula strip, or other structured graphic. Do not use <canvas> unless the canvas content is
+already rendered as media, because this source must not include JavaScript.
+
+## Output Contract
+
+Return the files as separate fenced code blocks with clear filenames:
+
+\`\`\`text
+// scenes.json
+...
+\`\`\`
+
+\`\`\`html
+<!-- body.html -->
+...
+\`\`\`
+
+If media assets are needed, describe the exact filenames and what each asset should contain.
+
+## Rules for \`scenes.json\`
+
+- Output valid JSON only.
+- Use an array of scene objects.
+- The first scene must have "id": "intro" and must introduce where the video starts, what it will explain, and the rough route of the video.
+- Every scene must contain:
+  - \`id\`: lowercase letters, digits, and hyphens only.
+  - \`category\`: a short Chinese label, 2 to 12 characters, used by the factory's bottom chapter rail.
+  - \`title\`: visual title for the scene.
+  - \`summary\`: one sentence for the visual summary.
+  - \`narration\`: natural Chinese spoken narration.
+- Optional fields such as \`visual_notes\` are allowed, but do not rely on JavaScript.
+- For an approximately three-minute video at edge-tts \`+12%\` rate, target 1,150 to 1,250 Chinese characters total.
+- Keep each scene focused. Prefer 4 to 7 scenes for a short explainer.
+- Match every scene's narration with a visual aid, so the screen explains structure rather than only repeating the spoken text.
+
+Example scene:
+
+\`\`\`json
+{
+  "id": "intro",
+  "category": "总览",
+  "title": "从问题入口开始",
+  "summary": "先说明本视频从哪里切入，以及后面会讲什么。",
+  "narration": "这条视频先从问题入口讲起，然后拆解核心概念、常见误区和最后的操作建议。"
+}
+\`\`\`
+
+## Rules for \`body.html\`
+
+- Output an HTML fragment, not a full HTML document.
+- Do not include \`<html>\`, \`<head>\`, \`<body>\`, \`<script>\`, inline event handlers, or JavaScript.
+- Do not include headers, footers, playback controls, scrubbers, timecodes, transport bars, or template chrome.
+- Do not include a per-scene progress bar such as \`progress-line\`.
+- Do not create the bottom chapter rail in \`body.html\`; the factory generates one continuous rail from \`scenes.json.category\` and the TTS timeline.
+- Include one top-level section per scene:
+
+\`\`\`html
 <section class="content-scene scene" data-scene="intro">
-  <div class="scene-copy">
-    <div class="eyebrow">INTRO</div>
-    <h1>标题</h1>
-    <p class="summary">摘要。</p>
-  </div>
-  <div class="visual-board"></div>
+  ...
 </section>
+\`\`\`
+
+- Every \`id\` in \`scenes.json\` must have a matching \`data-scene\` section.
+- The \`intro\` section must visually introduce the topic, starting point, and route. Do not jump straight into a detail scene.
+- Keep important visual content clear of the bottom 25% of the frame because captions and the generated chapter rail live there.
+- Use theme-friendly classes when helpful:
+  - \`scene-copy\`
+  - \`eyebrow\`
+  - \`summary\`
+  - \`scene-list\`
+  - \`visual-board\`
+  - \`visual-grid\`
+  - \`step-chip\` with \`data-step\`
+  - \`quote-panel\`
+  - \`diagram-flow\` with \`diagram-node\`
+  - \`comparison-grid\` with \`comparison-card\`
+  - \`metric-grid\` with \`metric-card\` and \`metric-value\`
+  - \`formula-strip\` with \`formula-token\`
+  - \`concept-map\` with \`concept-node\`
+  - \`diagram-svg\` for compact inline SVG diagrams
+- Reference local assets as \`media/name.ext\`.
+
+Example visual block:
+
+\`\`\`html
+<div class="visual-board">
+  <div class="diagram-flow">
+    <div class="diagram-node" data-step><b>输入</b><span>问题和素材</span></div>
+    <div class="diagram-node" data-step><b>处理</b><span>拆成结构</span></div>
+    <div class="diagram-node" data-step><b>输出</b><span>画面和旁白</span></div>
+  </div>
+  <div class="formula-strip">
+    <div class="formula-token"><b>概念</b><span>是什么</span></div>
+    <div class="formula-token operator">+</div>
+    <div class="formula-token"><b>关系</b><span>怎么连</span></div>
+    <div class="formula-token operator">=</div>
+    <div class="formula-token"><b>结论</b><span>怎么用</span></div>
+  </div>
+</div>
 \`\`\``;
 }
 
@@ -133,6 +282,7 @@ async function copyPrompt() {
 function extractFence(text, name, language) {
   const patterns = [
     new RegExp(`\`\`\`${language}\\s+${name}\\s*\\n([\\s\\S]*?)\\n\`\`\``, 'i'),
+    new RegExp(`\`\`\`${language}\\s+index\\.html\\s*\\n([\\s\\S]*?)\\n\`\`\``, 'i'),
     new RegExp(`${name}\\s*:?\\s*\\n\`\`\`(?:${language})?\\s*\\n([\\s\\S]*?)\\n\`\`\``, 'i'),
     new RegExp(`\`\`\`${language}\\s*\\n([\\s\\S]*?)\\n\`\`\``, 'i'),
   ];
@@ -143,9 +293,23 @@ function extractFence(text, name, language) {
   return '';
 }
 
+function looksLikeScenesJson(text) {
+  try {
+    const parsed = JSON.parse(text);
+    return Array.isArray(parsed) && parsed.some(scene => scene && typeof scene === 'object' && scene.id && scene.narration);
+  } catch {
+    return false;
+  }
+}
+
+function looksLikeBodyHtml(text) {
+  return /<section\b[\s\S]*data-scene=/i.test(text) || /<body\b[\s\S]*<section\b/i.test(text);
+}
+
 function extractScenes(text) {
   const fenced = extractFence(text, 'scenes.json', 'json');
   if (fenced) return fenced;
+  if (looksLikeScenesJson(text.trim())) return text.trim();
   const match = text.match(/\[\s*\{[\s\S]*?\}\s*\]/);
   return match ? match[0].trim() : '';
 }
@@ -153,10 +317,21 @@ function extractScenes(text) {
 function extractBody(text) {
   const fenced = extractFence(text, 'body.html', 'html');
   if (fenced) return fenced;
+  if (looksLikeBodyHtml(text.trim())) return text.trim();
   const firstSection = text.indexOf('<section');
   const lastSection = text.lastIndexOf('</section>');
   if (firstSection === -1 || lastSection === -1) return '';
   return text.slice(firstSection, lastSection + '</section>'.length).trim();
+}
+
+function readSmartSources() {
+  const smartText = els.aiResponseInput?.value || '';
+  const directScenes = els.directScenesInput?.value.trim() || '';
+  const directBody = els.directBodyInput?.value.trim() || '';
+  return {
+    scenes: directScenes || extractScenes(smartText) || els.scenesOutput.value.trim(),
+    body: directBody || extractBody(smartText) || els.bodyOutput.value.trim(),
+  };
 }
 
 function setExtractStatus(message, tone = 'neutral') {
@@ -166,18 +341,13 @@ function setExtractStatus(message, tone = 'neutral') {
 }
 
 function extractResponse() {
-  const directScenes = els.directScenesInput?.value.trim() || '';
-  const directBody = els.directBodyInput?.value.trim() || '';
-  const useDirect = importMode === 'direct' || directScenes || directBody;
-  const text = els.aiResponseInput.value;
-  const scenes = useDirect ? directScenes : extractScenes(text);
-  const body = useDirect ? directBody : extractBody(text);
+  const { scenes, body } = readSmartSources();
   els.scenesOutput.value = scenes;
   els.bodyOutput.value = body;
 
   if (!scenes || !body) {
-    setExtractStatus('提取失败', 'failed');
-    setStatus('没有同时找到 scenes.json 和 body.html。', 'error');
+    setExtractStatus('缺少文件', 'failed');
+    setStatus('还缺 scenes.json 或 body.html/index.html。可以继续粘贴，或切到分别粘贴。', 'error');
     return false;
   }
 
@@ -189,19 +359,19 @@ function extractResponse() {
     return false;
   }
 
-  setExtractStatus('已提取', 'succeeded');
-  setStatus('已提取 scenes.json 和 body.html。', 'success');
+  setExtractStatus('已识别', 'succeeded');
+  setStatus('已识别 scenes.json 和 body.html。', 'success');
   return true;
 }
 
 function setImportMode(mode) {
-  importMode = mode === 'direct' ? 'direct' : 'response';
+  importMode = mode === 'direct' ? 'direct' : 'smart';
   document.querySelectorAll('[data-import-mode]').forEach(button => {
     button.classList.toggle('active', button.dataset.importMode === importMode);
   });
   if (els.directImportGrid) els.directImportGrid.hidden = importMode !== 'direct';
   if (els.aiResponseInput) els.aiResponseInput.hidden = importMode === 'direct';
-  setStatus(importMode === 'direct' ? '当前使用分别粘贴模式。' : '当前使用 AI response 提取模式。');
+  setStatus(importMode === 'direct' ? '当前使用分别粘贴模式。' : '当前使用智能粘贴模式。');
 }
 
 function ensureExtracted() {
@@ -234,10 +404,12 @@ async function saveProject() {
   els.saveProjectButton.disabled = true;
   try {
     setStatus('正在保存项目...');
+    const overwrite = Boolean(importProjectSlug && cleanSlug(slug) === cleanSlug(importProjectSlug));
     const created = await postJson('/api/projects', {
       slug,
       scenesJson: els.scenesOutput.value,
       bodyHtml: els.bodyOutput.value,
+      overwrite,
     });
     await postJson('/api/projects/load', { project: created.project.slug });
     setStatus(`已保存并加载：${created.project.slug}`, 'success');
@@ -276,6 +448,17 @@ function bindImportPage() {
       if (importMode === 'direct') extractResponse();
     });
   });
+  els.aiResponseInput.addEventListener('input', () => {
+    if (importMode === 'smart') window.clearTimeout(els.aiResponseInput.extractTimer);
+    if (importMode === 'smart') {
+      els.aiResponseInput.extractTimer = window.setTimeout(() => {
+        const { scenes, body } = readSmartSources();
+        if (scenes) els.scenesOutput.value = scenes;
+        if (body) els.bodyOutput.value = body;
+        if (scenes || body) setExtractStatus(scenes && body ? '已识别' : '继续粘贴', scenes && body ? 'succeeded' : 'running');
+      }, 180);
+    }
+  });
   els.extractButton.addEventListener('click', extractResponse);
   els.validateExtractedButton.addEventListener('click', validateExtracted);
   els.saveProjectButton.addEventListener('click', saveProject);
@@ -283,4 +466,6 @@ function bindImportPage() {
 
 bindPromptPage();
 bindImportPage();
+bindGuideDialog();
+initImportProjectContext();
 renderIcons();

@@ -1,5 +1,6 @@
 const SOURCE_BASE = '/.local/current/source';
 const ASSET_BASE = '/.local/current/assets';
+const NARRATION_SRC = `${ASSET_BASE}/narration.mp3`;
 
 const state = {
   scenes: [],
@@ -10,6 +11,7 @@ const state = {
   raf: null,
   startedAt: 0,
   startOffset: 0,
+  hasNarrationAudio: false,
   renderMode: new URLSearchParams(location.search).has('render'),
 };
 
@@ -135,7 +137,38 @@ function activeCueAt(seconds) {
 function timelineMatchesSource(timeline, scenes) {
   const timelineScenes = timeline?.scenes || [];
   if (timelineScenes.length !== scenes.length) return false;
-  return scenes.every((scene, index) => timelineScenes[index]?.id === scene.id);
+  return scenes.every((scene, index) => (
+    timelineScenes[index]?.id === scene.id
+    && String(timelineScenes[index]?.narration || '') === String(scene.narration || '')
+  ));
+}
+
+function timelineAudioKey(timeline) {
+  const raw = [
+    timeline?.duration,
+    timeline?.voice,
+    timeline?.rate,
+    timeline?.pitch,
+    ...(timeline?.scenes || []).map(scene => `${scene.id}:${scene.narration}`),
+  ].join('|');
+  let hash = 0;
+  for (let index = 0; index < raw.length; index += 1) {
+    hash = ((hash << 5) - hash + raw.charCodeAt(index)) | 0;
+  }
+  return Math.abs(hash).toString(36);
+}
+
+function setNarrationAudio(enabled, timeline = null) {
+  state.hasNarrationAudio = Boolean(enabled && audio);
+  if (!audio) return;
+  if (state.hasNarrationAudio) {
+    audio.src = `${NARRATION_SRC}?v=${timelineAudioKey(timeline)}`;
+    audio.load();
+    return;
+  }
+  if (!audio.paused) audio.pause();
+  audio.removeAttribute('src');
+  audio.load();
 }
 
 function normalizeCaptionCue(cue, index) {
@@ -289,14 +322,14 @@ function renderAtTime(seconds) {
 function pause() {
   state.playing = false;
   if (playButton) playButton.textContent = 'Play';
-  if (!audio.paused) audio.pause();
+  if (audio && !audio.paused) audio.pause();
   cancelAnimationFrame(state.raf);
 }
 
 function tick(now) {
   if (!state.playing) return;
 
-  if (!state.renderMode && audio.src && !audio.paused && Number.isFinite(audio.currentTime)) {
+  if (!state.renderMode && state.hasNarrationAudio && audio && !audio.paused && Number.isFinite(audio.currentTime)) {
     state.current = audio.currentTime;
   } else {
     state.current = state.startOffset + (now - state.startedAt) / 1000;
@@ -319,7 +352,7 @@ async function startPlayback() {
   state.startedAt = performance.now();
   state.startOffset = state.current;
 
-  if (!state.renderMode) {
+  if (!state.renderMode && state.hasNarrationAudio && audio) {
     try {
       audio.currentTime = state.current;
       await audio.play();
@@ -344,7 +377,7 @@ if (scrubber) {
     const wasPlaying = state.playing;
     pause();
     state.current = Number(scrubber.value);
-    if (Number.isFinite(audio.duration)) audio.currentTime = state.current;
+    if (state.hasNarrationAudio && audio && Number.isFinite(audio.duration)) audio.currentTime = state.current;
     renderAtTime(state.current);
     if (wasPlaying) startPlayback();
   });
@@ -357,11 +390,16 @@ async function init() {
 
   try {
     const timeline = await fetchJson(`${ASSET_BASE}/timeline.json`);
-    state.timeline = timelineMatchesSource(timeline, state.scenes)
-      ? await applyCaptionOverrides(timeline)
-      : estimatedTimeline(state.scenes);
+    if (timelineMatchesSource(timeline, state.scenes)) {
+      state.timeline = await applyCaptionOverrides(timeline);
+      setNarrationAudio(true, timeline);
+    } else {
+      state.timeline = estimatedTimeline(state.scenes);
+      setNarrationAudio(false);
+    }
   } catch {
     state.timeline = estimatedTimeline(state.scenes);
+    setNarrationAudio(false);
   }
 
   state.duration = Number(state.timeline.duration) || 0;

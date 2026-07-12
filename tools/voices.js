@@ -28,6 +28,7 @@ const els = {
   engineStatus: $('#engineStatus'),
   topStatus: $('#topStatus'),
   notification: $('#notification'),
+  voiceGuideButton: $('#voiceGuideButton'), voiceGuideDialog: $('#voiceGuideDialog'),
 };
 
 const EXAMPLE_TEXT = `欢迎使用 edge-tts 中文语音试听工具。
@@ -47,6 +48,39 @@ let notificationTimer = 0;
 
 function renderIcons() {
   if (window.lucide) window.lucide.createIcons();
+}
+
+function bindGuideDialog() {
+  if (!els.voiceGuideButton || !els.voiceGuideDialog) return;
+  els.voiceGuideButton.addEventListener('click', startVoiceTour);
+  els.voiceGuideDialog.querySelector('[data-close-guide]')?.addEventListener('click', () => els.voiceGuideDialog.close());
+  els.voiceGuideDialog.addEventListener('click', event => {
+    if (event.target === els.voiceGuideDialog) els.voiceGuideDialog.close();
+  });
+}
+
+function startVoiceTour() {
+  const driverFactory = window.driver?.js?.driver;
+  if (!driverFactory) {
+    els.voiceGuideDialog.showModal();
+    return;
+  }
+  const steps = [
+    { element: '.text-panel', popover: { title: '1. 输入试听文本', description: '在这里粘贴一段旁白。先用两三句内容比较声音，效率最高。', side: 'right', align: 'start' } },
+    { element: '.settings-panel', popover: { title: '2. 选择声音和参数', description: '选择声音，再微调语速和音调。参数会直接用于下一次试听。', side: 'right', align: 'start' } },
+    { element: '#generateButton', popover: { title: '3. 生成试听', description: '点击后在本地生成音频，完成时会自动载入播放器。', side: 'right', align: 'center' } },
+    { element: '.history-panel', popover: { title: '4. 横向比较', description: '最近试听保存在这里，可快速播放不同声音或参数的结果。', side: 'left', align: 'start' } },
+  ];
+  driverFactory({
+    showProgress: true,
+    animate: true,
+    allowClose: true,
+    overlayOpacity: 0.42,
+    nextBtnText: '下一步',
+    prevBtnText: '上一步',
+    doneBtnText: '完成',
+    steps,
+  }).drive();
 }
 
 function nowLabel() {
@@ -319,6 +353,7 @@ function bindEvents() {
 }
 
 bindEvents();
+bindGuideDialog();
 updateInputs();
 renderIcons();
 setJobStatus('已就绪');

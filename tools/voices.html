@@ -4,8 +4,11 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>edge-tts Voice Preview</title>
+  <link rel="icon" href="/tools/favicon.ico" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.6/dist/driver.css" />
   <link rel="stylesheet" href="/tools/voices.css" />
   <link rel="stylesheet" href="/tools/app-shell.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/driver.js@1.3.6/dist/driver.js.iife.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/lucide@0.513.0/dist/umd/lucide.min.js"></script>
   <script defer src="/tools/voices.js"></script>
 </head>
@@ -50,9 +53,12 @@
         <span class="tool-badge">本地工具</span>
         <span class="ready-state"><i></i><span id="topStatus">已就绪</span></span>
       </div>
-      <a class="open-output-button" href="/.local/assets/voice-preview/" target="_blank" rel="noreferrer">
+      <div class="tool-top-actions">
+        <button id="voiceGuideButton" class="quiet-button" type="button"><i data-lucide="circle-help"></i><span>使用指南</span></button>
+        <a class="open-output-button" href="/.local/assets/voice-preview/" target="_blank" rel="noreferrer">
         <i data-lucide="folder-open"></i><span>打开输出目录</span>
-      </a>
+        </a>
+      </div>
     </header>
 
     <section class="voice-workspace">
@@ -143,15 +149,17 @@
       <section class="panel guide-panel">
         <div class="section-heading">
           <span class="step-number">04</span>
-          <div><h2>使用说明</h2><p>了解本工具的工作流程与说明</p></div>
+          <div><h2>生成状态</h2><p>试听生成完成后会自动播放，并保存到最近记录</p></div>
+          <span id="jobStatus" class="job-status">空闲</span>
         </div>
-        <ul class="guide-list">
-          <li><i data-lucide="audio-lines"></i><span>本页面用于比较 edge-tts 中文声音效果，可自由切换不同声音和参数。</span></li>
-          <li><i data-lucide="play"></i><span>点击“生成试听”后，任务将在后台执行，完成后自动载入播放器。</span></li>
-          <li><i data-lucide="refresh-cw"></i><span>生成的试听音频只保存在本地，不会上传到任何服务器。</span></li>
-        </ul>
-        <div class="log-header"><strong>接口日志</strong><span id="jobStatus" class="job-status">空闲</span><button id="clearLogButton" type="button">清空日志</button></div>
-        <pre id="jobLog" class="job-log">等待接口调用。</pre>
+        <div class="generation-flow" aria-label="生成流程">
+          <span><i data-lucide="type"></i>输入文本</span><i data-lucide="chevron-right"></i><span><i data-lucide="sliders-horizontal"></i>选择声音</span><i data-lucide="chevron-right"></i><span><i data-lucide="headphones"></i>生成试听</span>
+        </div>
+        <details class="advanced-log">
+          <summary>查看任务日志</summary>
+          <div class="log-header"><strong>本地接口日志</strong><button id="clearLogButton" type="button">清空</button></div>
+          <pre id="jobLog" class="job-log">等待接口调用。</pre>
+        </details>
       </section>
 
       <section class="panel history-panel">
@@ -164,6 +172,10 @@
     </section>
 
     <div id="notification" class="notification" role="status" aria-live="polite"></div>
+    <dialog id="voiceGuideDialog" class="tool-guide-dialog" aria-labelledby="voiceGuideTitle">
+      <div class="guide-dialog-heading"><div><p>VOICE PREVIEW GUIDE</p><h2 id="voiceGuideTitle">声音试听怎么用</h2></div><button type="button" data-close-guide aria-label="关闭"><i data-lucide="x"></i></button></div>
+      <ol><li><strong>输入文本</strong><span>粘贴一段想试听的旁白，左下角会显示字数。</span></li><li><strong>选择声音和参数</strong><span>调整声音、语速和音调，先用短文本比较效果。</span></li><li><strong>生成并复听</strong><span>点击“生成试听”，完成后在右侧播放，也可从最近记录快速比较。</span></li></ol>
+    </dialog>
   </main>
 </body>
 </html>

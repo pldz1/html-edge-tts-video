@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>AI Response Import</title>
+  <title>Source Import</title>
+  <link rel="icon" href="/tools/favicon.ico" />
   <link rel="stylesheet" href="/tools/studio.css" />
   <link rel="stylesheet" href="/tools/app-shell.css" />
   <link rel="stylesheet" href="/tools/studio-workflow.css" />
@@ -28,15 +29,16 @@
         <div class="engine-row"><span class="status-dot"></span><div><strong>引擎状态</strong><p>运行正常</p></div></div>
         <small>TTS · 本地 · AI 引擎</small>
       </section>
-      <a class="settings-link active" href="/studio/import"><i data-lucide="file-input"></i><span>Import AI</span></a>
+      <a class="settings-link active" href="/studio/import"><i data-lucide="file-input"></i><span>Import Source</span></a>
     </aside>
 
     <header class="workflow-topbar">
       <section class="workflow-title">
         <i data-lucide="file-input"></i>
-        <div><p class="section-label">Studio Route</p><h1>AI Response Import</h1></div>
+        <div><p class="section-label">Studio Route</p><h1>Source Import</h1></div>
       </section>
       <nav class="workflow-actions">
+        <button id="workflowGuideButton" class="quiet-button" type="button"><i data-lucide="circle-help"></i><span>使用指南</span></button>
         <a class="quiet-button" href="/studio/prompt"><i data-lucide="copy"></i><span>生成 Prompt</span></a>
         <a class="quiet-button" href="/studio"><i data-lucide="layout-dashboard"></i><span>返回 Studio</span></a>
       </nav>
@@ -45,20 +47,20 @@
     <section class="workflow-workspace import-workspace">
       <section class="panel import-source-panel">
         <div class="panel-heading">
-          <div><p class="section-label">01</p><h2>粘贴 AI 输出</h2></div>
-          <button id="extractButton" class="quiet-button" type="button"><i data-lucide="scan-text"></i><span>提取</span></button>
+          <div><p class="section-label">01</p><h2>导入源内容</h2></div>
+          <button id="extractButton" class="quiet-button" type="button"><i data-lucide="scan-text"></i><span>识别</span></button>
         </div>
         <div class="import-mode-tabs" role="tablist" aria-label="导入方式">
-          <button class="active" type="button" data-import-mode="response"><i data-lucide="scan-text"></i><span>AI Response</span></button>
+          <button class="active" type="button" data-import-mode="smart"><i data-lucide="scan-text"></i><span>智能粘贴</span></button>
           <button type="button" data-import-mode="direct"><i data-lucide="columns-2"></i><span>分别粘贴</span></button>
         </div>
-        <textarea id="aiResponseInput" class="workflow-response" spellcheck="false" placeholder="粘贴 Web AI 返回的 scenes.json 和 body.html。"></textarea>
+        <textarea id="aiResponseInput" class="workflow-response" spellcheck="false" placeholder="粘贴整段 AI 回复，或直接粘贴 scenes.json / body.html / index.html。可以分多次粘贴，系统会自动识别。"></textarea>
         <div class="direct-import-grid" hidden>
           <label>scenes.json<textarea id="directScenesInput" class="code-field" spellcheck="false" placeholder="直接粘贴 scenes.json"></textarea></label>
-          <label>body.html<textarea id="directBodyInput" class="code-field" spellcheck="false" placeholder="直接粘贴 body.html"></textarea></label>
+          <label>body.html / index.html<textarea id="directBodyInput" class="code-field" spellcheck="false" placeholder="直接粘贴 body.html 或 index.html"></textarea></label>
         </div>
         <div class="save-row workflow-save-row">
-          <label>项目 slug<input id="projectSlugInput" type="text" value="my-video" /></label>
+          <label>项目 slug<input id="projectSlugInput" type="text" placeholder="项目名称 / slug" /></label>
           <button id="validateExtractedButton" class="quiet-button" type="button"><i data-lucide="shield-check"></i><span>校验</span></button>
           <button id="saveProjectButton" class="primary-button" type="button"><i data-lucide="save"></i><span>保存并加载</span></button>
         </div>
@@ -66,8 +68,8 @@
 
       <section class="panel import-preview-panel">
         <div class="panel-heading">
-          <div><p class="section-label">02</p><h2>提取结果</h2></div>
-          <span id="extractStatus" class="job-status">等待提取</span>
+          <div><p class="section-label">02</p><h2>当前源文件</h2></div>
+          <span id="extractStatus" class="job-status">等待识别</span>
         </div>
         <div class="extract-grid workflow-extract-grid">
           <label>scenes.json<textarea id="scenesOutput" class="code-field" spellcheck="false"></textarea></label>
@@ -76,6 +78,10 @@
       </section>
       <p id="statusText" class="toast-line workflow-toast">Ready.</p>
     </section>
+    <dialog id="workflowGuideDialog" class="tool-guide-dialog" aria-labelledby="workflowGuideTitle">
+      <div class="guide-dialog-heading"><div><p>IMPORT GUIDE</p><h2 id="workflowGuideTitle">导入项目源文件</h2></div><button type="button" data-close-guide aria-label="关闭"><i data-lucide="x"></i></button></div>
+      <ol><li><strong>粘贴或分别填写</strong><span>可粘贴完整 AI 回复，也可分别编辑 scenes.json 与 body.html。</span></li><li><strong>检查内容</strong><span>确认首个场景为 intro，且每个场景都有 category。</span></li><li><strong>保存并加载</strong><span>保存后该项目会自动切换为当前项目，随后在 Studio 生成配音。</span></li></ol>
+    </dialog>
   </main>
 </body>
 </html>

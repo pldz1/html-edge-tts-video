@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>AI Prompt Builder</title>
+  <link rel="icon" href="/tools/favicon.ico" />
   <link rel="stylesheet" href="/tools/studio.css" />
   <link rel="stylesheet" href="/tools/app-shell.css" />
   <link rel="stylesheet" href="/tools/studio-workflow.css" />
@@ -37,6 +38,7 @@
         <div><p class="section-label">Studio Route</p><h1>AI Prompt Builder</h1></div>
       </section>
       <nav class="workflow-actions">
+        <button id="workflowGuideButton" class="quiet-button" type="button"><i data-lucide="circle-help"></i><span>使用指南</span></button>
         <a class="quiet-button" href="/studio"><i data-lucide="layout-dashboard"></i><span>返回 Studio</span></a>
         <a class="quiet-button" href="/studio/import"><i data-lucide="file-input"></i><span>导入 Response</span></a>
       </nav>
@@ -71,6 +73,10 @@
       </section>
       <p id="statusText" class="toast-line workflow-toast">Ready.</p>
     </section>
+    <dialog id="workflowGuideDialog" class="tool-guide-dialog" aria-labelledby="workflowGuideTitle">
+      <div class="guide-dialog-heading"><div><p>PROMPT GUIDE</p><h2 id="workflowGuideTitle">创建项目的三步</h2></div><button type="button" data-close-guide aria-label="关闭"><i data-lucide="x"></i></button></div>
+      <ol><li><strong>填写主题</strong><span>说明对象、受众和希望的视频风格。</span></li><li><strong>复制 Prompt</strong><span>将生成的提示词交给任意 AI，并让它只返回 scenes.json 和 body.html。</span></li><li><strong>导入结果</strong><span>返回后打开“导入 Response”，识别并保存为项目。</span></li></ol>
+    </dialog>
   </main>
 </body>
 </html>

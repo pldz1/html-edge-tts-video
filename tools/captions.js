@@ -18,7 +18,7 @@ const state = {
 
 const els = {
   statusText: $('#statusText'), engineStatus: $('#engineStatus'), engineDot: $('#engineDot'),
-  captionProjectSelect: $('#captionProjectSelect'),
+  captionProjectSelect: $('#captionProjectSelect'), captionProjectName: $('#captionProjectName'),
   sceneSearch: $('#sceneSearch'), sceneList: $('#sceneList'), sceneScrollLeft: $('#sceneScrollLeft'), sceneScrollRight: $('#sceneScrollRight'),
   currentTimeText: $('#currentTimeText'), durationText: $('#durationText'), timelineTrack: $('#timelineTrack'), timelineProgress: $('#timelineProgress'), timelineCues: $('#timelineCues'), timelinePlayhead: $('#timelinePlayhead'), timelinePlayButton: $('#timelinePlayButton'),
   previousSceneButton: $('#previousSceneButton'), nextSceneButton: $('#nextSceneButton'),
@@ -28,6 +28,7 @@ const els = {
   startEarlierButton: $('#startEarlierButton'), startLaterButton: $('#startLaterButton'), endEarlierButton: $('#endEarlierButton'), endLaterButton: $('#endLaterButton'),
   autoWrapToggle: $('#autoWrapToggle'), punctuationToggle: $('#punctuationToggle'), twoLineToggle: $('#twoLineToggle'), restoreButton: $('#restoreButton'), saveButton: $('#saveButton'), jumpListButton: $('#jumpListButton'),
   modifiedText: $('#modifiedText'), saveState: $('#saveState'), notification: $('#notification'),
+  captionGuideButton: $('#captionGuideButton'), captionGuideDialog: $('#captionGuideDialog'),
 };
 
 let notificationTimer = 0;
@@ -35,6 +36,39 @@ const pad = (value, width = 2) => String(value).padStart(width, '0');
 
 function renderIcons() {
   if (window.lucide) window.lucide.createIcons();
+}
+
+function bindGuideDialog() {
+  if (!els.captionGuideButton || !els.captionGuideDialog) return;
+  els.captionGuideButton.addEventListener('click', startCaptionTour);
+  els.captionGuideDialog.querySelector('[data-close-guide]')?.addEventListener('click', () => els.captionGuideDialog.close());
+  els.captionGuideDialog.addEventListener('click', event => {
+    if (event.target === els.captionGuideDialog) els.captionGuideDialog.close();
+  });
+}
+
+function startCaptionTour() {
+  const driverFactory = window.driver?.js?.driver;
+  if (!driverFactory) {
+    els.captionGuideDialog.showModal();
+    return;
+  }
+  const steps = [
+    { element: '.caption-project-picker', popover: { title: '1. 选择项目', description: '先选择要编辑的项目。字幕编辑依赖该项目已经生成的配音时间线。', side: 'bottom', align: 'end' } },
+    { element: '.scene-panel', popover: { title: '2. 从场景定位', description: '点击场景卡片或时间线，预览和字幕列表会定位到对应位置。', side: 'right', align: 'start' } },
+    { element: '.cue-list-panel', popover: { title: '3. 选择一句字幕', description: '搜索或点击任意字幕，右侧会加载它的文字和时间。', side: 'right', align: 'start' } },
+    { element: '.cue-detail', popover: { title: '4. 修改并保存', description: '调整文字或起止时间，确认预览后保存 captions.json。', side: 'left', align: 'start' } },
+  ];
+  driverFactory({
+    showProgress: true,
+    animate: true,
+    allowClose: true,
+    overlayOpacity: 0.42,
+    nextBtnText: '下一步',
+    prevBtnText: '上一步',
+    doneBtnText: '完成',
+    steps,
+  }).drive();
 }
 
 function formatTime(seconds, withMs = true) {
@@ -346,6 +380,7 @@ async function loadCaptions() {
     throw new Error(error.error || response.statusText);
   }
   const payload = await response.json();
+  els.captionProjectName.textContent = els.captionProjectSelect.selectedOptions[0]?.textContent || '字幕编辑器';
   state.captions = payload.captions;
   state.generated = payload.generated;
   state.scenes = payload.scenes || [];
@@ -487,11 +522,12 @@ function bindEvents() {
 }
 
 bindEvents();
+bindGuideDialog();
 renderIcons();
 loadProjectList()
   .then(loadCaptions)
   .catch(error => {
     setStatus(error.message, true);
-    els.cueList.innerHTML = '<p class="error">请先选择项目并运行 TTS 生成 timeline.json，然后刷新此页面。</p>';
+    els.cueList.innerHTML = '<div class="caption-empty-state"><span>还不能编辑字幕</span><strong>当前项目尚未生成配音时间线</strong><p>回到 Studio 点击“生成配音”，完成后再打开字幕编辑器。</p><a href="/studio">返回 Studio</a></div>';
     notify(error.message, 'error');
   });

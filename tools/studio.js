@@ -5,11 +5,17 @@ const els = {
   timelineStatus: $('#timelineStatus'),
   outputStatus: $('#outputStatus'),
   currentSourcePath: $('#currentSourcePath'),
+  workspaceProjectTitle: $('#workspaceProjectTitle'),
+  workspaceProjectPath: $('#workspaceProjectPath'),
+  workspaceProjectBadge: $('#workspaceProjectBadge'),
+  workspaceSceneCount: $('#workspaceSceneCount'),
+  workspaceNarrationChars: $('#workspaceNarrationChars'),
+  workspaceTimelineState: $('#workspaceTimelineState'),
+  workspaceOutputCount: $('#workspaceOutputCount'),
   guideTitle: $('#guideTitle'),
   guideBody: $('#guideBody'),
   guideBadge: $('#guideBadge'),
   projectList: $('#projectList'),
-  mainProjectGrid: $('#mainProjectGrid'),
   outputList: $('#outputList'),
   outputPlayer: $('#outputPlayer'),
   previewFrame: $('#previewFrame'),
@@ -33,6 +39,10 @@ const els = {
   newProjectSlugInput: $('#newProjectSlugInput'),
   newProjectButton: $('#newProjectButton'),
   openProjectsShortcut: $('#openProjectsShortcut'),
+  newWorkspaceProjectButton: $('#newWorkspaceProjectButton'),
+  editCurrentProjectButton: $('#editCurrentProjectButton'),
+  importCurrentProjectButton: $('#importCurrentProjectButton'),
+  openCaptionsButton: $('#openCaptionsButton'),
   topicInput: $('#topicInput'),
   audienceInput: $('#audienceInput'),
   toneInput: $('#toneInput'),
@@ -56,8 +66,6 @@ const els = {
   jobStatus: $('#jobStatus'),
   jobLog: $('#jobLog'),
   statusText: $('#statusText'),
-  viewTabs: [...document.querySelectorAll('[data-view-tab]')],
-  viewPanels: [...document.querySelectorAll('[data-view-panel]')],
 };
 
 let appState = null;
@@ -67,8 +75,8 @@ let selectedOutputUrl = '';
 let currentJobId = '';
 let pollTimer = 0;
 let tourAutoStarted = false;
-let activeView = 'compose';
 let promptRefreshFrame = 0;
+let appliedProjectSettingsKey = '';
 
 const TOUR_STORAGE_KEY = 'html-edge-tts-video:studio-tour-seen:v1';
 const PROJECT_DRAWER_STORAGE_KEY = 'html-edge-tts-video:studio-project-drawer-open:v1';
@@ -115,7 +123,6 @@ function applyRouteFocus(route = routeKey()) {
   document.querySelectorAll('[data-studio-route]').forEach(link => {
     link.classList.toggle('active', link.dataset.studioRoute === route);
   });
-  if (route === 'new') setActiveView('compose');
   if (route === 'new') setProjectDrawerOpen(true);
 }
 
@@ -168,10 +175,17 @@ function resetWorkspaceUi({ slug = '', resetPrompt = false, resetImport = true }
   if (resetImport) resetImportComposer(slug);
   resetBuildState(slug);
   resetPreviewState();
-  setActiveView('compose');
 }
 
 function setProjectDrawerOpen(open) {
+  const isMobile = window.matchMedia('(max-width: 760px)').matches;
+  if (!isMobile) {
+    document.body.classList.remove('projects-open');
+    els.sidebarToggle.setAttribute('aria-expanded', 'true');
+    const desktopLabel = els.sidebarToggle.querySelector('span');
+    if (desktopLabel) desktopLabel.textContent = '项目';
+    return;
+  }
   document.body.classList.toggle('projects-open', open);
   els.sidebarToggle.setAttribute('aria-expanded', String(open));
   const label = els.sidebarToggle.querySelector('span');
@@ -189,12 +203,20 @@ function settingsFromStorage() {
 }
 
 function applyStudioSettings(settings) {
-  els.settingsVoice.value = settings.voice;
-  els.settingsRate.value = settings.rate;
-  els.settingsPitch.value = settings.pitch;
-  els.settingsGap.value = settings.gap;
+  els.settingsVoice.value = settings.voice || DEFAULT_STUDIO_SETTINGS.voice;
+  els.settingsRate.value = settings.rate || DEFAULT_STUDIO_SETTINGS.rate;
+  els.settingsPitch.value = settings.pitch || DEFAULT_STUDIO_SETTINGS.pitch;
+  els.settingsGap.value = settings.gap || DEFAULT_STUDIO_SETTINGS.gap;
   els.settingsReducedMotion.checked = Boolean(settings.reducedMotion);
   document.body.classList.toggle('reduce-motion', Boolean(settings.reducedMotion));
+}
+
+function applyProjectTtsSettings(ttsSettings) {
+  applyStudioSettings({
+    ...getStudioSettings(),
+    ...(ttsSettings || DEFAULT_STUDIO_SETTINGS),
+    reducedMotion: getStudioSettings().reducedMotion,
+  });
 }
 
 function getStudioSettings() {
@@ -212,7 +234,7 @@ function setSettingsOpen(open) {
   els.settingsDrawer.setAttribute('aria-hidden', String(!open));
 }
 
-function saveStudioSettings() {
+async function saveStudioSettings() {
   const settings = getStudioSettings();
   if (!/^[+-](?:\d|[1-9]\d)%$/.test(settings.rate)) {
     setStatus('语速格式应类似 +12%', 'error');
@@ -229,25 +251,32 @@ function saveStudioSettings() {
   }
   settings.gap = String(gap);
   localStorage.setItem(STUDIO_SETTINGS_KEY, JSON.stringify(settings));
-  applyStudioSettings(settings);
-  setSettingsOpen(false);
-  setStatus(`已保存 TTS 默认参数：${settings.voice}`, 'success');
+  try {
+    if (appState?.activeProject?.slug) {
+      await postJson('/api/projects/settings', {
+        project: appState.activeProject.slug,
+        tts: {
+          voice: settings.voice,
+          rate: settings.rate,
+          pitch: settings.pitch,
+          gap: settings.gap,
+        },
+      });
+      appliedProjectSettingsKey = '';
+      await refreshAll();
+    }
+    applyStudioSettings(settings);
+    setSettingsOpen(false);
+    setStatus(`已保存当前项目 TTS 参数：${settings.voice}`, 'success');
+  } catch (error) {
+    setStatus(error.message, 'error');
+  }
 }
 
 function renderIcons() {
   if (window.lucide) {
     window.lucide.createIcons();
   }
-}
-
-function setActiveView(view) {
-  activeView = view;
-  els.viewTabs.forEach(tab => {
-    tab.classList.toggle('is-active', tab.dataset.viewTab === view);
-  });
-  els.viewPanels.forEach(panel => {
-    panel.classList.toggle('is-active', panel.dataset.viewPanel === view);
-  });
 }
 
 function setStatus(message, tone = 'neutral') {
@@ -309,49 +338,137 @@ function buildPrompt() {
   const tone = els.toneInput.value.trim();
   const sceneCount = els.sceneCountInput.value.trim();
   const notes = els.notesInput.value.trim();
+  const preferredSceneCount = sceneCount ? `\nPreferred scene count:\n${sceneCount}` : '';
+  const additionalNotes = notes ? `\nAdditional requirement:\n${notes}` : '';
 
-  return `你是一个 HTML edge-tts video source generator。
+  return `You are generating a source folder for an HTML edge-tts video factory.
 
-请为本地视频工厂生成一个中文旁白视频源。主题：${topic}
+Output only these files:
 
-受众：${audience}
-风格：${tone}
-场景数量：${sceneCount}
-额外要求：${notes}
-
-必须遵守：
-- 只输出 scenes.json 和 body.html。
-- 不要生成 app.js、runtime.js、脚本标签、播放控件、进度条、章节栏、时间码或字幕文件。
-- 第一幕必须是 id 为 "intro" 的总览场景。
-- 每个 scene 必须包含 id、category、title、summary、narration。
-- category 使用 2 到 12 个中文字符。
-- body.html 必须为每个 scene id 提供一个 <section class="content-scene scene" data-scene="...">。
-- 优先使用 visual-board、diagram-flow、comparison-grid、metric-grid、formula-strip、concept-map、scene-list 等结构化视觉。
-- 重要内容避开画面底部 25%，给字幕和章节栏留空间。
-
-请按下面格式返回，不要添加解释：
-
-\`\`\`json scenes.json
-[
-  {
-    "id": "intro",
-    "category": "总览",
-    "title": "标题",
-    "summary": "摘要",
-    "narration": "中文旁白。"
-  }
-]
+\`\`\`text
+scenes.json
+body.html
+media/ optional
 \`\`\`
 
-\`\`\`html body.html
+Do not output \`app.js\`, \`runtime.js\`, JavaScript, a renderer folder, MP3, timeline JSON, or MP4.
+The factory theme owns playback, captions, the continuous chapter rail, preview controls, and rendering.
+Do not output \`captions.json\`; the local factory creates editable captions after real TTS timing exists.
+
+Topic:
+${topic || '<PUT THE VIDEO TOPIC HERE>'}
+
+Audience:
+${audience || '<PUT THE TARGET AUDIENCE HERE>'}
+
+Tone:
+${tone || '<PUT THE TONE HERE>'}${preferredSceneCount}${additionalNotes}
+
+Visual direction:
+<PUT THE VISUAL DIRECTION HERE>
+
+Important visual requirement:
+Avoid text-only slides. Each scene should include at least one explanatory visual made from HTML
+elements or a compact inline SVG: a pipeline, state diagram, comparison matrix, metric cards, concept
+map, formula strip, or other structured graphic. Do not use <canvas> unless the canvas content is
+already rendered as media, because this source must not include JavaScript.
+
+## Output Contract
+
+Return the files as separate fenced code blocks with clear filenames:
+
+\`\`\`text
+// scenes.json
+...
+\`\`\`
+
+\`\`\`html
+<!-- body.html -->
+...
+\`\`\`
+
+If media assets are needed, describe the exact filenames and what each asset should contain.
+
+## Rules for \`scenes.json\`
+
+- Output valid JSON only.
+- Use an array of scene objects.
+- The first scene must have "id": "intro" and must introduce where the video starts, what it will explain, and the rough route of the video.
+- Every scene must contain:
+  - \`id\`: lowercase letters, digits, and hyphens only.
+  - \`category\`: a short Chinese label, 2 to 12 characters, used by the factory's bottom chapter rail.
+  - \`title\`: visual title for the scene.
+  - \`summary\`: one sentence for the visual summary.
+  - \`narration\`: natural Chinese spoken narration.
+- Optional fields such as \`visual_notes\` are allowed, but do not rely on JavaScript.
+- For an approximately three-minute video at edge-tts \`+12%\` rate, target 1,150 to 1,250 Chinese characters total.
+- Keep each scene focused. Prefer 4 to 7 scenes for a short explainer.
+- Match every scene's narration with a visual aid, so the screen explains structure rather than only repeating the spoken text.
+
+Example scene:
+
+\`\`\`json
+{
+  "id": "intro",
+  "category": "总览",
+  "title": "从问题入口开始",
+  "summary": "先说明本视频从哪里切入，以及后面会讲什么。",
+  "narration": "这条视频先从问题入口讲起，然后拆解核心概念、常见误区和最后的操作建议。"
+}
+\`\`\`
+
+## Rules for \`body.html\`
+
+- Output an HTML fragment, not a full HTML document.
+- Do not include \`<html>\`, \`<head>\`, \`<body>\`, \`<script>\`, inline event handlers, or JavaScript.
+- Do not include headers, footers, playback controls, scrubbers, timecodes, transport bars, or template chrome.
+- Do not include a per-scene progress bar such as \`progress-line\`.
+- Do not create the bottom chapter rail in \`body.html\`; the factory generates one continuous rail from \`scenes.json.category\` and the TTS timeline.
+- Include one top-level section per scene:
+
+\`\`\`html
 <section class="content-scene scene" data-scene="intro">
-  <div class="scene-copy">
-    <div class="eyebrow">INTRO</div>
-    <h1>标题</h1>
-    <p class="summary">摘要。</p>
-  </div>
-  <div class="visual-board"></div>
+  ...
 </section>
+\`\`\`
+
+- Every \`id\` in \`scenes.json\` must have a matching \`data-scene\` section.
+- The \`intro\` section must visually introduce the topic, starting point, and route. Do not jump straight into a detail scene.
+- Keep important visual content clear of the bottom 25% of the frame because captions and the generated chapter rail live there.
+- Use theme-friendly classes when helpful:
+  - \`scene-copy\`
+  - \`eyebrow\`
+  - \`summary\`
+  - \`scene-list\`
+  - \`visual-board\`
+  - \`visual-grid\`
+  - \`step-chip\` with \`data-step\`
+  - \`quote-panel\`
+  - \`diagram-flow\` with \`diagram-node\`
+  - \`comparison-grid\` with \`comparison-card\`
+  - \`metric-grid\` with \`metric-card\` and \`metric-value\`
+  - \`formula-strip\` with \`formula-token\`
+  - \`concept-map\` with \`concept-node\`
+  - \`diagram-svg\` for compact inline SVG diagrams
+- Reference local assets as \`media/name.ext\`.
+
+Example visual block:
+
+\`\`\`html
+<div class="visual-board">
+  <div class="diagram-flow">
+    <div class="diagram-node" data-step><b>输入</b><span>问题和素材</span></div>
+    <div class="diagram-node" data-step><b>处理</b><span>拆成结构</span></div>
+    <div class="diagram-node" data-step><b>输出</b><span>画面和旁白</span></div>
+  </div>
+  <div class="formula-strip">
+    <div class="formula-token"><b>概念</b><span>是什么</span></div>
+    <div class="formula-token operator">+</div>
+    <div class="formula-token"><b>关系</b><span>怎么连</span></div>
+    <div class="formula-token operator">=</div>
+    <div class="formula-token"><b>结论</b><span>怎么用</span></div>
+  </div>
+</div>
 \`\`\``;
 }
 
@@ -439,19 +556,38 @@ function ensureExtracted() {
 function renderHeader() {
   const active = appState?.activeProject;
   const timeline = appState?.timeline || {};
-  els.currentProjectName.textContent = active?.slug || '未加载';
-  els.timelineStatus.textContent = timeline.matchesSource
+  const activeProject = projects.find(project => project.active) || null;
+  const current = appState?.current || {};
+  const sceneCount = current.sceneCount ?? activeProject?.sceneCount ?? 0;
+  const narrationChars = current.narrationChars ?? activeProject?.narrationChars ?? 0;
+  const currentTitle = current.title || activeProject?.title || active?.slug || '未选择项目';
+  const timelineLabel = timeline.matchesSource
     ? formatDuration(timeline.duration)
     : timeline.exists
       ? '需重建'
       : '待生成';
+  els.currentProjectName.textContent = active?.slug || '未加载';
+  els.timelineStatus.textContent = timelineLabel;
   els.outputStatus.textContent = `${outputs.length} 个`;
   els.currentSourcePath.textContent = active?.relativePath || '暂无当前源文件';
+  els.workspaceProjectTitle.textContent = currentTitle;
+  els.workspaceProjectPath.textContent = active?.relativePath || '请先从左侧选择一个项目。';
+  els.workspaceProjectBadge.textContent = active?.slug || '未加载';
+  els.workspaceSceneCount.textContent = `${sceneCount}`;
+  els.workspaceNarrationChars.textContent = `${narrationChars}`;
+  els.workspaceTimelineState.textContent = timelineLabel;
+  els.workspaceOutputCount.textContent = `${outputs.length} 个`;
   els.guideTitle.textContent = appState?.guide?.title || '读取状态中';
   els.guideBody.textContent = appState?.guide?.body || 'Studio 正在连接本地工厂。';
   els.guideBadge.textContent = (appState?.guide?.stage || 'ready').toUpperCase();
   els.loadStarterButton.disabled = !appState?.hasStarter;
-  els.loadStarterButton.querySelector('span').textContent = appState?.hasStarter ? '加载 starter' : 'starter 不可用';
+  els.loadStarterButton.querySelector('span').textContent = appState?.hasStarter ? '打开示例项目' : '示例项目不可用';
+  const activeSlug = active?.slug || '';
+  els.editCurrentProjectButton.href = activeSlug ? `/studio/import?project=${encodeURIComponent(activeSlug)}` : '/studio/import';
+  els.importCurrentProjectButton.href = activeSlug ? `/studio/import?project=${encodeURIComponent(activeSlug)}` : '/studio/import';
+  els.editCurrentProjectButton.classList.toggle('is-disabled', !activeSlug);
+  els.importCurrentProjectButton.classList.toggle('is-disabled', !activeSlug);
+  els.openCaptionsButton?.classList.toggle('is-disabled', !activeSlug);
 }
 
 function projectCard(project) {
@@ -472,70 +608,17 @@ function projectCard(project) {
   return button;
 }
 
-function mainProjectCard(project) {
-  const article = document.createElement('article');
-  article.className = `main-project-card${project.active ? ' active' : ''}`;
-  article.dataset.project = project.slug;
-
-  const head = document.createElement('div');
-  head.className = 'main-project-head';
-
-  const titleWrap = document.createElement('div');
-  const label = document.createElement('p');
-  label.className = 'section-label';
-  label.textContent = project.active ? '当前项目' : '本地项目';
-  const title = document.createElement('h3');
-  title.textContent = project.title || project.slug;
-  titleWrap.append(label, title);
-
-  const badge = document.createElement('span');
-  badge.className = 'project-badge';
-  badge.textContent = project.slug;
-  head.append(titleWrap, badge);
-
-  const meta = document.createElement('div');
-  meta.className = 'main-project-meta';
-  meta.innerHTML = `
-    <span><i data-lucide="layers-3"></i>${project.sceneCount} scenes</span>
-    <span><i data-lucide="type"></i>${project.narrationChars} 字</span>
-    <span><i data-lucide="clock-3"></i>${formatDate(project.updatedAt)}</span>
-  `;
-
-  const path = document.createElement('p');
-  path.className = 'main-project-path';
-  path.textContent = project.relativePath;
-
-  const actions = document.createElement('div');
-  actions.className = 'main-project-actions';
-  actions.innerHTML = `
-    <button type="button" data-project-action="preview"><i data-lucide="monitor-play"></i><span>Preview</span></button>
-    <button type="button" data-project-action="export"><i data-lucide="download"></i><span>Export</span></button>
-    <button type="button" data-project-action="captions"><i data-lucide="captions"></i><span>Captions</span></button>
-    <button type="button" class="danger-button" data-project-action="delete"><i data-lucide="trash-2"></i><span>Delete</span></button>
-  `;
-
-  article.append(head, meta, path, actions);
-  return article;
-}
-
 function renderProjects() {
   els.projectList.replaceChildren();
-  els.mainProjectGrid?.replaceChildren();
   if (!projects.length) {
     const empty = document.createElement('p');
     empty.className = 'empty-text';
     empty.textContent = '还没有 .local/work 项目。';
     els.projectList.append(empty);
-    if (els.mainProjectGrid) {
-      const mainEmpty = empty.cloneNode(true);
-      mainEmpty.textContent = '还没有项目。可以点击右上角新建，或进入 Import 创建一个项目。';
-      els.mainProjectGrid.append(mainEmpty);
-    }
     return;
   }
   projects.forEach(project => {
     els.projectList.append(projectCard(project));
-    els.mainProjectGrid?.append(mainProjectCard(project));
   });
 }
 
@@ -597,71 +680,48 @@ function tourSteps() {
       },
     },
     {
-      element: '.sidebar',
+      element: '.project-drawer',
       popover: {
-        title: '选择本地项目',
-        description: '左侧列出 .local/work 里的视频源。点项目即可加载到当前工厂工作区。',
+        title: '这里切换当前项目',
+        description: '左侧项目列表负责激活项目。点任意项目卡片，就会把它切换成当前项目。',
         side: 'right',
         align: 'start',
       },
     },
     {
-      element: '.guide-panel',
+      element: '.current-project-panel',
       popover: {
-        title: '跟着下一步走',
-        description: '这个提示会根据当前状态变化：没有源文件、需要 TTS、可以预览、可以渲染，都会给出下一步。',
+        title: '先看当前项目工作台',
+        description: '这里集中显示当前项目的标题、状态、下一步和编辑入口，不再和项目列表重复。',
+        side: 'right',
+        align: 'start',
+      },
+    },
+    {
+      element: '.quick-actions-panel',
+      popover: {
+        title: '常用操作在这里',
+        description: '编辑项目、导入替换、切字幕和新建项目都放在同一块，避免来回找入口。',
         side: 'bottom',
         align: 'start',
       },
     },
     {
-      element: '.prompt-panel',
-      view: 'compose',
-      popover: {
-        title: '生成 Web AI 提示词',
-        description: '填写主题、受众和风格，复制提示词到 ChatGPT、Claude 或 Gemini，让它只生成 scenes.json 和 body.html。',
-        side: 'right',
-        align: 'start',
-      },
-    },
-    {
-      element: '.import-panel',
-      view: 'compose',
-      popover: {
-        title: '粘贴并保存 AI 输出',
-        description: '把 AI 返回内容粘贴到这里，提取、校验，然后保存成本地项目并自动加载。',
-        side: 'left',
-        align: 'start',
-      },
-    },
-    {
       element: '.build-panel',
-      view: 'build',
       popover: {
-        title: '构建时间线和视频',
-        description: 'Check 做源文件校验，TTS 生成旁白和字幕时间线，Render 输出 MP4。',
+        title: '构建只针对当前项目',
+        description: '当前项目切好以后，在这里做 Check、TTS 和 Render，语义会更清楚。',
         side: 'top',
         align: 'center',
       },
     },
     {
       element: '.preview-panel',
-      view: 'review',
       popover: {
-        title: '预览当前画面',
-        description: '这里嵌入当前主题预览。修改 body.html 或重新生成时间线后，它会刷新。',
+        title: '右侧只看当前项目',
+        description: '上面是当前项目预览，下面是当前项目自己的输出结果，预览和成片终于对应起来。',
         side: 'top',
         align: 'start',
-      },
-    },
-    {
-      element: '.outputs-panel',
-      view: 'review',
-      popover: {
-        title: '查看渲染结果',
-        description: '这里会列出 .local/output 里的视频文件，可以直接播放最近的成片。',
-        side: 'top',
-        align: 'end',
       },
     },
   ];
@@ -708,8 +768,7 @@ function startDriverTour(steps) {
     doneBtnText: '完成',
     steps,
     onHighlightStarted: (_element, step) => {
-      if (step?.view) setActiveView(step.view);
-      setProjectDrawerOpen(step?.element === '.sidebar');
+      setProjectDrawerOpen(step?.element === '.project-drawer');
     },
   });
   driverObj.drive();
@@ -757,8 +816,7 @@ function startFallbackTour(steps) {
   function renderStep() {
     clearHighlight();
     const step = steps[index];
-    if (step.view) setActiveView(step.view);
-    setProjectDrawerOpen(step.element === '.sidebar');
+    setProjectDrawerOpen(step.element === '.project-drawer');
     const target = document.querySelector(step.element);
     if (target) {
       target.classList.add('tour-fallback-highlight');
@@ -803,7 +861,7 @@ function maybeStartTour() {
   if (tourAutoStarted) return;
   tourAutoStarted = true;
   const params = new URLSearchParams(window.location.search);
-  if (params.get('tour') === '1' || !hasSeenTour()) {
+  if (params.get('tour') === '1') {
     window.setTimeout(startTour, 650);
   }
 }
@@ -819,6 +877,11 @@ async function refreshAll() {
     projects = projectData.projects || [];
     outputs = outputData.outputs || [];
     appState.outputs = outputs;
+    const settingsKey = appState?.activeProject?.slug || '';
+    if (settingsKey !== appliedProjectSettingsKey) {
+      applyProjectTtsSettings(appState?.settings?.tts || appState?.activeProject?.settings?.tts);
+      appliedProjectSettingsKey = settingsKey;
+    }
     renderHeader();
     renderProjects();
     renderOutputs();
@@ -833,12 +896,13 @@ async function loadProject(project, { view = 'compose', closeDrawer = true } = {
   try {
     setStatus('正在加载项目...');
     const data = await postJson('/api/projects/load', { project });
+    applyProjectTtsSettings(data.project?.settings?.tts);
+    appliedProjectSettingsKey = data.project?.slug || '';
     resetWorkspaceUi({ slug: data.project?.slug || project, resetPrompt: false, resetImport: true });
     if (closeDrawer) setProjectDrawerOpen(false);
     setStudioRoute('main');
     reloadPreview();
     await refreshAll();
-    setActiveView(view);
     setStatus('项目已加载。', 'success');
     return data.project;
   } catch (error) {
@@ -862,17 +926,25 @@ async function deleteProject(project) {
 }
 
 async function previewProject(project) {
-  const loaded = await loadProject(project, { view: 'review' });
-  if (loaded) setActiveView('review');
+  const loaded = await loadProject(project);
+  if (loaded) {
+    reloadPreview();
+    els.previewFrame.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+}
+
+async function manageProject(project) {
+  const loaded = await loadProject(project);
+  if (loaded) window.location.href = `/studio/import?project=${encodeURIComponent(project)}`;
 }
 
 async function openProjectCaptions(project) {
-  const loaded = await loadProject(project, { view: 'review' });
+  const loaded = await loadProject(project);
   if (loaded) window.location.href = '/captions';
 }
 
 async function exportProject(project) {
-  const loaded = await loadProject(project, { view: 'build' });
+  const loaded = await loadProject(project);
   if (!loaded) return;
   els.renderOutputInput.value = `${cleanSlug(project)}.mp4`;
   await startJob('render');
@@ -904,8 +976,11 @@ async function saveProject() {
       slug,
       scenesJson: els.scenesOutput.value,
       bodyHtml: els.bodyOutput.value,
+      tts: getStudioSettings(),
     });
     await postJson('/api/projects/load', { project: created.project.slug });
+    applyProjectTtsSettings(created.project?.settings?.tts);
+    appliedProjectSettingsKey = created.project?.slug || '';
     resetWorkspaceUi({ slug: created.project.slug, resetPrompt: false, resetImport: true });
     setStudioRoute('main');
     reloadPreview();
@@ -919,7 +994,7 @@ async function saveProject() {
 async function createBlankProject() {
   const slug = els.newProjectSlugInput.value.trim();
   if (!slug) {
-    setStatus('请输入新项目的 slug', 'error');
+    setStatus('请输入新项目名称或 slug', 'error');
     els.newProjectSlugInput.focus();
     return;
   }
@@ -927,12 +1002,15 @@ async function createBlankProject() {
   try {
     const data = await postJson('/api/projects/blank', { slug });
     appState = data.state;
+    applyProjectTtsSettings(data.project?.settings?.tts || DEFAULT_STUDIO_SETTINGS);
+    appliedProjectSettingsKey = data.project?.slug || '';
     resetWorkspaceUi({ slug: data.project?.slug || slug, resetPrompt: true, resetImport: true });
     setProjectDrawerOpen(false);
     setStudioRoute('main');
     reloadPreview();
     await refreshAll();
     setStatus(`已新建并加载项目：${data.project.slug}`, 'success');
+    window.location.href = `/studio/import?project=${encodeURIComponent(data.project.slug)}`;
   } catch (error) {
     setStatus(error.message, 'error');
   } finally {
@@ -975,7 +1053,6 @@ async function pollJob() {
     await refreshAll();
     if (data.job.status === 'succeeded') {
       if (['tts', 'offline'].includes(data.job.task)) reloadPreview();
-      if (data.job.task === 'render') setActiveView('review');
       setStatus(`${data.job.task} 已完成。`, 'success');
     } else {
       setStatus(`${data.job.task} 失败，请查看日志。`, 'error');
@@ -988,7 +1065,6 @@ async function pollJob() {
 
 async function startJob(task) {
   const payload = { task };
-  setActiveView('build');
   if (task === 'tts') {
     const settings = getStudioSettings();
     payload.voice = settings.voice;
@@ -1050,11 +1126,17 @@ function bindEvents() {
   });
   els.saveProjectButton?.addEventListener('click', saveProject);
   els.openProjectsShortcut?.addEventListener('click', () => setProjectDrawerOpen(true));
+  els.newWorkspaceProjectButton?.addEventListener('click', () => setProjectDrawerOpen(true));
+  els.openCaptionsButton?.addEventListener('click', async () => {
+    const slug = appState?.activeProject?.slug;
+    if (!slug) {
+      setStatus('请先选择一个项目。', 'error');
+      return;
+    }
+    await openProjectCaptions(slug);
+  });
   els.refreshButton.addEventListener('click', refreshAll);
   els.refreshOutputsButton.addEventListener('click', refreshAll);
-  els.viewTabs.forEach(tab => {
-    tab.addEventListener('click', () => setActiveView(tab.dataset.viewTab));
-  });
   els.loadStarterButton.addEventListener('click', () => loadProject('templates/starter'));
   els.newProjectButton.addEventListener('click', createBlankProject);
   els.newProjectSlugInput.addEventListener('keydown', event => {
@@ -1068,18 +1150,6 @@ function bindEvents() {
   els.projectList.addEventListener('click', event => {
     const card = event.target.closest('[data-project]');
     if (card) loadProject(card.dataset.project);
-  });
-
-  els.mainProjectGrid?.addEventListener('click', event => {
-    const action = event.target.closest('[data-project-action]');
-    const card = event.target.closest('[data-project]');
-    if (!action || !card) return;
-    const project = card.dataset.project;
-    const type = action.dataset.projectAction;
-    if (type === 'preview') previewProject(project);
-    if (type === 'export') exportProject(project);
-    if (type === 'captions') openProjectCaptions(project);
-    if (type === 'delete') deleteProject(project);
   });
 
   els.outputList.addEventListener('click', event => {

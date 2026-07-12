@@ -101,9 +101,14 @@ def ensure_theme(theme: str) -> Path:
 def load_source(source: Path, theme: str = DEFAULT_THEME) -> None:
     resolved = resolve_source(source)
     ensure_theme(theme)
+    previous_source = active_source_root()
+    same_source = bool(previous_source and previous_source.resolve() == resolved["root"].resolve())
 
     clean_dir(CURRENT_SOURCE)
-    CURRENT_ASSETS.mkdir(parents=True, exist_ok=True)
+    if same_source:
+        CURRENT_ASSETS.mkdir(parents=True, exist_ok=True)
+    else:
+        clean_dir(CURRENT_ASSETS)
 
     shutil.copy2(resolved["scenes"], CURRENT_SOURCE / "scenes.json")
     shutil.copy2(resolved["body"], CURRENT_SOURCE / "body.html")

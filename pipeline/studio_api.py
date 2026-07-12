@@ -55,6 +55,14 @@ VOICE_OPTIONS = [
     {"id": "zh-HK-HiuGaaiNeural", "label": "晓佳（粤语）", "locale": "zh-HK", "gender": "Female"},
     {"id": "zh-TW-HsiaoChenNeural", "label": "晓臻（台湾）", "locale": "zh-TW", "gender": "Female"},
 ]
+DEFAULT_TTS_SETTINGS = {
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "+12%",
+    "pitch": "+0Hz",
+    "gap": "0.28",
+}
+PROJECT_SETTINGS_FILE = ".studio.json"
+OUTPUT_INDEX_FILE = LOCAL_OUTPUT / ".studio-outputs.json"
 
 
 class ApiError(Exception):
@@ -81,6 +89,111 @@ def read_json_file(path: Path) -> Any | None:
         return json.loads(path.read_text(encoding="utf-8"))
     except (FileNotFoundError, json.JSONDecodeError, OSError):
         return None
+
+
+def read_output_index() -> dict[str, dict[str, Any]]:
+    data = read_json_file(OUTPUT_INDEX_FILE)
+    if not isinstance(data, dict):
+        return {}
+    return {
+        name: entry
+        for name, entry in data.items()
+        if isinstance(name, str) and isinstance(entry, dict)
+    }
+
+
+def write_output_index(index: dict[str, dict[str, Any]]) -> None:
+    LOCAL_OUTPUT.mkdir(parents=True, exist_ok=True)
+    OUTPUT_INDEX_FILE.write_text(
+        json.dumps(index, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
+def output_record(path: Path) -> dict[str, Any]:
+    return {
+        "name": path.name,
+        "path": str(path),
+        "relativePath": rel(path),
+        "url": f"/.local/output/{quote(path.name)}",
+        "size": path.stat().st_size,
+        "modifiedAt": file_time(path),
+        "extension": path.suffix.lower().lstrip("."),
+    }
+
+
+def register_output(path: Path, project_slug: str | None, project_path: str | None) -> None:
+    index = read_output_index()
+    index[path.name] = {
+        "projectSlug": project_slug or "",
+        "projectPath": project_path or "",
+        "updatedAt": utc_now(),
+    }
+    write_output_index(index)
+
+
+def output_belongs_to_project(path: Path, project_slug: str | None, project_path: str | None) -> bool:
+    if not project_slug and not project_path:
+        return False
+
+    index = read_output_index()
+    entry = index.get(path.name)
+    if entry:
+        entry_slug = str(entry.get("projectSlug") or "").strip()
+        entry_path = str(entry.get("projectPath") or "").strip()
+        if project_path and entry_path:
+            return entry_path == project_path
+        if project_slug and entry_slug:
+            return entry_slug == project_slug
+        return False
+
+    # Backward-compatible fallback for older exports that used the project slug as filename.
+    stem = path.stem.lower()
+    slug_prefix = (project_slug or "").strip().lower()
+    return bool(slug_prefix and (stem == slug_prefix or stem.startswith(f"{slug_prefix}-")))
+
+
+def project_display_name(value: str) -> str:
+    cleaned = re.sub(r"[-_.]+", " ", value).strip()
+    return cleaned or "新建视频项目"
+
+
+def normalize_tts_settings(value: Any | None = None) -> dict[str, str]:
+    data = value if isinstance(value, dict) else {}
+    settings = {**DEFAULT_TTS_SETTINGS}
+    settings["voice"] = str(data.get("voice") or settings["voice"]).strip()
+    settings["rate"] = str(data.get("rate") or settings["rate"]).strip()
+    settings["pitch"] = str(data.get("pitch") or settings["pitch"]).strip()
+    settings["gap"] = str(data.get("gap") or settings["gap"]).strip()
+    return settings
+
+
+def read_project_settings(source_root: Path) -> dict[str, Any]:
+    data = read_json_file(source_root / PROJECT_SETTINGS_FILE)
+    if not isinstance(data, dict):
+        data = {}
+    return {
+        **data,
+        "tts": normalize_tts_settings(data.get("tts")),
+    }
+
+
+def write_project_settings(source_root: Path, settings: dict[str, Any]) -> None:
+    current = read_project_settings(source_root)
+    if "tts" in settings:
+        current["tts"] = normalize_tts_settings(settings["tts"])
+    source_root.mkdir(parents=True, exist_ok=True)
+    (source_root / PROJECT_SETTINGS_FILE).write_text(
+        json.dumps(current, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def active_source_settings() -> dict[str, Any]:
+    source = active_source_root()
+    if not source:
+        return {"tts": normalize_tts_settings()}
+    return read_project_settings(source)
 
 
 def safe_project_path(value: str) -> Path:
@@ -123,6 +236,7 @@ def source_summary(source_root: Path) -> dict[str, Any]:
         "updatedAt": datetime.fromtimestamp(updated_at, timezone.utc).isoformat(),
         "hasCaptions": bool(resolved["captions"]),
         "hasMedia": bool(resolved["media"]),
+        "settings": read_project_settings(resolved["root"]),
         "active": bool(active and active.resolve() == resolved["root"].resolve()),
     }
 
@@ -140,28 +254,19 @@ def list_projects() -> list[dict[str, Any]]:
     return projects
 
 
-def list_outputs(limit: int | None = None) -> list[dict[str, Any]]:
+def list_outputs(limit: int | None = None, project_slug: str | None = None, project_path: str | None = None) -> list[dict[str, Any]]:
     LOCAL_OUTPUT.mkdir(parents=True, exist_ok=True)
     files = [
         item
         for item in LOCAL_OUTPUT.iterdir()
         if item.is_file() and item.suffix.lower() in OUTPUT_EXTENSIONS
     ]
+    if project_slug or project_path:
+        files = [item for item in files if output_belongs_to_project(item, project_slug, project_path)]
     files.sort(key=lambda item: item.stat().st_mtime, reverse=True)
     if limit:
         files = files[:limit]
-    return [
-        {
-            "name": item.name,
-            "path": str(item),
-            "relativePath": rel(item),
-            "url": f"/.local/output/{quote(item.name)}",
-            "size": item.stat().st_size,
-            "modifiedAt": file_time(item),
-            "extension": item.suffix.lower().lstrip("."),
-        }
-        for item in files
-    ]
+    return [output_record(item) for item in files]
 
 
 def current_scenes_summary() -> dict[str, Any]:
@@ -234,6 +339,7 @@ def active_project_meta() -> dict[str, Any] | None:
         "path": str(source),
         "relativePath": rel(source),
         "theme": active_theme(),
+        "settings": read_project_settings(source),
         "loadedAt": meta.get("loaded_at") if isinstance(meta, dict) else None,
     }
 
@@ -277,14 +383,18 @@ def guide_state(state: dict[str, Any]) -> dict[str, str]:
 
 def studio_state() -> dict[str, Any]:
     theme = active_theme()
+    active_project = active_project_meta()
+    output_slug = active_project["slug"] if active_project else None
+    output_path = active_project["path"] if active_project else None
     state: dict[str, Any] = {
-        "activeProject": active_project_meta(),
+        "activeProject": active_project,
         "theme": theme,
         "hasStarter": STARTER_SOURCE.exists(),
         "current": current_scenes_summary(),
+        "settings": active_source_settings(),
         "timeline": timeline_summary(),
         "projectCount": len(list_projects()),
-        "outputs": list_outputs(limit=5),
+        "outputs": list_outputs(limit=5, project_slug=output_slug, project_path=output_path),
         "urls": {
             "studio": "/studio",
             "studioPrompt": "/studio/prompt",
@@ -356,6 +466,11 @@ def create_project(payload: dict[str, Any]) -> dict[str, Any]:
     target.mkdir(parents=True, exist_ok=True)
     (target / "scenes.json").write_text(scenes_json.strip() + "\n", encoding="utf-8")
     (target / "body.html").write_text(body_html.strip() + "\n", encoding="utf-8")
+    write_project_settings(target, {"tts": payload.get("tts")})
+    active = active_source_root()
+    if active and active.resolve() == target.resolve():
+        shutil.rmtree(CURRENT_ASSETS, ignore_errors=True)
+        CURRENT_ASSETS.mkdir(parents=True, exist_ok=True)
     captions = target / "captions.json"
     if overwrite and captions.exists():
         captions.unlink()
@@ -368,20 +483,21 @@ def create_blank_project(payload: dict[str, Any]) -> dict[str, Any]:
     if target.exists() and any(target.iterdir()):
         raise ApiError(409, f"project already exists: {target.name}")
 
+    display_name = project_display_name(target.name)
     scenes = [
         {
             "id": "intro",
             "category": "总览",
-            "title": "新建视频项目",
-            "summary": "从这里开始规划主题、场景和旁白。",
-            "narration": "这是一个新建的视频项目。接下来请说明主题、受众和需要讲述的内容。",
+            "title": display_name,
+            "summary": f"从这里开始规划 {display_name} 的主题、场景和旁白。",
+            "narration": f"这是 {display_name} 的新建视频项目。接下来请说明主题、受众和需要讲述的内容。",
         }
     ]
-    body_html = """<section class=\"content-scene scene\" data-scene=\"intro\">
+    body_html = f"""<section class=\"content-scene scene\" data-scene=\"intro\">
   <div class=\"scene-copy\">
     <div class=\"eyebrow\">INTRO</div>
-    <h1>新建视频项目</h1>
-    <p class=\"summary\">从这里开始规划主题、场景和旁白。</p>
+    <h1>{display_name}</h1>
+    <p class=\"summary\">从这里开始规划 {display_name} 的主题、场景和旁白。</p>
   </div>
   <div class=\"visual-board\"></div>
 </section>
@@ -389,6 +505,7 @@ def create_blank_project(payload: dict[str, Any]) -> dict[str, Any]:
     target.mkdir(parents=True, exist_ok=True)
     (target / "scenes.json").write_text(json.dumps(scenes, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     (target / "body.html").write_text(body_html, encoding="utf-8")
+    write_project_settings(target, {"tts": DEFAULT_TTS_SETTINGS})
     try:
         load_source(target, str(payload.get("theme") or DEFAULT_THEME))
     except SystemExit as exc:
@@ -407,6 +524,35 @@ def load_project(payload: dict[str, Any]) -> dict[str, Any]:
     except SystemExit as exc:
         raise ApiError(422, str(exc)) from exc
     return {"project": source_summary(source_root), "state": studio_state()}
+
+
+def project_source(query: dict[str, list[str]]) -> dict[str, Any]:
+    value = (query.get("project") or query.get("slug") or [""])[0].strip()
+    source_root = safe_project_path(value) if value else active_source_root()
+    if not source_root:
+        raise ApiError(404, "project not found")
+    try:
+        resolved = resolve_source(source_root)
+    except SystemExit as exc:
+        raise ApiError(422, str(exc)) from exc
+    return {
+        "project": source_summary(source_root),
+        "files": {
+            "scenesJson": resolved["scenes"].read_text(encoding="utf-8"),
+            "bodyHtml": resolved["body"].read_text(encoding="utf-8"),
+        },
+    }
+
+
+def save_project_settings(payload: dict[str, Any]) -> dict[str, Any]:
+    value = str(payload.get("project") or payload.get("slug") or "").strip()
+    source_root = safe_project_path(value) if value else active_source_root()
+    if not source_root:
+        raise ApiError(409, "no loaded source; load or create a project first")
+    if not source_root.exists() or not source_root.is_dir():
+        raise ApiError(404, f"project not found: {source_root.name}")
+    write_project_settings(source_root, {"tts": payload.get("tts") or payload})
+    return {"project": source_summary(source_root), "settings": read_project_settings(source_root)}
 
 
 def delete_project(payload: dict[str, Any]) -> dict[str, Any]:
@@ -501,6 +647,16 @@ def run_job(job_id: str) -> None:
             exitCode=exit_code,
             finishedAt=utc_now(),
         )
+        if exit_code == 0 and job.get("task") == "render":
+            output_name = str(job.get("outputName") or "").strip()
+            if output_name:
+                output_file = LOCAL_OUTPUT / output_name
+                if output_file.exists():
+                    register_output(
+                        output_file,
+                        str(job.get("projectSlug") or "").strip() or None,
+                        str(job.get("projectPath") or "").strip() or None,
+                    )
         print(f"[job:{job_id} {job['task']}] {'completed' if exit_code == 0 else 'failed'} (exit {exit_code})", flush=True)
     except Exception as exc:  # noqa: BLE001 - surface background failures to the UI.
         append_job_log(job_id, f"Job failed before completion: {exc}")
@@ -546,18 +702,22 @@ def command_for_job(payload: dict[str, Any]) -> tuple[str, list[str]]:
         ]
 
     if task == "tts":
+        tts_settings = normalize_tts_settings(payload)
+        source = active_source_root()
+        if source and source.exists() and source.is_dir():
+            write_project_settings(source, {"tts": tts_settings})
         command = [
             PYTHON,
             "main.py",
             "tts",
             "--voice",
-            str(payload.get("voice") or "zh-CN-XiaoxiaoNeural"),
+            tts_settings["voice"],
             "--rate",
-            str(payload.get("rate") or "+12%"),
+            tts_settings["rate"],
             "--pitch",
-            str(payload.get("pitch") or "+0Hz"),
+            tts_settings["pitch"],
             "--gap",
-            str(payload.get("gap") or "0.28"),
+            tts_settings["gap"],
         ]
         if payload.get("force"):
             command.append("--force")
@@ -601,10 +761,17 @@ def start_job(payload: dict[str, Any]) -> dict[str, Any]:
         raise ApiError(409, "no loaded source; load or create a project first")
 
     job_id = uuid.uuid4().hex[:12]
+    active_project = active_project_meta()
+    output_name = ""
+    if task == "render":
+        output_name = clean_output_name(str(payload.get("output") or "studio-render.mp4"))
     job = {
         "id": job_id,
         "task": task,
         "command": command,
+        "projectSlug": active_project["slug"] if active_project else None,
+        "projectPath": active_project["path"] if active_project else None,
+        "outputName": output_name,
         "status": "queued",
         "exitCode": None,
         "createdAt": utc_now(),
@@ -652,8 +819,16 @@ def handle_get(path: str, query: dict[str, list[str]]) -> tuple[int, Any] | None
         return 200, studio_state()
     if path == "/api/projects":
         return 200, {"projects": list_projects()}
+    if path == "/api/projects/source":
+        return 200, project_source(query)
     if path == "/api/outputs":
-        return 200, {"outputs": list_outputs()}
+        active_project = active_project_meta()
+        return 200, {
+            "outputs": list_outputs(
+                project_slug=active_project["slug"] if active_project else None,
+                project_path=active_project["path"] if active_project else None,
+            )
+        }
     if path == "/api/voice-preview":
         return 200, voice_preview_state()
     if path == "/api/jobs":
@@ -668,6 +843,8 @@ def handle_post(path: str, payload: dict[str, Any]) -> tuple[int, Any] | None:
         return 201, create_blank_project(payload)
     if path == "/api/projects/load":
         return 200, load_project(payload)
+    if path == "/api/projects/settings":
+        return 200, save_project_settings(payload)
     if path == "/api/projects/delete":
         return 200, delete_project(payload)
     if path == "/api/source/validate":
