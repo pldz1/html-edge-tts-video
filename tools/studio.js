@@ -9,10 +9,10 @@ const els = {
   workspaceProjectId: $('#workspaceProjectId'),
   projectDetailTitle: $('#projectDetailTitle'),
   projectEditButton: $('#projectEditButton'),
+  projectDetails: $('#projectDetails'),
   projectEditForm: $('#projectEditForm'),
   projectTitleInput: $('#projectTitleInput'),
   saveProjectMetaButton: $('#saveProjectMetaButton'),
-  cancelProjectMetaButton: $('#cancelProjectMetaButton'),
   workspaceSceneCount: $('#workspaceSceneCount'),
   workspaceNarrationChars: $('#workspaceNarrationChars'),
   workspaceTimelineState: $('#workspaceTimelineState'),
@@ -141,14 +141,20 @@ function cleanFileName(value) {
 }
 
 function setProjectEditMode(editing) {
+  els.projectDetails?.toggleAttribute('hidden', !editing);
   els.projectEditForm?.toggleAttribute('hidden', !editing);
   document.body.classList.toggle('project-meta-editing', editing);
+  if (els.projectEditButton) {
+    els.projectEditButton.setAttribute('aria-expanded', String(editing));
+    els.projectEditButton.title = editing ? '收起项目信息' : '编辑项目信息';
+    const label = els.projectEditButton.querySelector('span');
+    if (label) label.textContent = editing ? '收起' : '编辑';
+  }
   if (!editing) return;
   const active = appState?.activeProject;
   const activeProject = projects.find(project => project.active) || null;
   const title = active?.name || activeProject?.name || appState?.current?.title || '';
   if (els.projectTitleInput) els.projectTitleInput.value = title || '';
-  document.querySelector('.project-details')?.setAttribute('open', '');
   els.projectTitleInput?.focus();
 }
 
@@ -1196,9 +1202,11 @@ function bindEvents() {
     validateExtracted();
   });
   els.saveProjectButton?.addEventListener('click', saveProject);
-  els.projectEditButton?.addEventListener('click', () => setProjectEditMode(true));
+  els.projectEditButton?.addEventListener('click', () => {
+    const isEditing = document.body.classList.contains('project-meta-editing');
+    setProjectEditMode(!isEditing);
+  });
   els.saveProjectMetaButton?.addEventListener('click', saveProjectMetaEdit);
-  els.cancelProjectMetaButton?.addEventListener('click', () => setProjectEditMode(false));
   els.openProjectsShortcut?.addEventListener('click', () => {
     els.projectSelect?.focus();
   });
@@ -1251,8 +1259,15 @@ function bindEvents() {
     });
   });
   window.addEventListener('popstate', () => applyRouteFocus());
+  document.addEventListener('click', event => {
+    if (!document.body.classList.contains('project-meta-editing')) return;
+    if (els.projectEditButton?.contains(event.target)) return;
+    if (els.projectDetails?.contains(event.target)) return;
+    setProjectEditMode(false);
+  });
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape') {
+      setProjectEditMode(false);
       setProjectDrawerOpen(false);
       setSettingsOpen(false);
     }
@@ -1260,6 +1275,7 @@ function bindEvents() {
 }
 
 bindEvents();
+setProjectEditMode(false);
 setProjectDrawerOpen(false);
 applyStudioSettings(settingsFromStorage());
 applyRouteFocus();

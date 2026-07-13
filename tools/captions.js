@@ -17,7 +17,7 @@ const state = {
 };
 
 const els = {
-  statusText: $('#statusText'), engineStatus: $('#engineStatus'), engineDot: $('#engineDot'),
+  engineStatus: $('#engineStatus'), engineDot: $('#engineDot'),
   captionProjectSelect: $('#captionProjectSelect'), captionProjectName: $('#captionProjectName'),
   sceneSearch: $('#sceneSearch'), sceneList: $('#sceneList'), sceneScrollLeft: $('#sceneScrollLeft'), sceneScrollRight: $('#sceneScrollRight'),
   currentTimeText: $('#currentTimeText'), durationText: $('#durationText'), timelineTrack: $('#timelineTrack'), timelineProgress: $('#timelineProgress'), timelineCues: $('#timelineCues'), timelinePlayhead: $('#timelinePlayhead'), timelinePlayButton: $('#timelinePlayButton'),
@@ -99,9 +99,9 @@ function notify(message, tone = '') {
 }
 
 function setStatus(message, error = false) {
-  els.statusText.textContent = message;
   els.engineStatus.textContent = error ? '连接失败' : '运行正常';
   els.engineDot.classList.toggle('error', error);
+  notify(message, error ? 'error' : '');
 }
 
 async function apiJson(path, options = {}) {

@@ -69,7 +69,6 @@ textarea { font: inherit; }
 .caption-topbar,
 .project-title,
 .caption-project-picker,
-.ready-state,
 .open-output-button,
 .section-heading,
 .heading-tools,
@@ -151,8 +150,6 @@ h1 { margin: 0; font-size: 16px; line-height: 1.1; white-space: nowrap; }
 .project-title { gap: 9px; min-width: 0; }
 .project-title > strong { font-size: 13px; }
 .tool-badge { padding: 4px 7px; border-radius: 6px; background: var(--blue-soft); color: #5a7fac; font-size: 9px; }
-.ready-state { gap: 5px; color: #68798c; font-size: 9px; }
-.ready-state > i { width: 5px; height: 5px; border-radius: 50%; background: var(--green); }
 .caption-project-picker {
   gap: 7px;
   margin-left: auto;
@@ -452,10 +449,6 @@ kbd { display: inline-grid; place-items: center; min-width: 17px; height: 17px; 
 
   .caption-topbar .project-title {
     grid-column: 1 / -1;
-  }
-
-  .caption-topbar .ready-state {
-    display: none;
   }
 
   .caption-project-picker {

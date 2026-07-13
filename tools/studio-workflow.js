@@ -18,7 +18,6 @@ const els = {
   saveProjectButton: $('#saveProjectButton'),
   scenesOutput: $('#scenesOutput'),
   bodyOutput: $('#bodyOutput'),
-  statusText: $('#statusText'),
   extractStatus: $('#extractStatus'),
   workflowGuideButton: $('#workflowGuideButton'),
   workflowGuideDialog: $('#workflowGuideDialog'),
@@ -27,6 +26,7 @@ const els = {
 let promptRefreshFrame = 0;
 let importMode = 'smart';
 let importProjectId = '';
+let toastTimer = 0;
 
 function renderIcons() {
   if (window.lucide) window.lucide.createIcons();
@@ -42,10 +42,21 @@ function bindGuideDialog() {
 }
 
 function setStatus(message, tone = 'neutral') {
-  if (!els.statusText) return;
-  els.statusText.textContent = message;
-  els.statusText.classList.toggle('error', tone === 'error');
-  els.statusText.classList.toggle('success', tone === 'success');
+  let toast = document.querySelector('#workflowToast');
+  if (!toast) {
+    toast = document.createElement('p');
+    toast.id = 'workflowToast';
+    toast.className = 'studio-toast';
+    toast.setAttribute('role', 'status');
+    toast.setAttribute('aria-live', 'polite');
+    document.body.append(toast);
+  }
+  window.clearTimeout(toastTimer);
+  toast.textContent = message;
+  toast.classList.toggle('error', tone === 'error');
+  toast.classList.toggle('success', tone === 'success');
+  toast.classList.add('is-visible');
+  toastTimer = window.setTimeout(() => toast.classList.remove('is-visible'), 3600);
 }
 
 async function api(path, options = {}) {

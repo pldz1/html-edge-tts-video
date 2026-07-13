@@ -1,238 +1,461 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="zh-CN">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Video Studio</title>
-  <link rel="icon" href="/tools/favicon.ico" />
-  <link
-    rel="stylesheet"
-    href="https://cdn.bootcdn.net/ajax/libs/driver.js/1.3.6/driver.min.css"
-    onerror="this.onerror=null;this.href='https://cdn.jsdelivr.net/npm/driver.js@1.3.6/dist/driver.css'"
-  />
-  <link rel="stylesheet" href="/tools/studio.css" />
-  <link rel="stylesheet" href="/tools/app-shell.css" />
-  <script
-    defer
-    src="https://cdn.bootcdn.net/ajax/libs/driver.js/1.3.6/driver.min.js.iife.js"
-    onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/driver.js@1.3.6/dist/driver.js.iife.js'"
-  ></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/lucide@0.513.0/dist/umd/lucide.min.js"></script>
-  <script defer src="/tools/studio.js"></script>
-</head>
-<body>
-  <main class="studio-app">
-    <header class="studio-header studio-project-header" aria-label="Current project status">
-      <section class="project-identity" aria-label="当前项目">
-        <nav class="project-breadcrumb" aria-label="项目路径">
-          <span>我的项目</span><span aria-hidden="true">/</span>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Video Studio</title>
+    <link rel="icon" href="/tools/favicon.ico" />
+    <link
+      rel="stylesheet"
+      href="https://cdn.bootcdn.net/ajax/libs/driver.js/1.3.6/driver.min.css"
+      onerror="this.onerror=null;this.href='https://cdn.jsdelivr.net/npm/driver.js@1.3.6/dist/driver.css'"
+    />
+    <link rel="stylesheet" href="/tools/studio.css" />
+    <link rel="stylesheet" href="/tools/app-shell.css" />
+    <script
+      defer
+      src="https://cdn.bootcdn.net/ajax/libs/driver.js/1.3.6/driver.min.js.iife.js"
+      onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/driver.js@1.3.6/dist/driver.js.iife.js'"
+    ></script>
+    <script
+      defer
+      src="https://cdn.jsdelivr.net/npm/lucide@0.513.0/dist/umd/lucide.min.js"
+    ></script>
+    <script defer src="/tools/studio.js"></script>
+  </head>
+  <body>
+    <main class="studio-app">
+      <header
+        class="studio-header studio-project-header"
+        aria-label="Current project status"
+      >
+        <section class="project-identity" aria-label="当前项目">
+          <div class="project-title-row">
+            <h1 id="workspaceProjectTitle" title="未选择项目">未选择项目</h1>
+            <button
+              id="projectEditButton"
+              class="icon-button project-edit-button"
+              type="button"
+              title="编辑项目信息"
+              aria-controls="projectDetails"
+              aria-expanded="false"
+            >
+              <i data-lucide="square-pen"></i><span>编辑</span>
+            </button>
+          </div>
+        </section>
+
+        <section class="status-summary" aria-label="项目状态摘要">
+          <article>
+            <span>场景</span>
+            <strong
+              ><span id="workspaceSceneCount">0</span><small>个</small></strong
+            >
+          </article>
+          <article>
+            <span>旁白</span>
+            <strong
+              ><span id="workspaceNarrationChars">0</span
+              ><small>字</small></strong
+            >
+          </article>
+          <article>
+            <span>时间线</span>
+            <strong id="workspaceTimelineState" class="status-badge warning"
+              >待生成</strong
+            >
+          </article>
+          <article>
+            <span>输出</span>
+            <strong
+              ><span id="workspaceOutputCount">0</span><small>个</small></strong
+            >
+          </article>
+        </section>
+
+        <nav class="header-actions quick-actions-panel" aria-label="项目操作">
+          <a class="primary-button" href="/studio/prompt"
+            ><i data-lucide="sparkles"></i><span>AI 创建</span></a
+          >
+          <a
+            id="editCurrentProjectButton"
+            class="quiet-button secondary-action"
+            href="/studio/import"
+            ><i data-lucide="square-pen"></i><span>编辑源文件</span></a
+          >
+          <button
+            id="tourButton"
+            class="quiet-button utility-action"
+            type="button"
+            title="打开使用引导"
+          >
+            <i data-lucide="map"></i><span>引导</span>
+          </button>
+          <a
+            id="importCurrentProjectButton"
+            class="quiet-button utility-action"
+            href="/studio/import"
+            title="导入并替换当前项目"
+            ><i data-lucide="file-input"></i><span>导入替换</span></a
+          >
+          <button
+            id="openCaptionsButton"
+            class="quiet-button utility-action"
+            type="button"
+            title="编辑字幕"
+          >
+            <i data-lucide="captions"></i><span>编辑字幕</span>
+          </button>
+          <button
+            id="openProjectsShortcut"
+            class="quiet-button utility-action"
+            type="button"
+            title="切换项目"
+          >
+            <i data-lucide="folder-open"></i><span>切换项目</span>
+          </button>
+          <button
+            id="newWorkspaceProjectButton"
+            class="quiet-button utility-action"
+            type="button"
+            title="新建项目"
+          >
+            <i data-lucide="plus"></i><span>新建项目</span>
+          </button>
         </nav>
-        <div class="project-title-row">
-          <h1 id="workspaceProjectTitle" title="未选择项目">未选择项目</h1>
-          <button id="projectEditButton" class="icon-button project-edit-button" type="button" title="编辑项目信息">
-            <i data-lucide="square-pen"></i><span>编辑</span>
+
+        <section
+          id="projectDetails"
+          class="project-details"
+          aria-label="项目详情"
+          hidden
+        >
+          <div class="project-details-panel">
+            <label
+              >选择项目
+              <select
+                id="projectSelect"
+                class="project-select"
+                aria-label="选择项目"
+              >
+                <option value="">暂无项目</option>
+              </select>
+            </label>
+            <div class="detail-field">
+              <span>项目名称</span>
+              <strong id="projectDetailTitle">未选择项目</strong>
+            </div>
+            <div class="detail-field">
+              <span>项目 ID</span>
+              <strong id="workspaceProjectId">未加载</strong>
+            </div>
+            <div class="detail-field detail-field-wide">
+              <span>本地路径</span>
+              <strong id="currentSourcePath">暂无当前源文件</strong>
+            </div>
+            <form id="projectEditForm" class="project-edit-form" hidden>
+              <label
+                >项目名称<input
+                  id="projectTitleInput"
+                  type="text"
+                  autocomplete="off"
+              /></label>
+              <div class="project-edit-actions">
+                <button
+                  id="saveProjectMetaButton"
+                  class="primary-button"
+                  type="button"
+                >
+                  <i data-lucide="save"></i><span>保存</span>
+                </button>
+              </div>
+            </form>
+            <div
+              id="projectSidebar"
+              class="project-create-tools"
+              aria-label="项目创建"
+            >
+              <button id="refreshButton" class="quiet-button" type="button">
+                <i data-lucide="refresh-cw"></i><span>刷新</span>
+              </button>
+              <button id="loadStarterButton" class="quiet-button" type="button">
+                <i data-lucide="sparkles"></i><span>示例</span>
+              </button>
+              <input
+                id="newProjectNameInput"
+                type="text"
+                placeholder="新项目名称"
+                aria-label="新项目名称"
+              />
+              <button id="newProjectButton" class="quiet-button" type="button">
+                <i data-lucide="plus"></i><span>新建</span>
+              </button>
+            </div>
+            <div id="projectList" class="project-list" hidden></div>
+          </div>
+        </section>
+
+        <div class="header-status-mirror" aria-hidden="true">
+          <span id="currentProjectName">未加载</span>
+          <span id="timelineStatus">待生成</span>
+          <span id="outputStatus">0 个</span>
+        </div>
+        <nav class="top-actions" aria-hidden="true">
+          <button
+            id="sidebarToggle"
+            class="quiet-button sidebar-toggle"
+            type="button"
+            aria-controls="projectSidebar"
+            aria-expanded="true"
+          >
+            <i data-lucide="folder-tree"></i><span>项目</span>
+          </button>
+          <a
+            class="quiet-button"
+            href="../themes/default/index.html"
+            target="_blank"
+            rel="noreferrer"
+          >
+            <i data-lucide="monitor-play"></i><span>预览</span>
+          </a>
+          <a
+            class="quiet-button"
+            href="/captions"
+            target="_blank"
+            rel="noreferrer"
+          >
+            <i data-lucide="captions"></i><span>字幕</span>
+          </a>
+          <a
+            class="quiet-button"
+            href="/voices"
+            target="_blank"
+            rel="noreferrer"
+          >
+            <i data-lucide="audio-lines"></i><span>声音</span>
+          </a>
+        </nav>
+      </header>
+
+      <div class="studio-layout">
+        <aside class="app-sidebar">
+          <div class="sidebar-brand">
+            <div class="brand-mark">VF</div>
+            <div>
+              <p class="eyebrow">LOCAL VIDEO FACTORY</p>
+              <h1>Video Factory</h1>
+            </div>
+          </div>
+          <nav class="product-nav" aria-label="产品工具">
+            <p class="nav-label">产品工具</p>
+            <a class="active" href="/studio" aria-current="page"
+              ><i data-lucide="folder"></i><span>Studio</span></a
+            >
+            <a href="/voices"
+              ><i data-lucide="audio-lines"></i><span>Voice Preview</span></a
+            >
+            <a href="/captions"
+              ><i data-lucide="captions"></i><span>Captions</span></a
+            >
+          </nav>
+          <div class="sidebar-spacer"></div>
+          <section class="engine-card">
+            <div class="engine-row">
+              <span class="status-dot"></span>
+              <div>
+                <strong>引擎状态</strong>
+                <p>运行正常</p>
+              </div>
+            </div>
+            <small>TTS · 本地 · AI 引擎</small>
+          </section>
+          <button id="settingsButton" class="settings-link" type="button">
+            <i data-lucide="settings"></i><span>设置</span>
+          </button>
+        </aside>
+
+        <button
+          id="projectDrawerBackdrop"
+          class="project-drawer-backdrop"
+          type="button"
+          aria-label="关闭项目列表"
+        ></button>
+
+        <section class="workspace">
+          <section class="preview-output-grid">
+            <section class="panel preview-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="section-label">Preview</p>
+                  <h2>项目预览</h2>
+                </div>
+                <a
+                  class="quiet-button"
+                  href="../themes/default/index.html"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <i data-lucide="maximize-2"></i><span>全屏打开</span>
+                </a>
+              </div>
+              <iframe
+                id="previewFrame"
+                title="Video preview"
+                src="../themes/default/index.html"
+              ></iframe>
+            </section>
+
+            <section class="panel outputs-panel is-empty">
+              <div class="panel-heading">
+                <div>
+                  <p class="section-label">Exports</p>
+                  <h2>本项目成片</h2>
+                </div>
+                <button
+                  id="refreshOutputsButton"
+                  class="icon-button"
+                  type="button"
+                  title="刷新输出"
+                >
+                  <i data-lucide="refresh-cw"></i><span>刷新</span>
+                </button>
+              </div>
+              <video id="outputPlayer" controls preload="metadata"></video>
+              <div id="outputList" class="output-list"></div>
+            </section>
+          </section>
+
+          <section class="panel build-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="section-label">Build & Export</p>
+                <h2>生成与导出</h2>
+              </div>
+              <p id="jobStatus" class="job-status">空闲</p>
+            </div>
+            <section class="build-next-step" aria-live="polite">
+              <span id="guideBadge" class="guide-badge">READY</span>
+              <div>
+                <span class="next-step-label">下一步</span>
+                <strong id="guideTitle">读取状态中</strong>
+                <p id="guideBody">Studio 正在连接本地工厂。</p>
+              </div>
+            </section>
+            <div class="build-controls">
+              <button id="checkButton" class="quiet-button" type="button">
+                <i data-lucide="check-circle-2"></i><span>检查项目</span>
+              </button>
+              <button id="offlineButton" class="quiet-button" type="button">
+                <i data-lucide="file-video"></i><span>静音预览</span>
+              </button>
+              <button id="ttsButton" class="primary-button" type="button">
+                <i data-lucide="radio-tower"></i><span>生成配音</span>
+              </button>
+              <label
+                >尺寸
+                <select id="renderSizeInput">
+                  <option value="720p">720p</option>
+                  <option value="1080p">1080p</option>
+                  <option value="2k">2K</option>
+                  <option value="4k">4K</option>
+                </select>
+              </label>
+              <label
+                >输出名<input
+                  id="renderOutputInput"
+                  type="text"
+                  value="studio-render.mp4"
+              /></label>
+              <button id="renderButton" class="primary-button" type="button">
+                <i data-lucide="download"></i><span>导出 MP4</span>
+              </button>
+            </div>
+            <pre id="jobLog" class="job-log">等待任务。</pre>
+          </section>
+        </section>
+      </div>
+
+      <section
+        id="settingsDrawer"
+        class="studio-settings-drawer"
+        aria-hidden="true"
+        aria-label="Studio 设置"
+      >
+        <div class="settings-drawer-heading">
+          <div>
+            <p>STUDIO SETTINGS</p>
+            <h2>当前项目生成参数</h2>
+          </div>
+          <button
+            id="closeSettingsButton"
+            class="icon-button"
+            type="button"
+            aria-label="关闭设置"
+          >
+            <i data-lucide="x"></i>
+          </button>
+        </div>
+        <p class="settings-intro">
+          这些参数会用于当前项目的下一次 TTS 任务，并随项目保存在本地。
+        </p>
+        <label
+          >默认声音<select id="settingsVoice">
+            <option value="zh-CN-XiaoxiaoNeural">
+              zh-CN-XiaoxiaoNeural（晓晓 · 女声）
+            </option>
+            <option value="zh-CN-XiaoyiNeural">
+              zh-CN-XiaoyiNeural（晓伊 · 女声）
+            </option>
+            <option value="zh-CN-YunjianNeural">
+              zh-CN-YunjianNeural（云健 · 男声）
+            </option>
+            <option value="zh-CN-YunxiNeural">
+              zh-CN-YunxiNeural（云希 · 男声）
+            </option>
+          </select></label
+        >
+        <div class="settings-field-grid">
+          <label
+            >语速<input
+              id="settingsRate"
+              type="text"
+              value="+12%"
+              inputmode="numeric" /></label
+          ><label
+            >音调<input
+              id="settingsPitch"
+              type="text"
+              value="+0Hz"
+              inputmode="numeric" /></label
+          ><label
+            >场景间隔（秒）<input
+              id="settingsGap"
+              type="number"
+              min="0"
+              max="3"
+              step="0.01"
+              value="0.28"
+          /></label>
+        </div>
+        <label class="settings-check"
+          ><input id="settingsReducedMotion" type="checkbox" /><span
+            ><strong>低动画模式</strong
+            ><small>减少界面过渡效果，改善较慢设备上的交互响应。</small></span
+          ></label
+        >
+        <div class="settings-actions">
+          <button id="resetSettingsButton" type="button">恢复默认</button
+          ><button id="saveSettingsButton" class="primary-button" type="button">
+            <i data-lucide="save"></i><span>保存设置</span>
           </button>
         </div>
       </section>
-
-      <section class="status-summary" aria-label="项目状态摘要">
-        <article>
-          <span>场景</span>
-          <strong><span id="workspaceSceneCount">0</span><small>个</small></strong>
-        </article>
-        <article>
-          <span>旁白</span>
-          <strong><span id="workspaceNarrationChars">0</span><small>字</small></strong>
-        </article>
-        <article>
-          <span>时间线</span>
-          <strong id="workspaceTimelineState" class="status-badge warning">待生成</strong>
-        </article>
-        <article>
-          <span>输出</span>
-          <strong><span id="workspaceOutputCount">0</span><small>个</small></strong>
-        </article>
-      </section>
-
-      <nav class="header-actions quick-actions-panel" aria-label="项目操作">
-        <a class="primary-button" href="/studio/prompt"><i data-lucide="sparkles"></i><span>AI 创建</span></a>
-        <a id="editCurrentProjectButton" class="quiet-button secondary-action" href="/studio/import"><i data-lucide="square-pen"></i><span>编辑源文件</span></a>
-        <details class="more-menu">
-          <summary class="quiet-button"><i data-lucide="more-horizontal"></i><span>更多</span></summary>
-          <div class="more-menu-panel">
-            <button id="tourButton" type="button"><i data-lucide="map"></i><span>引导</span></button>
-            <a id="importCurrentProjectButton" href="/studio/import"><i data-lucide="file-input"></i><span>导入替换</span></a>
-            <button id="openCaptionsButton" type="button"><i data-lucide="captions"></i><span>编辑字幕</span></button>
-            <button id="openProjectsShortcut" type="button"><i data-lucide="folder-open"></i><span>切换项目</span></button>
-            <button id="newWorkspaceProjectButton" type="button"><i data-lucide="plus"></i><span>新建项目</span></button>
-          </div>
-        </details>
-      </nav>
-
-      <details class="project-details">
-        <summary>项目详情</summary>
-        <div class="project-details-panel">
-          <label>选择项目
-            <select id="projectSelect" class="project-select" aria-label="选择项目">
-              <option value="">暂无项目</option>
-            </select>
-          </label>
-          <div class="detail-field">
-            <span>项目名称</span>
-            <strong id="projectDetailTitle">未选择项目</strong>
-          </div>
-          <div class="detail-field">
-            <span>项目 ID</span>
-            <strong id="workspaceProjectId">未加载</strong>
-          </div>
-          <div class="detail-field detail-field-wide">
-            <span>本地路径</span>
-            <strong id="currentSourcePath">暂无当前源文件</strong>
-          </div>
-          <form id="projectEditForm" class="project-edit-form" hidden>
-            <label>项目名称<input id="projectTitleInput" type="text" autocomplete="off" /></label>
-            <div class="project-edit-actions">
-              <button id="saveProjectMetaButton" class="primary-button" type="button"><i data-lucide="save"></i><span>保存</span></button>
-              <button id="cancelProjectMetaButton" class="quiet-button" type="button">取消</button>
-            </div>
-          </form>
-          <div id="projectSidebar" class="project-create-tools" aria-label="项目创建">
-            <button id="refreshButton" class="quiet-button" type="button"><i data-lucide="refresh-cw"></i><span>刷新</span></button>
-            <button id="loadStarterButton" class="quiet-button" type="button"><i data-lucide="sparkles"></i><span>示例</span></button>
-            <input id="newProjectNameInput" type="text" placeholder="新项目名称" aria-label="新项目名称" />
-            <button id="newProjectButton" class="quiet-button" type="button"><i data-lucide="plus"></i><span>新建</span></button>
-          </div>
-          <div id="projectList" class="project-list" hidden></div>
-        </div>
-      </details>
-
-      <div class="header-status-mirror" aria-hidden="true">
-        <span id="currentProjectName">未加载</span>
-        <span id="timelineStatus">待生成</span>
-        <span id="outputStatus">0 个</span>
-      </div>
-      <nav class="top-actions" aria-hidden="true">
-        <button id="sidebarToggle" class="quiet-button sidebar-toggle" type="button" aria-controls="projectSidebar" aria-expanded="true">
-          <i data-lucide="folder-tree"></i><span>项目</span>
-        </button>
-        <a class="quiet-button" href="../themes/default/index.html" target="_blank" rel="noreferrer">
-          <i data-lucide="monitor-play"></i><span>预览</span>
-        </a>
-        <a class="quiet-button" href="/captions" target="_blank" rel="noreferrer">
-          <i data-lucide="captions"></i><span>字幕</span>
-        </a>
-        <a class="quiet-button" href="/voices" target="_blank" rel="noreferrer">
-          <i data-lucide="audio-lines"></i><span>声音</span>
-        </a>
-      </nav>
-    </header>
-
-    <div class="studio-layout">
-      <aside class="app-sidebar">
-        <div class="sidebar-brand">
-          <div class="brand-mark">VF</div>
-          <div><p class="eyebrow">LOCAL VIDEO FACTORY</p><h1>Video Factory</h1></div>
-        </div>
-        <nav class="product-nav" aria-label="产品工具">
-          <p class="nav-label">产品工具</p>
-          <a class="active" href="/studio" aria-current="page"><i data-lucide="folder"></i><span>Studio</span></a>
-          <a href="/voices"><i data-lucide="audio-lines"></i><span>Voice Preview</span></a>
-          <a href="/captions"><i data-lucide="captions"></i><span>Captions</span></a>
-        </nav>
-        <div class="sidebar-spacer"></div>
-        <section class="engine-card">
-          <div class="engine-row"><span class="status-dot"></span><div><strong>引擎状态</strong><p>运行正常</p></div></div>
-          <small>TTS · 本地 · AI 引擎</small>
-        </section>
-        <button id="settingsButton" class="settings-link" type="button"><i data-lucide="settings"></i><span>设置</span></button>
-      </aside>
-
-      <button id="projectDrawerBackdrop" class="project-drawer-backdrop" type="button" aria-label="关闭项目列表"></button>
-
-      <section class="workspace">
-        <section class="preview-output-grid">
-          <section class="panel preview-panel">
-            <div class="panel-heading">
-              <div>
-                <p class="section-label">Preview</p>
-                <h2>项目预览</h2>
-              </div>
-              <a class="quiet-button" href="../themes/default/index.html" target="_blank" rel="noreferrer">
-                <i data-lucide="maximize-2"></i><span>全屏打开</span>
-              </a>
-            </div>
-            <iframe id="previewFrame" title="Video preview" src="../themes/default/index.html"></iframe>
-          </section>
-
-          <section class="panel outputs-panel is-empty">
-            <div class="panel-heading">
-              <div>
-                <p class="section-label">Exports</p>
-                <h2>本项目成片</h2>
-              </div>
-              <button id="refreshOutputsButton" class="icon-button" type="button" title="刷新输出">
-                <i data-lucide="refresh-cw"></i><span>刷新</span>
-              </button>
-            </div>
-            <video id="outputPlayer" controls preload="metadata"></video>
-            <div id="outputList" class="output-list"></div>
-          </section>
-        </section>
-
-        <section class="panel build-panel">
-          <div class="panel-heading">
-            <div>
-              <p class="section-label">Build & Export</p>
-              <h2>生成与导出</h2>
-            </div>
-            <p id="jobStatus" class="job-status">空闲</p>
-          </div>
-          <section class="build-next-step" aria-live="polite">
-            <span id="guideBadge" class="guide-badge">READY</span>
-            <div>
-              <span class="next-step-label">下一步</span>
-              <strong id="guideTitle">读取状态中</strong>
-              <p id="guideBody">Studio 正在连接本地工厂。</p>
-            </div>
-          </section>
-          <div class="build-controls">
-            <button id="checkButton" class="quiet-button" type="button">
-              <i data-lucide="check-circle-2"></i><span>检查项目</span>
-            </button>
-            <button id="offlineButton" class="quiet-button" type="button">
-              <i data-lucide="file-video"></i><span>静音预览</span>
-            </button>
-            <button id="ttsButton" class="primary-button" type="button">
-              <i data-lucide="radio-tower"></i><span>生成配音</span>
-            </button>
-            <label>尺寸
-              <select id="renderSizeInput">
-                <option value="720p">720p</option>
-                <option value="1080p">1080p</option>
-                <option value="2k">2K</option>
-                <option value="4k">4K</option>
-              </select>
-            </label>
-            <label>输出名<input id="renderOutputInput" type="text" value="studio-render.mp4" /></label>
-            <button id="renderButton" class="primary-button" type="button">
-              <i data-lucide="download"></i><span>导出 MP4</span>
-            </button>
-          </div>
-          <pre id="jobLog" class="job-log">等待任务。</pre>
-        </section>
-
-      </section>
-    </div>
-
-    <section id="settingsDrawer" class="studio-settings-drawer" aria-hidden="true" aria-label="Studio 设置">
-      <div class="settings-drawer-heading"><div><p>STUDIO SETTINGS</p><h2>当前项目生成参数</h2></div><button id="closeSettingsButton" class="icon-button" type="button" aria-label="关闭设置"><i data-lucide="x"></i></button></div>
-      <p class="settings-intro">这些参数会用于当前项目的下一次 TTS 任务，并随项目保存在本地。</p>
-      <label>默认声音<select id="settingsVoice"><option value="zh-CN-XiaoxiaoNeural">zh-CN-XiaoxiaoNeural（晓晓 · 女声）</option><option value="zh-CN-XiaoyiNeural">zh-CN-XiaoyiNeural（晓伊 · 女声）</option><option value="zh-CN-YunjianNeural">zh-CN-YunjianNeural（云健 · 男声）</option><option value="zh-CN-YunxiNeural">zh-CN-YunxiNeural（云希 · 男声）</option></select></label>
-      <div class="settings-field-grid"><label>语速<input id="settingsRate" type="text" value="+12%" inputmode="numeric" /></label><label>音调<input id="settingsPitch" type="text" value="+0Hz" inputmode="numeric" /></label><label>场景间隔（秒）<input id="settingsGap" type="number" min="0" max="3" step="0.01" value="0.28" /></label></div>
-      <label class="settings-check"><input id="settingsReducedMotion" type="checkbox" /><span><strong>低动画模式</strong><small>减少界面过渡效果，改善较慢设备上的交互响应。</small></span></label>
-      <div class="settings-actions"><button id="resetSettingsButton" type="button">恢复默认</button><button id="saveSettingsButton" class="primary-button" type="button"><i data-lucide="save"></i><span>保存设置</span></button></div>
-    </section>
-    <button id="settingsBackdrop" class="settings-backdrop" type="button" aria-label="关闭设置"></button>
-  </main>
-</body>
+      <button
+        id="settingsBackdrop"
+        class="settings-backdrop"
+        type="button"
+        aria-label="关闭设置"
+      ></button>
+    </main>
+  </body>
 </html>

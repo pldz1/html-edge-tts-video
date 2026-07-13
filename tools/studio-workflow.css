@@ -214,14 +214,6 @@
   padding-bottom: 10px;
 }
 
-.workflow-toast {
-  position: fixed;
-  right: 18px;
-  bottom: 14px;
-  display: block;
-  max-width: min(460px, calc(100vw - 36px));
-}
-
 .tool-guide-dialog { width: min(460px, calc(100vw - 32px)); padding: 0; border: 1px solid #d9e5f3; border-radius: 14px; box-shadow: 0 22px 60px rgba(29,52,84,.2); color: var(--text); }
 .tool-guide-dialog::backdrop { background: rgba(20,35,59,.34); }
 .guide-dialog-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 20px 20px 14px; border-bottom: 1px solid var(--line); background: #f5f9ff; }
