@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
@@ -14,9 +15,9 @@ from pipeline.factory import DEFAULT_THEME, LOCAL_WORK, ROOT, STARTER_SOURCE, lo
 PYTHON = sys.executable
 
 
-def run(command: list[str]) -> None:
+def run(command: list[str], env: dict[str, str] | None = None) -> None:
     try:
-        subprocess.run(command, cwd=ROOT, check=True)
+        subprocess.run(command, cwd=ROOT, check=True, env=env)
     except KeyboardInterrupt:
         print("\nInterrupted. Shutting down…")
         return
@@ -46,9 +47,18 @@ def validate_source(source: str | None, theme: str) -> None:
     run(command)
 
 
-def install(_: argparse.Namespace) -> None:
-    run([PYTHON, "-m", "pip", "install", "-r", "requirements.txt"])
-    run([PYTHON, "-m", "playwright", "install", "chromium"])
+def install(args: argparse.Namespace) -> None:
+    pip_command = [PYTHON, "-m", "pip", "install", "-r", "requirements.txt"]
+    if args.pip_index_url:
+        pip_command.extend(["--index-url", args.pip_index_url])
+        print(f"Using one-time Python package index: {args.pip_index_url}")
+    run(pip_command)
+
+    playwright_env = os.environ.copy()
+    if args.playwright_download_host:
+        playwright_env["PLAYWRIGHT_DOWNLOAD_HOST"] = args.playwright_download_host
+        print(f"Using one-time Playwright download host: {args.playwright_download_host}")
+    run([PYTHON, "-m", "playwright", "install", "chromium"], env=playwright_env)
 
 
 def tts(args: argparse.Namespace) -> None:
@@ -187,7 +197,16 @@ def build_parser() -> argparse.ArgumentParser:
     load_parser.add_argument("--theme", default=DEFAULT_THEME)
     load_parser.set_defaults(func=load)
 
-    subparsers.add_parser("install").set_defaults(func=install)
+    install_parser = subparsers.add_parser("install", help="Install Python dependencies and Playwright Chromium.")
+    install_parser.add_argument(
+        "--pip-index-url",
+        help="One-time Python package index URL; does not modify pip configuration.",
+    )
+    install_parser.add_argument(
+        "--playwright-download-host",
+        help="One-time host for the Playwright Chromium download; does not persist in the environment.",
+    )
+    install_parser.set_defaults(func=install)
 
     offline_parser = subparsers.add_parser("offline")
     add_source_args(offline_parser)

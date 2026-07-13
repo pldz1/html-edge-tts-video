@@ -22,31 +22,98 @@
 </head>
 <body>
   <main class="studio-app">
-    <header class="studio-header">
-      <div class="page-title-block">
-        <p class="eyebrow">STUDIO</p>
-        <h1>视频项目</h1>
-      </div>
-      <section class="status-strip" aria-label="Current project status">
-        <div>
-          <span>当前项目</span>
-          <strong id="currentProjectName">未加载</strong>
-        </div>
-        <div>
-          <span>时间线</span>
-          <strong id="timelineStatus">待生成</strong>
-        </div>
-        <div>
-          <span>输出</span>
-          <strong id="outputStatus">0 个</strong>
+    <header class="studio-header studio-project-header" aria-label="Current project status">
+      <section class="project-identity" aria-label="当前项目">
+        <nav class="project-breadcrumb" aria-label="项目路径">
+          <span>我的项目</span><span aria-hidden="true">/</span>
+        </nav>
+        <div class="project-title-row">
+          <h1 id="workspaceProjectTitle" title="未选择项目">未选择项目</h1>
+          <button id="projectEditButton" class="icon-button project-edit-button" type="button" title="编辑项目信息">
+            <i data-lucide="square-pen"></i><span>编辑</span>
+          </button>
         </div>
       </section>
-      <nav class="top-actions">
+
+      <section class="status-summary" aria-label="项目状态摘要">
+        <article>
+          <span>场景</span>
+          <strong><span id="workspaceSceneCount">0</span><small>个</small></strong>
+        </article>
+        <article>
+          <span>旁白</span>
+          <strong><span id="workspaceNarrationChars">0</span><small>字</small></strong>
+        </article>
+        <article>
+          <span>时间线</span>
+          <strong id="workspaceTimelineState" class="status-badge warning">待生成</strong>
+        </article>
+        <article>
+          <span>输出</span>
+          <strong><span id="workspaceOutputCount">0</span><small>个</small></strong>
+        </article>
+      </section>
+
+      <nav class="header-actions quick-actions-panel" aria-label="项目操作">
+        <a class="primary-button" href="/studio/prompt"><i data-lucide="sparkles"></i><span>AI 创建</span></a>
+        <a id="editCurrentProjectButton" class="quiet-button secondary-action" href="/studio/import"><i data-lucide="square-pen"></i><span>编辑源文件</span></a>
+        <details class="more-menu">
+          <summary class="quiet-button"><i data-lucide="more-horizontal"></i><span>更多</span></summary>
+          <div class="more-menu-panel">
+            <button id="tourButton" type="button"><i data-lucide="map"></i><span>引导</span></button>
+            <a id="importCurrentProjectButton" href="/studio/import"><i data-lucide="file-input"></i><span>导入替换</span></a>
+            <button id="openCaptionsButton" type="button"><i data-lucide="captions"></i><span>编辑字幕</span></button>
+            <button id="openProjectsShortcut" type="button"><i data-lucide="folder-open"></i><span>切换项目</span></button>
+            <button id="newWorkspaceProjectButton" type="button"><i data-lucide="plus"></i><span>新建项目</span></button>
+          </div>
+        </details>
+      </nav>
+
+      <details class="project-details">
+        <summary>项目详情</summary>
+        <div class="project-details-panel">
+          <label>选择项目
+            <select id="projectSelect" class="project-select" aria-label="选择项目">
+              <option value="">暂无项目</option>
+            </select>
+          </label>
+          <div class="detail-field">
+            <span>项目名称</span>
+            <strong id="projectDetailTitle">未选择项目</strong>
+          </div>
+          <div class="detail-field">
+            <span>项目 ID</span>
+            <strong id="workspaceProjectId">未加载</strong>
+          </div>
+          <div class="detail-field detail-field-wide">
+            <span>本地路径</span>
+            <strong id="currentSourcePath">暂无当前源文件</strong>
+          </div>
+          <form id="projectEditForm" class="project-edit-form" hidden>
+            <label>项目名称<input id="projectTitleInput" type="text" autocomplete="off" /></label>
+            <div class="project-edit-actions">
+              <button id="saveProjectMetaButton" class="primary-button" type="button"><i data-lucide="save"></i><span>保存</span></button>
+              <button id="cancelProjectMetaButton" class="quiet-button" type="button">取消</button>
+            </div>
+          </form>
+          <div id="projectSidebar" class="project-create-tools" aria-label="项目创建">
+            <button id="refreshButton" class="quiet-button" type="button"><i data-lucide="refresh-cw"></i><span>刷新</span></button>
+            <button id="loadStarterButton" class="quiet-button" type="button"><i data-lucide="sparkles"></i><span>示例</span></button>
+            <input id="newProjectNameInput" type="text" placeholder="新项目名称" aria-label="新项目名称" />
+            <button id="newProjectButton" class="quiet-button" type="button"><i data-lucide="plus"></i><span>新建</span></button>
+          </div>
+          <div id="projectList" class="project-list" hidden></div>
+        </div>
+      </details>
+
+      <div class="header-status-mirror" aria-hidden="true">
+        <span id="currentProjectName">未加载</span>
+        <span id="timelineStatus">待生成</span>
+        <span id="outputStatus">0 个</span>
+      </div>
+      <nav class="top-actions" aria-hidden="true">
         <button id="sidebarToggle" class="quiet-button sidebar-toggle" type="button" aria-controls="projectSidebar" aria-expanded="true">
           <i data-lucide="folder-tree"></i><span>项目</span>
-        </button>
-        <button id="tourButton" class="quiet-button" type="button">
-          <i data-lucide="map"></i><span>引导</span>
         </button>
         <a class="quiet-button" href="../themes/default/index.html" target="_blank" rel="noreferrer">
           <i data-lucide="monitor-play"></i><span>预览</span>
@@ -81,79 +148,8 @@
       </aside>
 
       <button id="projectDrawerBackdrop" class="project-drawer-backdrop" type="button" aria-label="关闭项目列表"></button>
-      <aside id="projectSidebar" class="sidebar project-drawer">
-        <div class="sidebar-brand">
-          <div class="brand-mark">VS</div>
-          <div>
-            <p class="eyebrow">LOCAL VIDEO FACTORY</p>
-            <h1>Video Studio</h1>
-          </div>
-        </div>
-        <section class="panel">
-          <div class="panel-heading">
-            <div>
-              <p class="section-label">Projects</p>
-              <h2>我的项目</h2>
-            </div>
-            <button id="refreshButton" class="icon-button" type="button" title="刷新">
-              <i data-lucide="refresh-cw"></i><span>刷新</span>
-            </button>
-          </div>
-          <button id="loadStarterButton" class="starter-button" type="button">
-            <i data-lucide="sparkles"></i>
-            <span>打开示例项目</span>
-          </button>
-          <div class="project-create-row">
-            <input id="newProjectSlugInput" type="text" placeholder="项目名称 / slug" aria-label="新项目名称或 slug" />
-            <button id="newProjectButton" type="button"><i data-lucide="plus"></i><span>新建项目</span></button>
-          </div>
-          <div id="projectList" class="project-list"></div>
-        </section>
-
-        <section class="panel compact-panel">
-          <p class="section-label">Source</p>
-          <p id="currentSourcePath" class="path-text">暂无当前源文件</p>
-        </section>
-      </aside>
 
       <section class="workspace">
-        <section class="panel current-project-panel">
-          <section class="current-project-hero">
-            <div>
-              <p class="section-label">当前项目</p>
-              <h3 id="workspaceProjectTitle">未选择项目</h3>
-              <p id="workspaceProjectPath" class="main-project-path">请先从左侧选择一个项目。</p>
-            </div>
-            <span id="workspaceProjectBadge" class="project-badge">未加载</span>
-          </section>
-          <div class="current-project-stats">
-            <article class="metric-tile">
-              <span>场景数</span>
-              <strong id="workspaceSceneCount">0</strong>
-            </article>
-            <article class="metric-tile">
-              <span>旁白字数</span>
-              <strong id="workspaceNarrationChars">0</strong>
-            </article>
-            <article class="metric-tile">
-              <span>时间线</span>
-              <strong id="workspaceTimelineState">待生成</strong>
-            </article>
-            <article class="metric-tile">
-              <span>输出</span>
-              <strong id="workspaceOutputCount">0 个</strong>
-            </article>
-          </div>
-          <div class="project-action-grid quick-actions-panel">
-            <a class="quiet-button" href="/studio/prompt"><i data-lucide="sparkles"></i><span>AI 创建</span></a>
-            <a id="editCurrentProjectButton" class="quiet-button" href="/studio/import"><i data-lucide="square-pen"></i><span>编辑源文件</span></a>
-            <a id="importCurrentProjectButton" class="quiet-button" href="/studio/import"><i data-lucide="file-input"></i><span>导入替换</span></a>
-            <button id="openCaptionsButton" class="quiet-button" type="button"><i data-lucide="captions"></i><span>编辑字幕</span></button>
-            <button id="openProjectsShortcut" class="quiet-button mobile-project-action" type="button"><i data-lucide="folder-open"></i><span>切换项目</span></button>
-            <button id="newWorkspaceProjectButton" class="quiet-button mobile-project-action" type="button"><i data-lucide="plus"></i><span>新建项目</span></button>
-          </div>
-        </section>
-
         <section class="preview-output-grid">
           <section class="panel preview-panel">
             <div class="panel-heading">
@@ -168,7 +164,7 @@
             <iframe id="previewFrame" title="Video preview" src="../themes/default/index.html"></iframe>
           </section>
 
-          <section class="panel outputs-panel">
+          <section class="panel outputs-panel is-empty">
             <div class="panel-heading">
               <div>
                 <p class="section-label">Exports</p>
@@ -225,7 +221,6 @@
           <pre id="jobLog" class="job-log">等待任务。</pre>
         </section>
 
-        <p id="statusText" class="toast-line">Ready.</p>
       </section>
     </div>
 

@@ -12,9 +12,10 @@ The browser UI is not the video engine. The Python factory remains the engine.
 Use two different browser roles:
 
 - User browser: opens the Studio, preview, caption editor, and external AI chat pages.
-- Render browser: uses Playwright bundled Chromium by default for deterministic capture.
+- Render browser: uses only Python Playwright's bundled Chromium for deterministic capture.
 
-The render browser should not depend on a user's installed Chrome or Edge. `CHROME_EXECUTABLE` is an explicit opt-in override for debugging or special environments, not an automatic fallback. This keeps render behavior consistent across machines after `python main.py install`.
+The render browser must not depend on or override to a user's installed Chrome or Edge. This keeps
+render behavior consistent across machines after `python main.py install`.
 
 ## Recommended Shape
 
@@ -36,8 +37,13 @@ Python factory server
   FFmpeg mux/export
         |
         v
-.local/work/<video-source>/
-.local/output/<video>.mp4
+.local/work/<8-char-project-id>/
+  manifest.json
+  scenes.json
+  body.html
+  media/
+  generated/
+  output/<video>.mp4
 ```
 
 ## Why Not Pure Browser
@@ -59,9 +65,9 @@ So the product should feel like a browser app, but technically be a local Python
 Use commands directly:
 
 ```bash
-python main.py tts --source .local/work/my-video
-python main.py captions --source .local/work/my-video
-python main.py render --source .local/work/my-video --size 2k --output my-video.mp4
+python main.py tts --source .local/work/a7f31c2d
+python main.py captions --source .local/work/a7f31c2d
+python main.py render --source .local/work/a7f31c2d --size 2k --output my-video.mp4
 ```
 
 Best for local agents and contributors.
@@ -100,7 +106,7 @@ html-edge-tts-video.exe
   starts localhost server
   opens default browser
   stores projects under .local/work/
-  stores videos under .local/output/
+  stores each project's videos under .local/work/<project-id>/output/
 ```
 
 This is easier and more reliable than rewriting the engine as a desktop frontend. The UI can remain ordinary HTML/CSS/JS.
@@ -140,7 +146,7 @@ Suggested flow:
 | Caption timing/editor | Browser UI + Python API | UI edits, Python persists to source/current |
 | Video capture | Python pipeline | Playwright controls bundled Chromium render frames |
 | MP4 encoding | Python pipeline | FFmpeg quality settings and mux |
-| Output browsing | Browser UI + Python API | Lists files from `.local/output/` |
+| Output browsing | Browser UI + Python API | Lists files from the active project's `output/` folder |
 
 ## Resolution Policy
 

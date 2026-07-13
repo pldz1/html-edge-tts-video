@@ -12,7 +12,8 @@ from pathlib import Path
 
 import edge_tts
 
-from factory import CURRENT_ASSETS, load_scenes, load_source
+from factory import CURRENT_ASSETS, load_scenes, load_source, persist_current_assets
+from toolchain import ffmpeg_executable, media_duration
 
 
 SCENE_AUDIO = CURRENT_ASSETS / "scenes"
@@ -20,23 +21,8 @@ TICKS = 10_000_000
 BREAK_RE = re.compile(r"[\u3002\uff01\uff1f\uff1b\uff0c\u3001\uff1a]$")
 
 
-def ffprobe_duration(path: Path) -> float:
-    process = subprocess.run(
-        [
-            "ffprobe",
-            "-v",
-            "error",
-            "-show_entries",
-            "format=duration",
-            "-of",
-            "default=noprint_wrappers=1:nokey=1",
-            str(path),
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    return float(process.stdout.strip())
+def audio_duration(path: Path) -> float:
+    return media_duration(path)
 
 
 def text_hash(text: str, voice: str, rate: str, pitch: str, boundary: str) -> str:
@@ -130,7 +116,7 @@ async def synth_scene(scene: dict, voice: str, rate: str, pitch: str, force: boo
 def write_gap_audio(path: Path, duration: float) -> None:
     subprocess.run(
         [
-            "ffmpeg",
+            ffmpeg_executable(),
             "-y",
             "-f",
             "lavfi",
@@ -165,7 +151,7 @@ async def main_async(args: argparse.Namespace) -> None:
     for index, scene in enumerate(scenes, 1):
         print(f"[{index:02d}/{len(scenes):02d}] {scene['id']}")
         audio_path, words = await synth_scene(scene, args.voice, args.rate, args.pitch, args.force)
-        duration = ffprobe_duration(audio_path)
+        duration = audio_duration(audio_path)
         timeline_scenes.append({**scene, "start": round(cursor, 3), "duration": round(duration, 3)})
         all_cues.extend(group_words(words, scene["id"], cursor))
         concat.append(f"file '{audio_path.as_posix()}'")
@@ -182,11 +168,11 @@ async def main_async(args: argparse.Namespace) -> None:
     concat_file.write_text("\n".join(concat), encoding="utf-8")
     narration = CURRENT_ASSETS / "narration.mp3"
     subprocess.run(
-        ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(concat_file), "-c:a", "libmp3lame", "-q:a", "2", str(narration)],
+        [ffmpeg_executable(), "-y", "-f", "concat", "-safe", "0", "-i", str(concat_file), "-c:a", "libmp3lame", "-q:a", "2", str(narration)],
         check=True,
     )
     timeline = {
-        "duration": round(ffprobe_duration(narration), 3),
+        "duration": round(audio_duration(narration), 3),
         "voice": args.voice,
         "rate": args.rate,
         "pitch": args.pitch,
@@ -194,6 +180,7 @@ async def main_async(args: argparse.Namespace) -> None:
         "cues": all_cues,
     }
     (CURRENT_ASSETS / "timeline.json").write_text(json.dumps(timeline, ensure_ascii=False, indent=2), encoding="utf-8")
+    persist_current_assets()
     print(f"\nCreated: {narration}\nCreated: {CURRENT_ASSETS / 'timeline.json'}\nDuration: {timeline['duration']:.2f}s")
 
 

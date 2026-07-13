@@ -20,6 +20,9 @@ CURRENT = LOCAL / "current"
 CURRENT_SOURCE = CURRENT / "source"
 CURRENT_ASSETS = CURRENT / "assets"
 CURRENT_META = CURRENT / "project.json"
+PROJECT_MANIFEST_FILE = "manifest.json"
+PROJECT_GENERATED_DIR = "generated"
+PROJECT_OUTPUT_DIR = "output"
 STARTER_SOURCE = ROOT / "templates" / "starter"
 THEMES = ROOT / "themes"
 DEFAULT_THEME = "default"
@@ -41,6 +44,33 @@ def clean_dir(path: Path) -> None:
     if path.exists():
         shutil.rmtree(path)
     path.mkdir(parents=True, exist_ok=True)
+
+
+def is_local_project(path: Path) -> bool:
+    try:
+        path.resolve().relative_to(LOCAL_WORK.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def project_generated_dir(path: Path) -> Path | None:
+    return path.resolve() / PROJECT_GENERATED_DIR if is_local_project(path) else None
+
+
+def project_output_dir(path: Path) -> Path | None:
+    return path.resolve() / PROJECT_OUTPUT_DIR if is_local_project(path) else None
+
+
+def persist_current_assets(source: Path | None = None) -> None:
+    source_root = source or active_source_root()
+    if not source_root or not CURRENT_ASSETS.exists():
+        return
+    target = project_generated_dir(source_root)
+    if not target:
+        return
+    clean_dir(target)
+    shutil.copytree(CURRENT_ASSETS, target, dirs_exist_ok=True)
 
 
 def find_first(source: Path, candidates: list[str]) -> Path | None:
@@ -104,11 +134,17 @@ def load_source(source: Path, theme: str = DEFAULT_THEME) -> None:
     previous_source = active_source_root()
     same_source = bool(previous_source and previous_source.resolve() == resolved["root"].resolve())
 
+    if previous_source and not same_source:
+        persist_current_assets(previous_source)
+
     clean_dir(CURRENT_SOURCE)
     if same_source:
         CURRENT_ASSETS.mkdir(parents=True, exist_ok=True)
     else:
         clean_dir(CURRENT_ASSETS)
+        generated = project_generated_dir(resolved["root"])
+        if generated and generated.exists():
+            shutil.copytree(generated, CURRENT_ASSETS, dirs_exist_ok=True)
 
     shutil.copy2(resolved["scenes"], CURRENT_SOURCE / "scenes.json")
     shutil.copy2(resolved["body"], CURRENT_SOURCE / "body.html")
@@ -200,4 +236,6 @@ def output_path(value: str) -> Path:
         return ROOT / path
     if parts and parts[0] == "output":
         return LOCAL_OUTPUT.joinpath(*parts[1:])
-    return LOCAL_OUTPUT / path
+    source = active_source_root()
+    project_output = project_output_dir(source) if source else None
+    return (project_output or LOCAL_OUTPUT) / path

@@ -8,7 +8,8 @@ import re
 import subprocess
 from pathlib import Path
 
-from factory import CURRENT_ASSETS, load_scenes, load_source
+from factory import CURRENT_ASSETS, load_scenes, load_source, persist_current_assets
+from toolchain import ffmpeg_executable
 
 
 BREAK_RE = re.compile(r".{1,22}?[\u3002\uff01\uff1f\uff1b\uff0c\u3001\uff1a]|.{1,22}$")
@@ -60,7 +61,7 @@ def main() -> None:
     )
     subprocess.run(
         [
-            "ffmpeg",
+            ffmpeg_executable(),
             "-y",
             "-f",
             "lavfi",
@@ -76,6 +77,7 @@ def main() -> None:
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
+    persist_current_assets()
     print(f"Offline timeline created: {cursor:.2f}s (silent audio)")
 
 

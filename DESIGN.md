@@ -8,23 +8,26 @@ the pipeline from scratch.
 
 The factory has four durable concepts:
 
-- Source folder: user or AI authored input containing `scenes.json`, `body.html`, optional `media/`,
-  and optional `captions.json`.
+- Project folder: `.local/work/<8-char-id>/`, containing `manifest.json`, source files, generated
+  resources, and project outputs. The immutable ID is storage identity; `manifest.json.name` is the
+  editable user-facing name.
+- Source files: `scenes.json`, `body.html`, optional `media/`, and optional `captions.json`.
 - Current workspace: `.local/current/`, the normalized active source plus generated assets.
 - Theme runtime: `themes/default/`, the stable HTML/CSS/JS shell that renders the source.
-- Output area: `.local/output/`, final MP4 files and diagnostics.
+- Output area: `<project>/output/` for managed projects, with `.local/output/` retained for external
+  source folders and legacy exports.
 
 Normal flow:
 
 ```text
-source folder
+project source files
   -> pipeline.factory.load_source()
   -> .local/current/source/
   -> pipeline.build_tts.main_async()
   -> .local/current/assets/narration.mp3 + timeline.json
   -> themes/default/runtime.js
   -> pipeline.render_video.main()
-  -> .local/output/*.mp4
+  -> .local/work/<project-id>/output/*.mp4
 ```
 
 `main.py` is the single CLI entrypoint.
@@ -151,8 +154,8 @@ fallback from old `work/` paths to `.local/work/`.
 
 `theme_url(theme)` validates the theme and returns the local preview URL.
 
-`output_path(value)` maps relative output names into `.local/output/`, keeps absolute paths intact,
-and maps legacy `output/foo.mp4` to `.local/output/foo.mp4`.
+`output_path(value)` maps relative output names into the active managed project's `output/` folder,
+keeps absolute paths intact, and maps legacy `output/foo.mp4` to `.local/output/foo.mp4`.
 
 ## Source Validation: pipeline/validate_sources.py
 
@@ -177,7 +180,8 @@ prints scene and narration counts.
 
 ## TTS Build: pipeline/build_tts.py
 
-`ffprobe_duration(path)` uses FFprobe to read an audio file duration in seconds.
+`audio_duration(path)` reads an audio duration through the FFmpeg binary managed by the active
+Python environment; it has no system `ffprobe` dependency.
 
 `text_hash(text, voice, rate, pitch, boundary)` creates a short cache key for a scene narration and
 TTS settings.
@@ -283,8 +287,8 @@ mode, FPS, CRF, preset, frame format, and JPEG quality.
 `ensure_render_assets_match_source()` requires `timeline.json` and `narration.mp3`, parses the
 timeline, and compares `(scene.id, scene.narration)` pairs against the current source.
 
-`launch_browser(playwright)` uses Playwright bundled Chromium by default. `CHROME_EXECUTABLE` is an
-explicit opt-in override for special environments and is not used as an automatic fallback.
+`launch_browser(playwright)` uses only the Chromium installed by Python Playwright. It has no
+system Chrome or Edge override or fallback.
 
 `resolved_capture_mode(value, width, height)` keeps explicit `video` or `frames`; `auto` chooses
 frame capture for 1080p and above, and Playwright video recording for lower sizes.

@@ -1,7 +1,7 @@
 ﻿# HTML edge-tts Video Factory
 
 This repo is a factory: it loads a video source folder, generates Chinese TTS and caption timing,
-records a stable HTML theme shell, then writes an MP4 under `.local/output/`.
+records a stable HTML theme shell, then writes an MP4 into the active project's `output/` folder.
 
 AI output is intentionally small:
 
@@ -36,25 +36,26 @@ python main.py check
 python main.py render --output starter.mp4
 ```
 
-Create an editable source folder:
-
-```bash
-python main.py init --target .local/work/my-video
-```
-
-Then edit:
+Studio-managed projects use an immutable 8-character ID and keep their metadata and resources together:
 
 ```text
-.local/work/my-video/scenes.json
-.local/work/my-video/body.html
-.local/work/my-video/media/ optional
-.local/work/my-video/captions.json optional, created by caption editor
+.local/work/a7f31c2d/
+  manifest.json
+  scenes.json
+  body.html
+  media/ optional
+  captions.json optional, created by caption editor
+  generated/ narration and timeline cache
+  output/ rendered videos
 ```
+
+`manifest.json` owns the editable project name and TTS settings. The folder ID does not change when
+the project is renamed. Standalone source folders outside `.local/work/` remain supported.
 
 Build it:
 
 ```bash
-python main.py tts --source .local/work/my-video
+python main.py tts --source .local/work/a7f31c2d
 python main.py check
 python main.py render --output my-video.mp4
 ```
@@ -62,7 +63,7 @@ python main.py render --output my-video.mp4
 Edit generated captions like a meeting transcript:
 
 ```bash
-python main.py captions --source .local/work/my-video
+python main.py captions --source .local/work/a7f31c2d
 ```
 
 Open:
@@ -81,11 +82,13 @@ python main.py check
 python main.py render --output my-video.mp4
 ```
 
-Final MP4 appears in:
+For a Studio-managed project, the final MP4 appears in:
 
 ```text
-.local/output/
+.local/work/<project-id>/output/
 ```
+
+Standalone external sources continue to use `.local/output/`.
 
 ## Source Format
 
@@ -184,7 +187,7 @@ http://127.0.0.1:8765/tools/voices.html
 ## Commands
 
 ```bash
-python main.py install        # install dependencies and Playwright browser
+python main.py install        # install Python dependencies, managed FFmpeg, and Playwright Chromium
 python main.py init           # copy templates/starter to .local/work/starter
 python main.py load --source <folder>
 python main.py voices         # list Chinese edge-tts voices
@@ -196,6 +199,16 @@ python main.py captions       # edit on-screen subtitles from timeline cues
 python main.py check
 python main.py render --output my-video.mp4
 ```
+
+To use a mirror for this installation only (without changing global pip or environment settings):
+
+```bash
+python main.py install --pip-index-url https://<your-python-mirror>/simple --playwright-download-host https://<your-playwright-mirror>
+```
+
+Omit either option to use its default official source. Rendering never uses installed Edge or Chrome;
+it launches only the Chromium downloaded by Python Playwright. FFmpeg is supplied by the active Python
+environment through `imageio-ffmpeg`, rather than a system `PATH` executable.
 
 Render size examples:
 
@@ -212,13 +225,14 @@ python main.py render --width 1080 --height 1920 --output vertical.mp4
 .local/current/source/
 ```
 
-and writes generated audio/timeline into:
+and writes generated audio/timeline into the active cache:
 
 ```text
 .local/current/assets/
 ```
 
-These folders are ignored. They are build state, not source.
+For a managed project this cache is mirrored to `.local/work/<project-id>/generated/`. These folders
+are ignored build state, not authored source.
 
 ## Git Boundary
 

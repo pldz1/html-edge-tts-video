@@ -38,8 +38,10 @@ python main.py check
 python main.py render --output video.mp4
 ```
 
-The source is copied into `.local/current/source/`; generated audio and timing go under
-`.local/current/assets/`; final videos go under `.local/output/`.
+The source is copied into `.local/current/source/`; generated audio and timing use
+`.local/current/assets/` as the active cache. Studio-managed projects persist that cache under
+`<project>/generated/` and write final videos under `<project>/output/`. External source folders use
+the legacy `.local/output/` destination.
 
 Do not ask web AI to generate `app.js`. It should generate only `scenes.json`, `body.html`, and
 optional `media/`.

@@ -123,20 +123,20 @@ async function loadProjectList() {
   const data = await apiJson('/api/projects');
   const projects = data.projects || [];
   els.captionProjectSelect.innerHTML = projects.length
-    ? projects.map(project => `<option value="${escapeHtml(project.slug)}" ${project.active ? 'selected' : ''}>${escapeHtml(project.title || project.slug)}</option>`).join('')
+    ? projects.map(project => `<option value="${escapeHtml(project.id)}" ${project.active ? 'selected' : ''}>${escapeHtml(project.name || project.id)}</option>`).join('')
     : '<option value="">暂无项目</option>';
   els.captionProjectSelect.disabled = !projects.length;
 }
 
-async function switchCaptionProject(slugValue) {
-  const slug = String(slugValue || '').trim();
-  if (!slug) return;
+async function switchCaptionProject(projectIdValue) {
+  const projectId = String(projectIdValue || '').trim();
+  if (!projectId) return;
   if (state.dirty && !window.confirm('当前字幕有未保存修改，切换项目会丢失这些修改。继续吗？')) {
     await loadProjectList();
     return;
   }
   setStatus('正在切换项目');
-  await apiJson('/api/projects/load', { method: 'POST', body: JSON.stringify({ project: slug }) });
+  await apiJson('/api/projects/load', { method: 'POST', body: JSON.stringify({ project: projectId }) });
   state.dirty = false;
   state.previewReady = false;
   els.narrationAudio.pause();

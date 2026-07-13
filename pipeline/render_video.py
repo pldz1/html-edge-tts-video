@@ -6,7 +6,6 @@ import argparse
 import asyncio
 import math
 import json
-import os
 import subprocess
 import threading
 import time
@@ -17,6 +16,7 @@ from playwright.async_api import async_playwright
 from playwright.async_api import Error as PlaywrightError
 
 from factory import CURRENT_ASSETS, LOCAL_PLAYWRIGHT, ROOT, active_theme, load_scenes, load_source, output_path, theme_url
+from toolchain import ffmpeg_executable
 
 
 SIZES = {
@@ -82,37 +82,15 @@ def ensure_render_assets_match_source() -> None:
 
 
 async def launch_browser(playwright: object) -> object:
-    base_args: dict[str, object] = {"headless": True}
-    explicit_browser = os.environ.get("CHROME_EXECUTABLE")
-
-    if explicit_browser:
-        executable = Path(explicit_browser).expanduser()
-        if not executable.is_file():
-            raise SystemExit(
-                f"CHROME_EXECUTABLE is set but does not point to a browser: {explicit_browser}\n"
-                "Unset CHROME_EXECUTABLE to use Playwright bundled Chromium, "
-                "or run: python main.py install"
-            )
-        launch_args = {**base_args, "executable_path": str(executable)}
-        try:
-            print(f"Using browser from CHROME_EXECUTABLE: {executable}")
-            return await playwright.chromium.launch(**launch_args)
-        except PlaywrightError as exc:
-            reason = str(exc).splitlines()[0]
-            raise SystemExit(
-                f"Could not launch CHROME_EXECUTABLE browser: {explicit_browser} ({reason})\n"
-                "Unset CHROME_EXECUTABLE to use Playwright bundled Chromium."
-            ) from exc
-
     try:
         print("Using browser: Playwright bundled Chromium")
-        return await playwright.chromium.launch(**base_args)
+        return await playwright.chromium.launch(headless=True)
     except PlaywrightError as exc:
         reason = str(exc).splitlines()[0]
         raise SystemExit(
             f"Could not launch Playwright bundled Chromium ({reason}).\n"
             "Run: python main.py install\n"
-            "If you intentionally want a system browser, set CHROME_EXECUTABLE to its executable path."
+            "This project intentionally does not use system Chrome or Edge."
         ) from exc
 
 
@@ -178,7 +156,7 @@ async def capture_frames(
 
     process = subprocess.Popen(
         [
-            "ffmpeg",
+            ffmpeg_executable(),
             "-y",
             "-f",
             "image2pipe",
@@ -266,7 +244,7 @@ async def capture_video(
 
     subprocess.run(
         [
-            "ffmpeg",
+            ffmpeg_executable(),
             "-y",
             "-ss",
             f"{preroll:.3f}",

@@ -13,7 +13,7 @@ const els = {
   directBodyInput: $('#directBodyInput'),
   directImportGrid: $('.direct-import-grid'),
   extractButton: $('#extractButton'),
-  projectSlugInput: $('#projectSlugInput'),
+  projectNameInput: $('#projectNameInput'),
   validateExtractedButton: $('#validateExtractedButton'),
   saveProjectButton: $('#saveProjectButton'),
   scenesOutput: $('#scenesOutput'),
@@ -26,7 +26,7 @@ const els = {
 
 let promptRefreshFrame = 0;
 let importMode = 'smart';
-let importProjectSlug = '';
+let importProjectId = '';
 
 function renderIcons() {
   if (window.lucide) window.lucide.createIcons();
@@ -66,48 +66,40 @@ function postJson(path, payload) {
   return api(path, { method: 'POST', body: JSON.stringify(payload) });
 }
 
-function cleanSlug(value) {
-  return String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9\u4e00-\u9fa5_-]+/g, '-')
-    .replace(/^-+|-+$/g, '') || 'new-video';
-}
-
 function projectFromUrl() {
   const params = new URLSearchParams(window.location.search);
-  return params.get('project') || params.get('slug') || '';
+  return params.get('project') || '';
 }
 
 async function initImportProjectContext() {
-  if (!els.projectSlugInput) return;
+  if (!els.projectNameInput) return;
   const urlProject = projectFromUrl();
   if (urlProject) {
-    importProjectSlug = cleanSlug(urlProject);
-    els.projectSlugInput.value = importProjectSlug;
-    setStatus(`正在打开项目：${importProjectSlug}`);
+    importProjectId = urlProject;
+    setStatus(`正在打开项目：${importProjectId}`);
     try {
-      const data = await api(`/api/projects/source?project=${encodeURIComponent(importProjectSlug)}`);
+      const data = await api(`/api/projects/source?project=${encodeURIComponent(importProjectId)}`);
       const scenes = data?.files?.scenesJson || '';
       const body = data?.files?.bodyHtml || '';
+      els.projectNameInput.value = data?.project?.name || '';
       if (els.directScenesInput) els.directScenesInput.value = scenes;
       if (els.directBodyInput) els.directBodyInput.value = body;
       if (els.scenesOutput) els.scenesOutput.value = scenes;
       if (els.bodyOutput) els.bodyOutput.value = body;
       setExtractStatus(scenes && body ? '已载入' : '待补全', scenes && body ? 'succeeded' : 'running');
-      setStatus(`已载入项目：${importProjectSlug}，现在可以直接编辑并保存覆盖。`, 'success');
+      setStatus(`已载入项目：${data?.project?.name || importProjectId}，现在可以直接编辑并保存。`, 'success');
     } catch (error) {
-      setStatus(error.message || `无法读取项目：${importProjectSlug}`, 'error');
+      setStatus(error.message || `无法读取项目：${importProjectId}`, 'error');
     }
     return;
   }
   try {
     const state = await api('/api/studio/state');
-    const activeSlug = state?.activeProject?.slug || '';
-    if (activeSlug) {
-      importProjectSlug = activeSlug;
-      els.projectSlugInput.value = activeSlug;
-      setStatus(`当前会保存到已加载项目：${activeSlug}`);
+    const activeId = state?.activeProject?.id || '';
+    if (activeId) {
+      importProjectId = activeId;
+      els.projectNameInput.value = state?.activeProject?.name || '';
+      setStatus(`当前会保存到已加载项目：${state?.activeProject?.name || activeId}`);
     }
   } catch {
     // Import can still work as a standalone create flow.
@@ -396,23 +388,24 @@ async function validateExtracted() {
 
 async function saveProject() {
   if (!ensureExtracted()) return;
-  const slug = els.projectSlugInput.value.trim();
-  if (!slug) {
-    setStatus('请填写项目 slug。', 'error');
+  const name = els.projectNameInput.value.trim();
+  if (!name) {
+    setStatus('请填写项目名称。', 'error');
     return;
   }
   els.saveProjectButton.disabled = true;
   try {
     setStatus('正在保存项目...');
-    const overwrite = Boolean(importProjectSlug && cleanSlug(slug) === cleanSlug(importProjectSlug));
+    const overwrite = Boolean(importProjectId);
     const created = await postJson('/api/projects', {
-      slug,
+      project: importProjectId || undefined,
+      name,
       scenesJson: els.scenesOutput.value,
       bodyHtml: els.bodyOutput.value,
       overwrite,
     });
-    await postJson('/api/projects/load', { project: created.project.slug });
-    setStatus(`已保存并加载：${created.project.slug}`, 'success');
+    await postJson('/api/projects/load', { project: created.project.id });
+    setStatus(`已保存并加载：${created.project.name}`, 'success');
     window.setTimeout(() => {
       window.location.href = '/studio';
     }, 450);

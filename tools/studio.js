@@ -6,8 +6,13 @@ const els = {
   outputStatus: $('#outputStatus'),
   currentSourcePath: $('#currentSourcePath'),
   workspaceProjectTitle: $('#workspaceProjectTitle'),
-  workspaceProjectPath: $('#workspaceProjectPath'),
-  workspaceProjectBadge: $('#workspaceProjectBadge'),
+  workspaceProjectId: $('#workspaceProjectId'),
+  projectDetailTitle: $('#projectDetailTitle'),
+  projectEditButton: $('#projectEditButton'),
+  projectEditForm: $('#projectEditForm'),
+  projectTitleInput: $('#projectTitleInput'),
+  saveProjectMetaButton: $('#saveProjectMetaButton'),
+  cancelProjectMetaButton: $('#cancelProjectMetaButton'),
   workspaceSceneCount: $('#workspaceSceneCount'),
   workspaceNarrationChars: $('#workspaceNarrationChars'),
   workspaceTimelineState: $('#workspaceTimelineState'),
@@ -16,6 +21,7 @@ const els = {
   guideBody: $('#guideBody'),
   guideBadge: $('#guideBadge'),
   projectList: $('#projectList'),
+  projectSelect: $('#projectSelect'),
   outputList: $('#outputList'),
   outputPlayer: $('#outputPlayer'),
   previewFrame: $('#previewFrame'),
@@ -36,7 +42,7 @@ const els = {
   refreshButton: $('#refreshButton'),
   refreshOutputsButton: $('#refreshOutputsButton'),
   loadStarterButton: $('#loadStarterButton'),
-  newProjectSlugInput: $('#newProjectSlugInput'),
+  newProjectNameInput: $('#newProjectNameInput'),
   newProjectButton: $('#newProjectButton'),
   openProjectsShortcut: $('#openProjectsShortcut'),
   newWorkspaceProjectButton: $('#newWorkspaceProjectButton'),
@@ -52,7 +58,7 @@ const els = {
   copyPromptButton: $('#copyPromptButton'),
   aiResponseInput: $('#aiResponseInput'),
   extractButton: $('#extractButton'),
-  projectSlugInput: $('#projectSlugInput'),
+  projectNameInput: $('#projectNameInput'),
   validateExtractedButton: $('#validateExtractedButton'),
   saveProjectButton: $('#saveProjectButton'),
   scenesOutput: $('#scenesOutput'),
@@ -65,7 +71,6 @@ const els = {
   renderOutputInput: $('#renderOutputInput'),
   jobStatus: $('#jobStatus'),
   jobLog: $('#jobLog'),
-  statusText: $('#statusText'),
 };
 
 let appState = null;
@@ -74,6 +79,7 @@ let outputs = [];
 let selectedOutputUrl = '';
 let currentJobId = '';
 let pollTimer = 0;
+let toastTimer = 0;
 let tourAutoStarted = false;
 let promptRefreshFrame = 0;
 let appliedProjectSettingsKey = '';
@@ -94,7 +100,7 @@ const INITIAL_FORM_VALUES = Object.freeze({
   tone: els.toneInput?.value || '',
   sceneCount: els.sceneCountInput?.value || '',
   notes: els.notesInput?.value || '',
-  projectSlug: els.projectSlugInput?.value || 'my-video',
+  projectName: els.projectNameInput?.value || '新建视频项目',
   renderOutput: els.renderOutputInput?.value || 'studio-render.mp4',
 });
 
@@ -126,12 +132,45 @@ function applyRouteFocus(route = routeKey()) {
   if (route === 'new') setProjectDrawerOpen(true);
 }
 
-function cleanSlug(value) {
+function cleanFileName(value) {
   return String(value || '')
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9\u4e00-\u9fa5_-]+/g, '-')
-    .replace(/^-+|-+$/g, '') || 'new-video';
+    .replace(/^-+|-+$/g, '') || 'video';
+}
+
+function setProjectEditMode(editing) {
+  els.projectEditForm?.toggleAttribute('hidden', !editing);
+  document.body.classList.toggle('project-meta-editing', editing);
+  if (!editing) return;
+  const active = appState?.activeProject;
+  const activeProject = projects.find(project => project.active) || null;
+  const title = active?.name || activeProject?.name || appState?.current?.title || '';
+  if (els.projectTitleInput) els.projectTitleInput.value = title || '';
+  document.querySelector('.project-details')?.setAttribute('open', '');
+  els.projectTitleInput?.focus();
+}
+
+async function saveProjectMetaEdit() {
+  const active = appState?.activeProject;
+  if (!active?.id) {
+    setStatus('请先选择一个项目。', 'error');
+    return;
+  }
+  const name = (els.projectTitleInput?.value || '').trim();
+  if (!name) {
+    setStatus('项目名称不能为空。', 'error');
+    return;
+  }
+  try {
+    await postJson('/api/projects/update', { project: active.id, name });
+    setProjectEditMode(false);
+    await refreshAll();
+    setStatus('项目名称已更新。', 'success');
+  } catch (error) {
+    setStatus(error.message, 'error');
+  }
 }
 
 function resetPromptComposer() {
@@ -144,15 +183,15 @@ function resetPromptComposer() {
   refreshPrompt();
 }
 
-function resetImportComposer(slug = INITIAL_FORM_VALUES.projectSlug) {
-  if (!els.aiResponseInput || !els.scenesOutput || !els.bodyOutput || !els.projectSlugInput) return;
+function resetImportComposer(name = INITIAL_FORM_VALUES.projectName) {
+  if (!els.aiResponseInput || !els.scenesOutput || !els.bodyOutput || !els.projectNameInput) return;
   els.aiResponseInput.value = '';
   els.scenesOutput.value = '';
   els.bodyOutput.value = '';
-  els.projectSlugInput.value = cleanSlug(slug || INITIAL_FORM_VALUES.projectSlug);
+  els.projectNameInput.value = name || INITIAL_FORM_VALUES.projectName;
 }
 
-function resetBuildState(slug = '') {
+function resetBuildState(name = '') {
   window.clearTimeout(pollTimer);
   pollTimer = 0;
   currentJobId = '';
@@ -161,7 +200,7 @@ function resetBuildState(slug = '') {
   els.jobStatus.className = 'job-status';
   els.jobLog.textContent = '等待任务。';
   els.renderSizeInput.value = '720p';
-  els.renderOutputInput.value = `${cleanSlug(slug || INITIAL_FORM_VALUES.renderOutput.replace(/\.mp4$/i, ''))}.mp4`;
+  els.renderOutputInput.value = `${cleanFileName(name || INITIAL_FORM_VALUES.renderOutput.replace(/\.mp4$/i, ''))}.mp4`;
 }
 
 function resetPreviewState() {
@@ -170,10 +209,10 @@ function resetPreviewState() {
   els.outputPlayer.load();
 }
 
-function resetWorkspaceUi({ slug = '', resetPrompt = false, resetImport = true } = {}) {
+function resetWorkspaceUi({ name = '', resetPrompt = false, resetImport = true } = {}) {
   if (resetPrompt) resetPromptComposer();
-  if (resetImport) resetImportComposer(slug);
-  resetBuildState(slug);
+  if (resetImport) resetImportComposer(name);
+  resetBuildState(name);
   resetPreviewState();
 }
 
@@ -252,9 +291,9 @@ async function saveStudioSettings() {
   settings.gap = String(gap);
   localStorage.setItem(STUDIO_SETTINGS_KEY, JSON.stringify(settings));
   try {
-    if (appState?.activeProject?.slug) {
+    if (appState?.activeProject?.id) {
       await postJson('/api/projects/settings', {
-        project: appState.activeProject.slug,
+        project: appState.activeProject.id,
         tts: {
           voice: settings.voice,
           rate: settings.rate,
@@ -280,9 +319,20 @@ function renderIcons() {
 }
 
 function setStatus(message, tone = 'neutral') {
-  els.statusText.textContent = message;
-  els.statusText.classList.toggle('error', tone === 'error');
-  els.statusText.classList.toggle('success', tone === 'success');
+  let toast = document.querySelector('#studioToast');
+  if (!toast) {
+    toast = document.createElement('p');
+    toast.id = 'studioToast';
+    toast.className = 'studio-toast';
+    toast.setAttribute('role', 'status');
+    document.body.append(toast);
+  }
+  window.clearTimeout(toastTimer);
+  toast.textContent = message;
+  toast.classList.toggle('error', tone === 'error');
+  toast.classList.toggle('success', tone === 'success');
+  toast.classList.add('is-visible');
+  toastTimer = window.setTimeout(() => toast.classList.remove('is-visible'), 3600);
 }
 
 async function api(path, options = {}) {
@@ -560,45 +610,48 @@ function renderHeader() {
   const current = appState?.current || {};
   const sceneCount = current.sceneCount ?? activeProject?.sceneCount ?? 0;
   const narrationChars = current.narrationChars ?? activeProject?.narrationChars ?? 0;
-  const currentTitle = current.title || activeProject?.title || active?.slug || '未选择项目';
+  const activeId = active?.id || activeProject?.id || '';
+  const currentTitle = active?.name || activeProject?.name || current.title || '未选择项目';
   const timelineLabel = timeline.matchesSource
     ? formatDuration(timeline.duration)
     : timeline.exists
       ? '需重建'
       : '待生成';
-  els.currentProjectName.textContent = active?.slug || '未加载';
+  els.currentProjectName.textContent = currentTitle;
   els.timelineStatus.textContent = timelineLabel;
   els.outputStatus.textContent = `${outputs.length} 个`;
   els.currentSourcePath.textContent = active?.relativePath || '暂无当前源文件';
   els.workspaceProjectTitle.textContent = currentTitle;
-  els.workspaceProjectPath.textContent = active?.relativePath || '请先从左侧选择一个项目。';
-  els.workspaceProjectBadge.textContent = active?.slug || '未加载';
+  els.workspaceProjectTitle.title = currentTitle;
+  els.workspaceProjectId.textContent = activeId || '未加载';
+  els.projectDetailTitle.textContent = currentTitle;
   els.workspaceSceneCount.textContent = `${sceneCount}`;
   els.workspaceNarrationChars.textContent = `${narrationChars}`;
   els.workspaceTimelineState.textContent = timelineLabel;
-  els.workspaceOutputCount.textContent = `${outputs.length} 个`;
+  els.workspaceTimelineState.classList.toggle('warning', !timeline.matchesSource);
+  els.workspaceTimelineState.classList.toggle('success', Boolean(timeline.matchesSource));
+  els.workspaceOutputCount.textContent = `${outputs.length}`;
   els.guideTitle.textContent = appState?.guide?.title || '读取状态中';
   els.guideBody.textContent = appState?.guide?.body || 'Studio 正在连接本地工厂。';
   els.guideBadge.textContent = (appState?.guide?.stage || 'ready').toUpperCase();
   els.loadStarterButton.disabled = !appState?.hasStarter;
-  els.loadStarterButton.querySelector('span').textContent = appState?.hasStarter ? '打开示例项目' : '示例项目不可用';
-  const activeSlug = active?.slug || '';
-  els.editCurrentProjectButton.href = activeSlug ? `/studio/import?project=${encodeURIComponent(activeSlug)}` : '/studio/import';
-  els.importCurrentProjectButton.href = activeSlug ? `/studio/import?project=${encodeURIComponent(activeSlug)}` : '/studio/import';
-  els.editCurrentProjectButton.classList.toggle('is-disabled', !activeSlug);
-  els.importCurrentProjectButton.classList.toggle('is-disabled', !activeSlug);
-  els.openCaptionsButton?.classList.toggle('is-disabled', !activeSlug);
+  els.loadStarterButton.querySelector('span').textContent = appState?.hasStarter ? '示例' : '示例不可用';
+  els.editCurrentProjectButton.href = activeId ? `/studio/import?project=${encodeURIComponent(activeId)}` : '/studio/import';
+  els.importCurrentProjectButton.href = activeId ? `/studio/import?project=${encodeURIComponent(activeId)}` : '/studio/import';
+  els.editCurrentProjectButton.classList.toggle('is-disabled', !activeId);
+  els.importCurrentProjectButton.classList.toggle('is-disabled', !activeId);
+  els.openCaptionsButton?.classList.toggle('is-disabled', !activeId);
 }
 
 function projectCard(project) {
   const button = document.createElement('button');
   button.className = `project-card${project.active ? ' active' : ''}`;
   button.type = 'button';
-  button.dataset.project = project.slug;
+  button.dataset.project = project.id;
 
   const title = document.createElement('span');
   title.className = 'project-title';
-  title.textContent = project.title || project.slug;
+  title.textContent = project.name || project.id;
 
   const meta = document.createElement('span');
   meta.className = 'project-meta';
@@ -610,16 +663,32 @@ function projectCard(project) {
 
 function renderProjects() {
   els.projectList.replaceChildren();
+  els.projectSelect?.replaceChildren();
   if (!projects.length) {
     const empty = document.createElement('p');
     empty.className = 'empty-text';
     empty.textContent = '还没有 .local/work 项目。';
     els.projectList.append(empty);
+    if (els.projectSelect) {
+      const option = document.createElement('option');
+      option.value = '';
+      option.textContent = '暂无项目';
+      els.projectSelect.append(option);
+      els.projectSelect.disabled = true;
+    }
     return;
   }
   projects.forEach(project => {
     els.projectList.append(projectCard(project));
+    if (els.projectSelect) {
+      const option = document.createElement('option');
+      option.value = project.id;
+      option.textContent = project.name || project.id;
+      option.selected = Boolean(project.active);
+      els.projectSelect.append(option);
+    }
   });
+  if (els.projectSelect) els.projectSelect.disabled = false;
 }
 
 function outputCard(output) {
@@ -642,13 +711,15 @@ function outputCard(output) {
 
 function renderOutputs() {
   els.outputList.replaceChildren();
-  if (!outputs.length) {
+  const isEmpty = !outputs.length;
+  els.outputPlayer.closest('.outputs-panel').classList.toggle('is-empty', isEmpty);
+  if (isEmpty) {
     selectedOutputUrl = '';
     els.outputPlayer.removeAttribute('src');
     els.outputPlayer.load();
     const empty = document.createElement('p');
     empty.className = 'empty-text';
-    empty.textContent = '还没有渲染结果。';
+    empty.textContent = '还没有可预览的成片。';
     els.outputList.append(empty);
     return;
   }
@@ -877,7 +948,7 @@ async function refreshAll() {
     projects = projectData.projects || [];
     outputs = outputData.outputs || [];
     appState.outputs = outputs;
-    const settingsKey = appState?.activeProject?.slug || '';
+    const settingsKey = appState?.activeProject?.id || '';
     if (settingsKey !== appliedProjectSettingsKey) {
       applyProjectTtsSettings(appState?.settings?.tts || appState?.activeProject?.settings?.tts);
       appliedProjectSettingsKey = settingsKey;
@@ -897,8 +968,8 @@ async function loadProject(project, { view = 'compose', closeDrawer = true } = {
     setStatus('正在加载项目...');
     const data = await postJson('/api/projects/load', { project });
     applyProjectTtsSettings(data.project?.settings?.tts);
-    appliedProjectSettingsKey = data.project?.slug || '';
-    resetWorkspaceUi({ slug: data.project?.slug || project, resetPrompt: false, resetImport: true });
+    appliedProjectSettingsKey = data.project?.id || '';
+    resetWorkspaceUi({ name: data.project?.name || '', resetPrompt: false, resetImport: true });
     if (closeDrawer) setProjectDrawerOpen(false);
     setStudioRoute('main');
     reloadPreview();
@@ -946,7 +1017,7 @@ async function openProjectCaptions(project) {
 async function exportProject(project) {
   const loaded = await loadProject(project);
   if (!loaded) return;
-  els.renderOutputInput.value = `${cleanSlug(project)}.mp4`;
+  els.renderOutputInput.value = `${cleanFileName(loaded.name || 'video')}.mp4`;
   await startJob('render');
 }
 
@@ -965,52 +1036,52 @@ async function validateExtracted() {
 
 async function saveProject() {
   if (!ensureExtracted()) return;
-  const slug = els.projectSlugInput.value.trim();
-  if (!slug) {
-    setStatus('请填写项目 slug。', 'error');
+  const name = els.projectNameInput.value.trim();
+  if (!name) {
+    setStatus('请填写项目名称。', 'error');
     return;
   }
   try {
     setStatus('正在保存项目...');
     const created = await postJson('/api/projects', {
-      slug,
+      name,
       scenesJson: els.scenesOutput.value,
       bodyHtml: els.bodyOutput.value,
       tts: getStudioSettings(),
     });
-    await postJson('/api/projects/load', { project: created.project.slug });
+    await postJson('/api/projects/load', { project: created.project.id });
     applyProjectTtsSettings(created.project?.settings?.tts);
-    appliedProjectSettingsKey = created.project?.slug || '';
-    resetWorkspaceUi({ slug: created.project.slug, resetPrompt: false, resetImport: true });
+    appliedProjectSettingsKey = created.project?.id || '';
+    resetWorkspaceUi({ name: created.project.name, resetPrompt: false, resetImport: true });
     setStudioRoute('main');
     reloadPreview();
     await refreshAll();
-    setStatus(`已保存并加载：${created.project.slug}`, 'success');
+    setStatus(`已保存并加载：${created.project.name}`, 'success');
   } catch (error) {
     setStatus(error.message, 'error');
   }
 }
 
 async function createBlankProject() {
-  const slug = els.newProjectSlugInput.value.trim();
-  if (!slug) {
-    setStatus('请输入新项目名称或 slug', 'error');
-    els.newProjectSlugInput.focus();
+  const name = els.newProjectNameInput.value.trim();
+  if (!name) {
+    setStatus('请输入新项目名称', 'error');
+    els.newProjectNameInput.focus();
     return;
   }
   els.newProjectButton.disabled = true;
   try {
-    const data = await postJson('/api/projects/blank', { slug });
+    const data = await postJson('/api/projects/blank', { name });
     appState = data.state;
     applyProjectTtsSettings(data.project?.settings?.tts || DEFAULT_STUDIO_SETTINGS);
-    appliedProjectSettingsKey = data.project?.slug || '';
-    resetWorkspaceUi({ slug: data.project?.slug || slug, resetPrompt: true, resetImport: true });
+    appliedProjectSettingsKey = data.project?.id || '';
+    resetWorkspaceUi({ name: data.project?.name || name, resetPrompt: true, resetImport: true });
     setProjectDrawerOpen(false);
     setStudioRoute('main');
     reloadPreview();
     await refreshAll();
-    setStatus(`已新建并加载项目：${data.project.slug}`, 'success');
-    window.location.href = `/studio/import?project=${encodeURIComponent(data.project.slug)}`;
+    setStatus(`已新建并加载项目：${data.project.name}`, 'success');
+    window.location.href = `/studio/import?project=${encodeURIComponent(data.project.id)}`;
   } catch (error) {
     setStatus(error.message, 'error');
   } finally {
@@ -1125,21 +1196,28 @@ function bindEvents() {
     validateExtracted();
   });
   els.saveProjectButton?.addEventListener('click', saveProject);
-  els.openProjectsShortcut?.addEventListener('click', () => setProjectDrawerOpen(true));
-  els.newWorkspaceProjectButton?.addEventListener('click', () => setProjectDrawerOpen(true));
+  els.projectEditButton?.addEventListener('click', () => setProjectEditMode(true));
+  els.saveProjectMetaButton?.addEventListener('click', saveProjectMetaEdit);
+  els.cancelProjectMetaButton?.addEventListener('click', () => setProjectEditMode(false));
+  els.openProjectsShortcut?.addEventListener('click', () => {
+    els.projectSelect?.focus();
+  });
+  els.newWorkspaceProjectButton?.addEventListener('click', () => {
+    els.newProjectNameInput?.focus();
+  });
   els.openCaptionsButton?.addEventListener('click', async () => {
-    const slug = appState?.activeProject?.slug;
-    if (!slug) {
+    const projectId = appState?.activeProject?.id;
+    if (!projectId) {
       setStatus('请先选择一个项目。', 'error');
       return;
     }
-    await openProjectCaptions(slug);
+    await openProjectCaptions(projectId);
   });
   els.refreshButton.addEventListener('click', refreshAll);
   els.refreshOutputsButton.addEventListener('click', refreshAll);
   els.loadStarterButton.addEventListener('click', () => loadProject('templates/starter'));
   els.newProjectButton.addEventListener('click', createBlankProject);
-  els.newProjectSlugInput.addEventListener('keydown', event => {
+  els.newProjectNameInput.addEventListener('keydown', event => {
     if (event.key === 'Enter') createBlankProject();
   });
   els.checkButton.addEventListener('click', () => startJob('check'));
@@ -1150,6 +1228,10 @@ function bindEvents() {
   els.projectList.addEventListener('click', event => {
     const card = event.target.closest('[data-project]');
     if (card) loadProject(card.dataset.project);
+  });
+  els.projectSelect?.addEventListener('change', event => {
+    const projectId = event.target.value;
+    if (projectId) loadProject(projectId);
   });
 
   els.outputList.addEventListener('click', event => {

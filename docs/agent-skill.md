@@ -18,6 +18,22 @@ source/
 Do not generate per-video JavaScript. The theme runtime owns timing, captions, preview controls,
 the generated chapter rail, and the Playwright render contract.
 
+Studio-managed projects wrap that source contract in a project directory:
+
+```text
+.local/work/<8-char-project-id>/
+  manifest.json
+  scenes.json
+  body.html
+  media/ optional
+  captions.json optional
+  generated/ factory-owned audio and timeline cache
+  output/ rendered videos
+```
+
+The project ID is immutable and internal. The editable display name and TTS settings live in
+`manifest.json`; agents and UI should not expose or request a slug.
+
 Do not put preview chrome into video content. Headers, playback buttons, scrubbers, timecodes, and
 transport bars belong only to preview UI and must be hidden in render mode.
 
@@ -32,9 +48,10 @@ Tracked reusable factory source:
 Ignored local runtime state:
 
 - `.local/current/source/` copied active source
-- `.local/current/assets/` generated TTS audio and timeline
-- `.local/work/` local editable source folders
-- `.local/output/` rendered MP4 files
+- `.local/current/assets/` active generated TTS/audio cache
+- `.local/work/<project-id>/generated/` persisted per-project generated cache
+- `.local/work/<project-id>/output/` per-project rendered MP4 files
+- `.local/output/` legacy and external-source rendered MP4 files
 - `.local/assets/` generated helper assets such as voice previews
 - `.local/playwright/` browser capture scratch files
 
@@ -130,7 +147,7 @@ python main.py render --output starter.mp4
 Create a local editable source:
 
 ```bash
-python main.py init --target .local/work/my-video
+python main.py init --target C:\video-sources\my-video
 ```
 
 Build a source folder:
@@ -182,6 +199,13 @@ Do not move this contract into user-generated source.
 ## Pipeline Guidance
 
 - Use `edge-tts`. Do not replace it with another TTS provider.
+- All automated capture uses Python Playwright's installed Chromium. Never use Edge, Chrome, or a
+  system-browser executable override.
+- All FFmpeg operations use the binary supplied by the Python `imageio-ffmpeg` dependency, never
+  `ffmpeg` or `ffprobe` from `PATH`.
+- `python main.py install` installs Python dependencies, the managed FFmpeg binary, and Playwright
+  Chromium. Use `--pip-index-url` and/or `--playwright-download-host` only for a one-time mirror;
+  these options never persist configuration.
 - Preserve generated cache under `.local/current/assets/scenes/` while rebuilding the same loaded source.
 - Let real audio duration and WordBoundary metadata control the timeline.
 - Use `python main.py offline --source <folder>` only when network access is unavailable and a silent estimated preview is acceptable.
