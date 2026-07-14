@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Video Studio</title>
+    <title>视频工作室</title>
     <link rel="icon" href="/studio/web/shared/favicon.ico" />
     <link
       rel="stylesheet"
@@ -28,91 +28,91 @@
     <main class="studio-app">
       <header
         class="studio-header studio-project-header"
-        aria-label="Current project status"
+        aria-label="当前项目状态"
       >
-        <section class="project-identity" aria-label="Current project">
+        <section class="project-identity" aria-label="当前项目">
           <div class="project-title-row">
-            <h1 id="workspaceProjectTitle" title="No project selected">
-              No project selected
+            <h1 id="workspaceProjectTitle" title="未选择项目">
+              未选择项目
             </h1>
             <button
               id="projectEditButton"
               class="icon-button project-edit-button"
               type="button"
-              title="Edit project details"
+              title="编辑项目详情"
               aria-controls="projectDetails"
               aria-expanded="false"
             >
-              <i data-lucide="square-pen"></i><span>Edit</span>
+              <i data-lucide="square-pen"></i><span>编辑</span>
             </button>
           </div>
         </section>
 
-        <section class="status-summary" aria-label="Project status summary">
+        <section class="status-summary" aria-label="项目状态摘要">
           <article>
-            <span>Scenes</span>
+            <span>场景</span>
             <strong
               ><span id="workspaceSceneCount">0</span
-              ><small>total</small></strong
+              ><small>个</small></strong
             >
           </article>
           <article>
-            <span>Narration</span>
+            <span>旁白</span>
             <strong
               ><span id="workspaceNarrationChars">0</span
-              ><small>characters</small></strong
+              ><small>字符</small></strong
             >
           </article>
           <article>
-            <span>Timeline</span>
+            <span>时间轴</span>
             <strong id="workspaceTimelineState" class="status-badge warning"
-              >Not generated</strong
+              >未生成</strong
             >
           </article>
           <article>
-            <span>Outputs</span>
+            <span>输出</span>
             <strong
               ><span id="workspaceOutputCount">0</span
-              ><small>total</small></strong
+              ><small>个</small></strong
             >
           </article>
         </section>
 
         <nav
           class="header-actions quick-actions-panel"
-          aria-label="Project actions"
+          aria-label="项目操作"
         >
           <a
             class="primary-button"
             href="/studio/create"
             data-studio-route="prompt"
-            title="Create a project with AI"
-            ><i data-lucide="sparkles"></i><span>Create</span></a
+            title="使用 AI 创建项目"
+            ><i data-lucide="sparkles"></i><span>创建</span></a
           >
           <a
             id="editCurrentProjectButton"
             class="quiet-button secondary-action"
             href="/studio/import"
             data-studio-route="import"
-            ><i data-lucide="square-pen"></i><span>Source</span></a
+            ><i data-lucide="square-pen"></i><span>源文件</span></a
           >
           <button
             id="tourButton"
             class="quiet-button utility-action"
             type="button"
-            title="Open guide"
+            title="打开指南"
           >
-            <i data-lucide="map"></i><span>Guide</span>
+            <i data-lucide="map"></i><span>指南</span>
           </button>
           <details class="more-menu">
-            <summary class="quiet-button" title="More project actions">
-              <i data-lucide="ellipsis"></i><span>More</span>
+            <summary class="quiet-button" title="更多项目操作">
+              <i data-lucide="ellipsis"></i><span>更多</span>
             </summary>
             <div class="more-menu-panel">
               <a
                 id="importCurrentProjectButton"
                 href="/studio/import"
-                title="Import and replace the current project"
+                title="导入并替换当前项目"
                 style="
                   display: flex;
                   align-items: center;
@@ -121,28 +121,28 @@
                   height: 36px;
                   line-height: 1;
                 "
-                ><i data-lucide="file-input"></i><span>Replace</span></a
+                ><i data-lucide="file-input"></i><span>替换</span></a
               >
               <button
                 id="openCaptionsButton"
                 type="button"
-                title="Edit captions"
+                title="编辑字幕"
               >
-                <i data-lucide="captions"></i><span>Captions</span>
+                <i data-lucide="captions"></i><span>字幕</span>
               </button>
               <button
                 id="openProjectsShortcut"
                 type="button"
-                title="Switch projects"
+                title="切换项目"
               >
-                <i data-lucide="folder-open"></i><span>Projects</span>
+                <i data-lucide="folder-open"></i><span>项目</span>
               </button>
               <button
                 id="newWorkspaceProjectButton"
                 type="button"
-                title="Create a new project"
+                title="创建新项目"
               >
-                <i data-lucide="plus"></i><span>New project</span>
+                <i data-lucide="plus"></i><span>新建项目</span>
               </button>
             </div>
           </details>
@@ -151,45 +151,45 @@
         <section
           id="projectDetails"
           class="project-details"
-          aria-label="Project details"
+          aria-label="项目详情"
           hidden
         >
           <div class="project-details-panel">
             <label
-              >Select project
+              >选择项目
               <select
                 id="projectSelect"
                 class="project-select"
-                aria-label="Select project"
+                aria-label="选择项目"
               >
-                <option value="">No projects available</option>
+                <option value="">暂无项目</option>
               </select>
             </label>
             <label
-              >Content Theme
+              >内容主题
               <select
                 id="themeSelect"
                 class="project-select"
-                aria-label="Select project theme"
+                aria-label="选择项目主题"
               >
-                <option value="default">Default</option>
+                <option value="default">默认</option>
               </select>
             </label>
             <div class="detail-field">
-              <span>Project name</span>
-              <strong id="projectDetailTitle">No project selected</strong>
+              <span>项目名称</span>
+              <strong id="projectDetailTitle">未选择项目</strong>
             </div>
             <div class="detail-field">
-              <span>Project ID</span>
-              <strong id="workspaceProjectId">Not loaded</strong>
+              <span>项目 ID</span>
+              <strong id="workspaceProjectId">未加载</strong>
             </div>
             <div class="detail-field detail-field-wide">
-              <span>Local path</span>
-              <strong id="currentSourcePath">No current source files</strong>
+              <span>本地路径</span>
+              <strong id="currentSourcePath">没有当前源文件</strong>
             </div>
             <form id="projectEditForm" class="project-edit-form" hidden>
               <label
-                >Project name<input
+                >项目名称<input
                   id="projectTitleInput"
                   type="text"
                   autocomplete="off"
@@ -200,29 +200,29 @@
                   class="primary-button"
                   type="button"
                 >
-                  <i data-lucide="save"></i><span>Save</span>
+                  <i data-lucide="save"></i><span>保存</span>
                 </button>
               </div>
             </form>
             <div
               id="projectSidebar"
               class="project-create-tools"
-              aria-label="Project creation"
+              aria-label="项目创建"
             >
               <button id="refreshButton" class="quiet-button" type="button">
-                <i data-lucide="refresh-cw"></i><span>Refresh</span>
+                <i data-lucide="refresh-cw"></i><span>刷新</span>
               </button>
               <button id="loadStarterButton" class="quiet-button" type="button">
-                <i data-lucide="sparkles"></i><span>Example</span>
+                <i data-lucide="sparkles"></i><span>示例</span>
               </button>
               <input
                 id="newProjectNameInput"
                 type="text"
-                placeholder="New project name"
-                aria-label="New project name"
+                placeholder="新项目名称"
+                aria-label="新项目名称"
               />
               <button id="newProjectButton" class="quiet-button" type="button">
-                <i data-lucide="plus"></i><span>Create</span>
+                <i data-lucide="plus"></i><span>创建</span>
               </button>
             </div>
             <div id="projectList" class="project-list" hidden></div>
@@ -230,9 +230,9 @@
         </section>
 
         <div class="header-status-mirror" aria-hidden="true">
-          <span id="currentProjectName">Not loaded</span>
-          <span id="timelineStatus">Not generated</span>
-          <span id="outputStatus">0 total</span>
+          <span id="currentProjectName">未加载</span>
+          <span id="timelineStatus">未生成</span>
+          <span id="outputStatus">共 0 个</span>
         </div>
         <nav class="top-actions" aria-hidden="true">
           <button
@@ -242,7 +242,7 @@
             aria-controls="projectSidebar"
             aria-expanded="true"
           >
-            <i data-lucide="folder-tree"></i><span>Projects</span>
+            <i data-lucide="folder-tree"></i><span>项目</span>
           </button>
           <a
             class="quiet-button"
@@ -251,7 +251,7 @@
             target="_blank"
             rel="noreferrer"
           >
-            <i data-lucide="monitor-play"></i><span>Preview</span>
+            <i data-lucide="monitor-play"></i><span>预览</span>
           </a>
           <a
             class="quiet-button"
@@ -259,7 +259,7 @@
             target="_blank"
             rel="noreferrer"
           >
-            <i data-lucide="captions"></i><span>Captions</span>
+            <i data-lucide="captions"></i><span>字幕</span>
           </a>
           <a
             class="quiet-button"
@@ -267,7 +267,7 @@
             target="_blank"
             rel="noreferrer"
           >
-            <i data-lucide="audio-lines"></i><span>Voice</span>
+            <i data-lucide="audio-lines"></i><span>语音</span>
           </a>
         </nav>
       </header>
@@ -277,20 +277,20 @@
           <div class="sidebar-brand">
             <div class="brand-mark">VF</div>
             <div>
-              <p class="eyebrow">LOCAL VIDEO FACTORY</p>
-              <h1>Video Factory</h1>
+              <p class="eyebrow">本地视频工厂</p>
+              <h1>视频工厂</h1>
             </div>
           </div>
-          <nav class="product-nav" aria-label="Product tools">
-            <p class="nav-label">PRODUCT TOOLS</p>
+          <nav class="product-nav" aria-label="产品工具">
+            <p class="nav-label">产品工具</p>
             <a class="active" href="/studio" aria-current="page"
-              ><i data-lucide="folder"></i><span>Studio</span></a
+              ><i data-lucide="folder"></i><span>工作室</span></a
             >
             <a href="/voices"
-              ><i data-lucide="audio-lines"></i><span>Voice Preview</span></a
+              ><i data-lucide="audio-lines"></i><span>语音试听</span></a
             >
             <a href="/captions"
-              ><i data-lucide="captions"></i><span>Captions</span></a
+              ><i data-lucide="captions"></i><span>字幕</span></a
             >
           </nav>
           <div class="sidebar-spacer"></div>
@@ -298,8 +298,8 @@
             <div class="engine-row">
               <span class="status-dot"></span>
               <div>
-                <strong>Engine status</strong>
-                <p>Running normally</p>
+                <strong>引擎状态</strong>
+                <p>运行正常</p>
               </div>
             </div>
             <small>TTS · LOCAL · AI ENGINE</small>
@@ -310,7 +310,7 @@
           id="projectDrawerBackdrop"
           class="project-drawer-backdrop"
           type="button"
-          aria-label="Close project list"
+          aria-label="关闭项目列表"
         ></button>
 
         <section class="workspace">
@@ -321,19 +321,19 @@
                 style="margin-top: 4px !important"
                 aria-live="polite"
               >
-                <span id="guideBadge" class="guide-badge">READY</span>
+                <span id="guideBadge" class="guide-badge">就绪</span>
                 <div>
-                  <span class="next-step-label">NEXT STEP</span>
-                  <strong id="guideTitle">Reading status</strong>
+                  <span class="next-step-label">下一步</span>
+                  <strong id="guideTitle">正在读取状态</strong>
                   <p id="guideBody">
-                    Studio is connecting to the local factory.
+                    工作室正在连接本地工厂。
                   </p>
                 </div>
               </section>
               <div class="panel-heading">
                 <div>
-                  <p class="section-label">Preview</p>
-                  <h2>Project preview</h2>
+                  <p class="section-label">预览</p>
+                  <h2>项目预览</h2>
                 </div>
                 <a
                   class="quiet-button"
@@ -342,12 +342,12 @@
                   target="_blank"
                   rel="noreferrer"
                 >
-                  <i data-lucide="maximize-2"></i><span>Open fullscreen</span>
+                  <i data-lucide="maximize-2"></i><span>全屏打开</span>
                 </a>
               </div>
               <iframe
                 id="previewFrame"
-                title="Video preview"
+                title="视频预览"
                 src="about:blank"
               ></iframe>
             </section>
@@ -355,16 +355,16 @@
             <section class="panel outputs-panel is-empty">
               <div class="panel-heading">
                 <div>
-                  <p class="section-label">Exports</p>
-                  <h2>Project exports</h2>
+                  <p class="section-label">导出</p>
+                  <h2>项目导出文件</h2>
                 </div>
                 <button
                   id="refreshOutputsButton"
                   class="icon-button"
                   type="button"
-                  title="Refresh outputs"
+                  title="刷新导出文件"
                 >
-                  <i data-lucide="refresh-cw"></i><span>Refresh</span>
+                  <i data-lucide="refresh-cw"></i><span>刷新</span>
                 </button>
               </div>
               <div id="outputList" class="output-list"></div>
@@ -374,23 +374,23 @@
           <section class="panel build-panel">
             <div class="panel-heading">
               <div>
-                <p class="section-label">Build & Export</p>
-                <h2>Generate and export</h2>
+                <p class="section-label">构建与导出</p>
+                <h2>生成并导出</h2>
               </div>
-              <p id="jobStatus" class="job-status">Idle</p>
+              <p id="jobStatus" class="job-status">空闲</p>
             </div>
             <div class="build-controls">
               <button id="checkButton" class="quiet-button" type="button">
-                <i data-lucide="check-circle-2"></i><span>Check project</span>
+                <i data-lucide="check-circle-2"></i><span>检查项目</span>
               </button>
               <button id="offlineButton" class="quiet-button" type="button">
-                <i data-lucide="file-video"></i><span>Silent preview</span>
+                <i data-lucide="file-video"></i><span>静音预览</span>
               </button>
               <button id="ttsButton" class="primary-button" type="button">
-                <i data-lucide="radio-tower"></i><span>Generate narration</span>
+                <i data-lucide="radio-tower"></i><span>生成旁白</span>
               </button>
               <label
-                >Size
+                >尺寸
                 <select id="renderSizeInput">
                   <option value="720p">720p</option>
                   <option value="1080p">1080p</option>
@@ -399,13 +399,13 @@
                 </select>
               </label>
               <label
-                >Output name<input
+                >输出文件名<input
                   id="renderOutputInput"
                   type="text"
                   value="studio-render.mp4"
               /></label>
               <label
-                >Scene transition (seconds)<input
+                >场景转场（秒）<input
                   id="renderTransitionInput"
                   type="number"
                   min="0"
@@ -414,52 +414,52 @@
                   value="0.4"
               /></label>
               <button id="renderButton" class="primary-button" type="button">
-                <i data-lucide="download"></i><span>Export MP4</span>
+                <i data-lucide="download"></i><span>导出 MP4</span>
               </button>
             </div>
-            <pre id="jobLog" class="job-log">Waiting for a task.</pre>
+            <pre id="jobLog" class="job-log">等待任务。</pre>
           </section>
         </section>
 
         <section
           class="studio-route-panel prompt-route-panel"
-          aria-label="AI prompt builder"
+          aria-label="AI 提示词生成器"
         >
           <section class="panel prompt-form-panel">
             <div class="panel-heading">
               <div>
-                <p class="section-label">01 · CREATE</p>
-                <h2>Generate a prompt</h2>
+                <p class="section-label">01 · 创建</p>
+                <h2>生成提示词</h2>
               </div>
               <button
                 id="copyPromptButton"
                 class="primary-button"
                 type="button"
               >
-                <i data-lucide="copy"></i><span>Copy prompt</span>
+                <i data-lucide="copy"></i><span>复制提示词</span>
               </button>
             </div>
             <div class="field-grid">
               <label
-                >Topic<input
+                >主题<input
                   id="topicInput"
                   type="text"
-                  placeholder="输入视频主题 / Describe the topic"
+                placeholder="输入视频主题"
               /></label>
               <label
-                >Audience<input
+                >受众<input
                   id="audienceInput"
                   type="text"
-                  placeholder="目标受众 / Target audience"
+                placeholder="输入目标受众"
               /></label>
               <label
-                >Tone<input
+                >语气<input
                   id="toneInput"
                   type="text"
-                  placeholder="表达语气 / Tone"
+                placeholder="输入表达语气"
               /></label>
               <label
-                >Scene count<input
+                >场景数量<input
                   id="sceneCountInput"
                   type="number"
                   min="3"
@@ -470,7 +470,7 @@
                 >内容语言<select id="languageInput">
                   <option value="auto">自动检测（中/英）</option>
                   <option value="zh-CN">中文</option>
-                  <option value="en-US">English</option>
+                  <option value="en-US">英语</option>
                 </select></label
               >
               <label
@@ -486,20 +486,20 @@
                 </select></label
               >
               <label
-                >Prompt 目标<select id="promptTargetInput">
-                  <option value="web-ai">Web AI（复制代码块）</option>
-                  <option value="agent">Agent（直接创建文件）</option>
+                >提示词目标<select id="promptTargetInput">
+                  <option value="web-ai">网页 AI（复制代码块）</option>
+                  <option value="agent">智能体（直接创建文件）</option>
                 </select></label
               >
             </div>
             <label class="wide-label"
-              >Additional requirements<textarea
+              >补充要求<textarea
                 id="notesInput"
                 placeholder="可选：品牌、颜色、素材或其他要求"
               ></textarea>
             </label>
             <p id="promptResolution" class="field-hint">
-              Language and renderer will be resolved from the selected theme.
+              将根据所选主题确定语言与渲染能力。
             </p>
             <div class="provider-row">
               <button data-provider="https://chat.openai.com/" type="button">
@@ -519,57 +519,57 @@
                 href="/studio/import"
                 data-studio-route="import"
                 ><i data-lucide="arrow-right"></i
-                ><span>Import response</span></a
+                ><span>导入回答</span></a
               >
             </div>
           </section>
           <section class="panel prompt-result-panel">
             <div class="panel-heading">
               <div>
-                <p class="section-label">02 · COPY</p>
-                <h2>Prompt output</h2>
+                <p class="section-label">02 · 复制</p>
+                <h2>提示词输出</h2>
               </div>
             </div>
             <textarea
               id="promptOutput"
               class="workflow-code code-field"
               spellcheck="false"
-              aria-label="Generated AI prompt"
+              aria-label="已生成的 AI 提示词"
             ></textarea>
           </section>
         </section>
 
         <section
           class="studio-route-panel import-route-panel"
-          aria-label="Source import"
+          aria-label="源文件导入"
         >
           <section class="panel import-source-panel">
             <div class="panel-heading">
               <div>
-                <p class="section-label">01 · IMPORT</p>
-                <h2>Import source content</h2>
+                <p class="section-label">01 · 导入</p>
+                <h2>导入源内容</h2>
               </div>
               <button id="extractButton" class="quiet-button" type="button">
-                <i data-lucide="scan-text"></i><span>Extract</span>
+                <i data-lucide="scan-text"></i><span>提取</span>
               </button>
             </div>
             <div
               class="import-mode-tabs"
               role="tablist"
-              aria-label="Import mode"
+              aria-label="导入方式"
             >
               <button class="active" type="button" data-import-mode="smart">
-                <i data-lucide="scan-text"></i><span>Smart paste</span>
+                <i data-lucide="scan-text"></i><span>智能粘贴</span>
               </button>
               <button type="button" data-import-mode="direct">
-                <i data-lucide="columns-2"></i><span>Paste separately</span>
+                <i data-lucide="columns-2"></i><span>分别粘贴</span>
               </button>
             </div>
             <textarea
               id="aiResponseInput"
               class="workflow-response"
               spellcheck="false"
-              placeholder="Paste a complete AI response containing scenes.json, body.html, body.css, and optional visual.js."
+              placeholder="粘贴包含 scenes.json、body.html、body.css 及可选 visual.js 的完整 AI 回答。"
             ></textarea>
             <div id="directImportGrid" class="direct-import-grid" hidden>
               <label
@@ -577,7 +577,7 @@
                   id="directScenesInput"
                   class="code-field"
                   spellcheck="false"
-                  placeholder="Paste scenes.json"
+                  placeholder="粘贴 scenes.json"
                 ></textarea>
               </label>
               <label
@@ -585,7 +585,7 @@
                   id="directBodyInput"
                   class="code-field"
                   spellcheck="false"
-                  placeholder="Paste body.html or index.html"
+                  placeholder="粘贴 body.html 或 index.html"
                 ></textarea>
               </label>
               <label
@@ -593,46 +593,46 @@
                   id="directCssInput"
                   class="code-field"
                   spellcheck="false"
-                  placeholder="Paste body.css"
+                  placeholder="粘贴 body.css"
                 ></textarea>
               </label>
               <label
-                >visual.js（optional）<textarea
+                >visual.js（可选）<textarea
                   id="directVisualInput"
                   class="code-field"
                   spellcheck="false"
-                  placeholder="Paste visual.js for Three.js, Canvas, or WebGL"
+                  placeholder="粘贴用于 Three.js、Canvas 或 WebGL 的 visual.js"
                 ></textarea>
               </label>
             </div>
             <div class="save-row workflow-save-row">
               <label
-                >Project name<input
+                >项目名称<input
                   id="projectNameInput"
                   type="text"
-                  value="New video project"
+                  value="新视频项目"
               /></label>
               <button
                 id="validateExtractedButton"
                 class="quiet-button"
                 type="button"
               >
-                <i data-lucide="shield-check"></i><span>Validate</span>
+                <i data-lucide="shield-check"></i><span>验证</span>
               </button>
               <button
                 id="saveProjectButton"
                 class="primary-button"
                 type="button"
               >
-                <i data-lucide="save"></i><span>Save and load</span>
+                <i data-lucide="save"></i><span>保存并加载</span>
               </button>
             </div>
           </section>
           <section class="panel import-preview-panel">
             <div class="panel-heading">
               <div>
-                <p class="section-label">02 · REVIEW</p>
-                <h2>Current source files</h2>
+                <p class="section-label">02 · 检查</p>
+                <h2>当前源文件</h2>
               </div>
             </div>
             <div class="extract-grid workflow-extract-grid">
@@ -678,9 +678,9 @@
       >
         <div class="job-overlay-card" role="status">
           <i data-lucide="loader-circle" aria-hidden="true"></i>
-          <strong id="jobOverlayTitle">Task in progress</strong>
+          <strong id="jobOverlayTitle">任务进行中</strong>
           <p id="jobOverlayMessage">
-            Processing. Do not perform other actions.
+            正在处理，请勿执行其他操作。
           </p>
         </div>
       </section>

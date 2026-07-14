@@ -31,13 +31,13 @@ const els = {
   voiceGuideButton: $('#voiceGuideButton'), voiceGuideDialog: $('#voiceGuideDialog'),
 };
 
-const EXAMPLE_TEXT = `Welcome to the edge-tts voice preview tool.
+const EXAMPLE_TEXT = `欢迎使用 edge-tts 语音试听工具。
 
-Choose a voice, adjust the rate and pitch, then generate a local preview.
+选择语音，调整语速和音调，然后生成本地试听。
 
-Audio is generated locally to keep your content private.
+音频在本地生成，保障您的内容隐私。
 
-Click “Generate preview” to begin.`;
+点击“生成试听”即可开始。`;
 
 let appState = { voices: [], history: [], manifest: {} };
 let currentJobId = '';
@@ -66,19 +66,19 @@ function startVoiceTour() {
     return;
   }
   const steps = [
-    { element: '.text-panel', popover: { title: '1. Enter preview text', description: 'Paste narration here. Two or three sentences are enough to compare voices.', side: 'right', align: 'start' } },
-    { element: '.settings-panel', popover: { title: '2. Choose voice and settings', description: 'Choose a voice, then fine-tune rate and pitch for the next preview.', side: 'right', align: 'start' } },
-    { element: '#generateButton', popover: { title: '3. Generate preview', description: 'Generate audio locally; the player loads automatically when it is ready.', side: 'right', align: 'center' } },
-    { element: '.history-panel', popover: { title: '4. Compare results', description: 'Recent previews are kept here so you can quickly compare voices and settings.', side: 'left', align: 'start' } },
+    { element: '.text-panel', popover: { title: '1. 输入试听文本', description: '在此粘贴旁白。两三句话即可用于对比不同语音。', side: 'right', align: 'start' } },
+    { element: '.settings-panel', popover: { title: '2. 选择语音和设置', description: '选择语音后，微调语速和音调以生成下一段试听。', side: 'right', align: 'start' } },
+    { element: '#generateButton', popover: { title: '3. 生成试听', description: '在本地生成音频；准备就绪后播放器会自动加载。', side: 'right', align: 'center' } },
+    { element: '.history-panel', popover: { title: '4. 对比结果', description: '最近的试听会保留在此，方便快速比较语音和设置。', side: 'left', align: 'start' } },
   ];
   driverFactory({
     showProgress: true,
     animate: true,
     allowClose: true,
     overlayOpacity: 0.42,
-    nextBtnText: 'Next',
-    prevBtnText: 'Back',
-    doneBtnText: 'Done',
+    nextBtnText: '下一步',
+    prevBtnText: '上一步',
+    doneBtnText: '完成',
     steps,
   }).drive();
 }
@@ -127,9 +127,9 @@ async function api(path, options = {}) {
   try {
     data = raw ? JSON.parse(raw) : {};
   } catch {
-    throw new Error(`The API returned invalid data (${response.status})`);
+    throw new Error(`API 返回了无效数据（${response.status}）`);
   }
-  if (!response.ok) throw new Error(data.error || `API request failed (${response.status})`);
+  if (!response.ok) throw new Error(data.error || `API 请求失败（${response.status}）`);
   return data;
 }
 
@@ -166,9 +166,9 @@ function escapeHtml(value = '') {
 }
 
 function formatDate(value) {
-  if (!value) return 'Unknown time';
+  if (!value) return '未知时间';
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Unknown time';
+  if (Number.isNaN(date.getTime())) return '未知时间';
   return new Intl.DateTimeFormat('zh-CN', {
     month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
   }).format(date);
@@ -178,7 +178,7 @@ function renderHistory() {
   if (!appState.history.length) {
     els.historyList.innerHTML = `
       <div class="history-empty">
-        <div><i data-lucide="archive"></i><h3>No previews yet</h3><p>Generated preview audio will appear here.</p></div>
+            <div><i data-lucide="archive"></i><h3>暂无试听记录</h3><p>生成的试听音频将显示在这里。</p></div>
       </div>`;
     renderIcons();
     return;
@@ -191,7 +191,7 @@ function renderHistory() {
           <strong>${escapeHtml(info.label || sample.voice)}</strong>
           <span>${escapeHtml(formatDate(sample.createdAt))} · ${escapeHtml(sample.rate || '+0%')} · ${escapeHtml(sample.pitch || '+0Hz')}</span>
         </div>
-        <button type="button" data-history-index="${index}" title="Play"><i data-lucide="play"></i></button>
+        <button type="button" data-history-index="${index}" title="播放"><i data-lucide="play"></i></button>
       </article>`;
   }).join('');
   renderIcons();
@@ -204,7 +204,7 @@ function setCurrentSample(sample, autoplay = false) {
   els.largePlayButton.disabled = false;
   els.previewEmpty.hidden = true;
   els.previewReady.hidden = false;
-  els.currentVoiceName.textContent = `${info.label || sample.voice} preview generated`;
+  els.currentVoiceName.textContent = `${info.label || sample.voice} 试听已生成`;
   els.currentVoiceMeta.textContent = `${sample.voice} · ${sample.rate || '+0%'} · ${sample.pitch || '+0Hz'}`;
   if (autoplay) els.audioPlayer.play().catch(() => {});
 }
@@ -221,11 +221,11 @@ async function loadState({ quiet = false, selectLatest = false } = {}) {
     renderHistory();
     if (selectLatest) setCurrentSample(appState.manifest.samples?.[0] || appState.history[0], true);
     else if (!els.audioPlayer.src) setCurrentSample(appState.manifest.samples?.[0] || appState.history[0]);
-    els.engineStatus.textContent = 'Running normally';
+    els.engineStatus.textContent = '运行正常';
     els.engineDot.classList.remove('error');
     if (!quiet) appendLog(`API complete: ${appState.voices.length} voices, ${appState.history.length} records`, 'OK');
   } catch (error) {
-    els.engineStatus.textContent = 'Connection failed';
+    els.engineStatus.textContent = '连接失败';
     els.engineDot.classList.add('error');
     appendLog(error.message, 'ERROR');
     notify(error.message, 'error');
@@ -237,12 +237,12 @@ function setBusy(busy) {
   els.voiceSelect.disabled = busy;
   els.rateInput.disabled = busy;
   els.pitchInput.disabled = busy;
-  els.generateButton.querySelector('span').textContent = busy ? 'Generating…' : 'Generate preview';
+  els.generateButton.querySelector('span').textContent = busy ? '生成中…' : '生成试听';
 }
 
 function renderJob(job) {
   currentJobId = job.id;
-  const labels = { queued: 'Queued', running: 'Generating', succeeded: 'Generated', failed: 'Failed' };
+  const labels = { queued: '排队中', running: '生成中', succeeded: '已生成', failed: '失败' };
   setJobStatus(labels[job.status] || job.status, job.status);
   const lines = Array.isArray(job.log) ? job.log : [];
   lines.slice(seenJobLog).forEach(line => appendLog(line));
@@ -262,15 +262,15 @@ async function pollJob() {
     setBusy(false);
     if (data.job.status === 'succeeded') {
       appendLog('Preview generation API completed', 'OK');
-      notify('Preview generated and loaded in the player', 'success');
+      notify('试听已生成并加载到播放器', 'success');
       await loadState({ quiet: true, selectLatest: true });
     } else {
       appendLog('Preview generation failed; check the task output above', 'ERROR');
-      notify('Preview generation failed; check the API log', 'error');
+      notify('试听生成失败，请查看 API 日志', 'error');
     }
   } catch (error) {
     setBusy(false);
-    setJobStatus('Connection failed', 'failed');
+    setJobStatus('连接失败', 'failed');
     appendLog(error.message, 'ERROR');
     notify(error.message, 'error');
   }
@@ -279,7 +279,7 @@ async function pollJob() {
 async function generatePreview() {
   const text = els.textInput.value.trim();
   if (!text) {
-    notify('Enter text to convert first', 'error');
+    notify('请先输入要转换的文本', 'error');
     els.textInput.focus();
     return;
   }
@@ -304,7 +304,7 @@ async function generatePreview() {
     pollTimer = window.setTimeout(pollJob, 400);
   } catch (error) {
     setBusy(false);
-    setJobStatus('Submission failed', 'failed');
+    setJobStatus('提交失败', 'failed');
     appendLog(error.message, 'ERROR');
     notify(error.message, 'error');
   }
@@ -327,11 +327,11 @@ function bindEvents() {
   els.refreshHistoryButton.addEventListener('click', () => loadState());
   els.clearLogButton.addEventListener('click', () => {
     logLines = [];
-    els.jobLog.textContent = 'Waiting for an API call.';
+    els.jobLog.textContent = '等待 API 调用。';
   });
   els.copyCommandButton.addEventListener('click', async () => {
     await navigator.clipboard.writeText('python main.py voice-preview');
-    notify('Command copied', 'success');
+    notify('命令已复制', 'success');
   });
   els.largePlayButton.addEventListener('click', () => {
     if (els.audioPlayer.paused) els.audioPlayer.play().catch(() => {});
@@ -356,5 +356,5 @@ bindEvents();
 bindGuideDialog();
 updateInputs();
 renderIcons();
-setJobStatus('Ready');
+setJobStatus('就绪');
 loadState();

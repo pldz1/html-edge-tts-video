@@ -54,19 +54,19 @@ function startCaptionTour() {
     return;
   }
   const steps = [
-    { element: '.caption-project-picker', popover: { title: '1. Choose a project', description: 'Choose the project to edit. Caption editing requires its generated narration timeline.', side: 'bottom', align: 'end' } },
-    { element: '.scene-panel', popover: { title: '2. Locate from a scene', description: 'Select a scene card or the timeline to locate its preview and captions.', side: 'right', align: 'start' } },
-    { element: '.cue-list-panel', popover: { title: '3. Choose a caption', description: 'Search or select any caption to load its text and timing on the right.', side: 'right', align: 'start' } },
-    { element: '.cue-detail', popover: { title: '4. Edit and save', description: 'Adjust text or start and end times, then save captions.json after reviewing.', side: 'left', align: 'start' } },
+    { element: '.caption-project-picker', popover: { title: '1. 选择项目', description: '选择要编辑的项目。编辑字幕需要已生成的旁白时间轴。', side: 'bottom', align: 'end' } },
+    { element: '.scene-panel', popover: { title: '2. 从场景定位', description: '选择场景卡片或时间轴，即可定位其预览和字幕。', side: 'right', align: 'start' } },
+    { element: '.cue-list-panel', popover: { title: '3. 选择字幕', description: '搜索或选择任一字幕，即可在右侧加载其文字和时间。', side: 'right', align: 'start' } },
+    { element: '.cue-detail', popover: { title: '4. 编辑并保存', description: '调整文字或起止时间，检查后保存 captions.json。', side: 'left', align: 'start' } },
   ];
   driverFactory({
     showProgress: true,
     animate: true,
     allowClose: true,
     overlayOpacity: 0.42,
-    nextBtnText: 'Next',
-    prevBtnText: 'Back',
-    doneBtnText: 'Done',
+    nextBtnText: '下一步',
+    prevBtnText: '上一步',
+    doneBtnText: '完成',
     steps,
   }).drive();
 }
@@ -99,7 +99,7 @@ function notify(message, tone = '') {
 }
 
 function setStatus(message, error = false) {
-  els.engineStatus.textContent = error ? 'Connection failed' : 'Running normally';
+  els.engineStatus.textContent = error ? '连接失败' : '运行正常';
   els.engineDot.classList.toggle('error', error);
   notify(message, error ? 'error' : '');
 }
@@ -131,11 +131,11 @@ async function loadProjectList() {
 async function switchCaptionProject(projectIdValue) {
   const projectId = String(projectIdValue || '').trim();
   if (!projectId) return;
-  if (state.dirty && !window.confirm('This caption has unsaved changes. Switching projects will discard them. Continue?')) {
+  if (state.dirty && !window.confirm('当前字幕有未保存的修改。切换项目将丢弃这些修改，是否继续？')) {
     await loadProjectList();
     return;
   }
-  setStatus('Switching project');
+  setStatus('正在切换项目');
   await apiJson('/api/projects/load', { method: 'POST', body: JSON.stringify({ project: projectId }) });
   state.dirty = false;
   state.previewReady = false;
@@ -176,7 +176,7 @@ function timingIsValid(cue) {
 
 function markDirty(message = 'Caption content changed') {
   state.dirty = true;
-  els.saveState.textContent = 'Unsaved';
+  els.saveState.textContent = '未保存';
   els.saveState.classList.add('dirty');
   els.modifiedText.textContent = `${new Date().toLocaleTimeString('zh-CN', { hour12: false })} ${message}`;
 }
@@ -235,13 +235,13 @@ function renderDetail() {
   els.cueDuration.value = formatTime(cue.end - cue.start);
   if (els.cueText.value !== cue.text) els.cueText.value = cue.text;
   els.textCount.textContent = `${cue.text.length} / 200`;
-  els.liveCaption.textContent = cue.text || '(Empty caption)';
-  els.sceneBadge.textContent = `Scene ${pad(sceneNumber(currentScene()))}`;
+  els.liveCaption.textContent = cue.text || '（空字幕）';
+  els.sceneBadge.textContent = `场景 ${pad(sceneNumber(currentScene()))}`;
 }
 
 function renderSummary() {
   const count = state.captions?.cues?.length || 0;
-  els.cueCount.textContent = `${count} cues`;
+  els.cueCount.textContent = `${count} 条字幕`;
   els.footerCueCount.textContent = String(count);
   els.durationText.textContent = formatTime(state.duration);
   els.totalDuration.textContent = formatTime(state.duration, false);
@@ -317,7 +317,7 @@ function syncPlaybackFrame() {
 function setPlayIcons(playing) {
   const icon = playing ? 'pause' : 'play';
   els.timelinePlayButton.innerHTML = `<i data-lucide="${icon}"></i>`;
-  els.previewPlayButton.innerHTML = `<i data-lucide="${icon}"></i><span>${playing ? 'Pause' : 'Play'}</span>`;
+  els.previewPlayButton.innerHTML = `<i data-lucide="${icon}"></i><span>${playing ? '暂停' : '播放'}</span>`;
   renderIcons();
 }
 
@@ -340,7 +340,7 @@ function updateTimingFromInputs() {
   cue.start = Number.parseFloat(els.cueStart.value);
   cue.end = Number.parseFloat(els.cueEnd.value);
   if (!timingIsValid(cue)) {
-    els.saveState.textContent = 'Invalid time';
+    els.saveState.textContent = '时间无效';
     els.saveState.classList.add('dirty');
     return;
   }
@@ -373,14 +373,14 @@ function shiftCue(delta) {
 }
 
 async function loadCaptions() {
-  setStatus('Loading');
+  setStatus('正在加载');
   const response = await fetch('/api/captions', { cache: 'no-store' });
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: response.statusText }));
     throw new Error(error.error || response.statusText);
   }
   const payload = await response.json();
-  els.captionProjectName.textContent = els.captionProjectSelect.selectedOptions[0]?.textContent || 'Caption editor';
+  els.captionProjectName.textContent = els.captionProjectSelect.selectedOptions[0]?.textContent || '字幕编辑器';
   state.captions = payload.captions;
   state.generated = payload.generated;
   state.scenes = payload.scenes || [];
@@ -398,9 +398,9 @@ async function loadCaptions() {
       els.previewFrame.src = previewUrl.href;
     }
   }
-  els.saveState.textContent = 'Saved';
+  els.saveState.textContent = '已保存';
   els.saveState.classList.remove('dirty');
-  setStatus(payload.saved ? 'Caption file loaded' : 'Using generated captions');
+  setStatus(payload.saved ? '字幕文件已加载' : '正在使用生成的字幕');
   renderSelection();
   seekPreview(0);
   if (els.previewFrame.contentDocument?.readyState === 'complete') preparePreviewFrame();
@@ -409,8 +409,8 @@ async function loadCaptions() {
 async function saveCaptions() {
   if (!state.captions) return;
   const invalid = state.captions.cues.find(cue => !timingIsValid(cue));
-  if (invalid) { notify('Invalid caption timing cannot be saved', 'error'); return; }
-  setStatus('Saving');
+  if (invalid) { notify('字幕时间无效，无法保存', 'error'); return; }
+  setStatus('正在保存');
   const response = await fetch('/api/captions', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(state.captions),
   });
@@ -421,11 +421,11 @@ async function saveCaptions() {
   const payload = await response.json();
   state.captions = payload.doc;
   state.dirty = false;
-  els.saveState.textContent = 'Saved';
+  els.saveState.textContent = '已保存';
   els.saveState.classList.remove('dirty');
   els.modifiedText.textContent = `${new Date().toLocaleTimeString('en-GB', { hour12: false })} saved captions.json`;
-  setStatus('Save complete');
-  notify(`Captions saved to ${payload.saved.length} locations`, 'success');
+  setStatus('保存完成');
+  notify(`字幕已保存到 ${payload.saved.length} 个位置`, 'success');
 }
 
 function restoreGeneratedCue() {
@@ -451,7 +451,7 @@ function exportSrt() {
   const anchor = document.createElement('a');
   anchor.href = url; anchor.download = 'captions.srt'; anchor.click();
   URL.revokeObjectURL(url);
-  notify('SRT captions exported', 'success');
+  notify('SRT 字幕已导出', 'success');
 }
 
 function bindEvents() {
@@ -496,7 +496,7 @@ function bindEvents() {
   els.endLaterButton.addEventListener('click', () => adjustBoundary('end', .1));
   els.cueText.addEventListener('input', () => {
     const cue = currentCue(); if (!cue) return;
-    cue.text = els.cueText.value; els.textCount.textContent = `${cue.text.length} / 200`; els.liveCaption.textContent = cue.text || '(Empty caption)'; markDirty('Caption content updated'); renderList();
+    cue.text = els.cueText.value; els.textCount.textContent = `${cue.text.length} / 200`; els.liveCaption.textContent = cue.text || '（空字幕）'; markDirty('字幕内容已更新'); renderList();
   });
   els.twoLineToggle.addEventListener('change', () => els.liveCaption.classList.toggle('two-lines', els.twoLineToggle.checked));
   els.autoWrapToggle.addEventListener('change', () => els.liveCaption.style.whiteSpace = els.autoWrapToggle.checked ? 'normal' : 'nowrap');
@@ -528,6 +528,6 @@ loadProjectList()
   .then(loadCaptions)
   .catch(error => {
     setStatus(error.message, true);
-    els.cueList.innerHTML = '<div class="caption-empty-state"><span>Captions are not ready to edit</span><strong>This project has no generated narration timeline</strong><p>Return to Studio, select “Generate narration”, then reopen the caption editor.</p><a href="/studio">Return to Studio</a></div>';
+    els.cueList.innerHTML = '<div class="caption-empty-state"><span>字幕尚不能编辑</span><strong>该项目没有已生成的旁白时间轴</strong><p>请返回工作室，选择“生成旁白”后重新打开字幕编辑器。</p><a href="/studio">返回工作室</a></div>';
     notify(error.message, 'error');
   });

@@ -102,7 +102,7 @@ const INITIAL_FORM_VALUES = Object.freeze({
   engine: els.engineInput?.value || 'auto',
   promptTarget: els.promptTargetInput?.value || 'web-ai',
   notes: els.notesInput?.value || '',
-  projectName: els.projectNameInput?.value || 'New video project',
+  projectName: els.projectNameInput?.value || '新视频项目',
   renderOutput: els.renderOutputInput?.value || 'studio-render.mp4',
 });
 
@@ -155,9 +155,9 @@ async function initImportProjectContext() {
     if (els.contentThemeInput) els.contentThemeInput.value = data?.project?.contentTheme || 'editorial';
     renderEngineOptions(data?.project?.contentTheme || 'editorial');
     if (els.engineInput) els.engineInput.value = data?.project?.engine || 'auto';
-    setStatus(`Editing project: ${data?.project?.name || projectId}`, 'success');
+    setStatus(`正在编辑项目：${data?.project?.name || projectId}`, 'success');
   } catch (error) {
-    setStatus(error.message || 'Unable to load the project source.', 'error');
+    setStatus(error.message || '无法加载项目源文件。', 'error');
   }
 }
 
@@ -191,9 +191,9 @@ function setProjectEditMode(editing) {
   document.body.classList.toggle('project-meta-editing', editing);
   if (els.projectEditButton) {
     els.projectEditButton.setAttribute('aria-expanded', String(editing));
-    els.projectEditButton.title = editing ? 'Collapse project details' : 'Edit project details';
+    els.projectEditButton.title = editing ? '收起项目详情' : '编辑项目详情';
     const label = els.projectEditButton.querySelector('span');
-    if (label) label.textContent = editing ? 'Collapse' : 'Edit';
+    if (label) label.textContent = editing ? '收起' : '编辑';
   }
   if (!editing) return;
   const active = appState?.activeProject;
@@ -206,19 +206,19 @@ function setProjectEditMode(editing) {
 async function saveProjectMetaEdit() {
   const active = appState?.activeProject;
   if (!active?.id) {
-    setStatus('Select a project first.', 'error');
+    setStatus('请先选择项目。', 'error');
     return;
   }
   const name = (els.projectTitleInput?.value || '').trim();
   if (!name) {
-    setStatus('Project name cannot be empty.', 'error');
+    setStatus('项目名称不能为空。', 'error');
     return;
   }
   try {
     await postJson('/api/projects/update', { project: active.id, name });
     setProjectEditMode(false);
     await refreshAll();
-    setStatus('Project name updated.', 'success');
+    setStatus('项目名称已更新。', 'success');
   } catch (error) {
     setStatus(error.message, 'error');
   }
@@ -257,9 +257,9 @@ function resetBuildState(name = '') {
   pollTimer = 0;
   currentJobId = '';
   setJobBusy(false);
-  els.jobStatus.textContent = 'Idle';
+  els.jobStatus.textContent = '空闲';
   els.jobStatus.className = 'job-status';
-  els.jobLog.textContent = 'Waiting for a task.';
+  els.jobLog.textContent = '等待任务。';
   els.renderSizeInput.value = '720p';
   els.renderOutputInput.value = outputNameForSize(
     name || INITIAL_FORM_VALUES.renderOutput,
@@ -279,13 +279,13 @@ function setProjectDrawerOpen(open) {
     document.body.classList.remove('projects-open');
     els.sidebarToggle.setAttribute('aria-expanded', 'true');
     const desktopLabel = els.sidebarToggle.querySelector('span');
-    if (desktopLabel) desktopLabel.textContent = 'Projects';
+    if (desktopLabel) desktopLabel.textContent = '项目';
     return;
   }
   document.body.classList.toggle('projects-open', open);
   els.sidebarToggle.setAttribute('aria-expanded', String(open));
   const label = els.sidebarToggle.querySelector('span');
-  if (label) label.textContent = open ? 'Close projects' : 'Projects';
+  if (label) label.textContent = open ? '关闭项目' : '项目';
   localStorage.setItem(PROJECT_DRAWER_STORAGE_KEY, open ? '1' : '0');
 }
 
@@ -323,7 +323,7 @@ async function api(path, options = {}) {
   const raw = await response.text();
   const data = raw ? JSON.parse(raw) : {};
   if (!response.ok) {
-    throw new Error(data.error || `Request failed: ${response.status}`);
+    throw new Error(data.error || `请求失败：${response.status}`);
   }
   return data;
 }
@@ -336,7 +336,7 @@ function postJson(path, payload) {
 }
 
 function formatDate(value) {
-  if (!value) return 'Unknown time';
+  if (!value) return '未知时间';
   return new Intl.DateTimeFormat('zh-CN', {
     month: '2-digit',
     day: '2-digit',
@@ -346,14 +346,14 @@ function formatDate(value) {
 }
 
 function formatBytes(value) {
-  if (!Number.isFinite(value)) return 'Unknown size';
+  if (!Number.isFinite(value)) return '未知大小';
   if (value < 1024 * 1024) return `${Math.round(value / 1024)} KB`;
   return `${(value / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function formatDuration(value) {
   const seconds = Number(value);
-  if (!Number.isFinite(seconds)) return 'Generated';
+  if (!Number.isFinite(seconds)) return '已生成';
   const minutes = Math.floor(seconds / 60);
   const rest = Math.round(seconds % 60).toString().padStart(2, '0');
   return `${minutes}:${rest}`;
@@ -381,11 +381,11 @@ async function refreshPrompt() {
     if (requestId !== promptRequestId) return;
     els.promptOutput.value = result.prompt;
     if (els.promptResolution) {
-      els.promptResolution.textContent = `Resolved: ${result.language} · ${result.contentTheme} · ${result.engine} · ${result.target}`;
+      els.promptResolution.textContent = `已解析：${result.language} · ${result.contentTheme} · ${result.engine} · ${result.target}`;
     }
   } catch (error) {
     if (requestId !== promptRequestId) return;
-    els.promptOutput.value = `Prompt generation failed: ${error.message}`;
+    els.promptOutput.value = `提示词生成失败：${error.message}`;
     if (els.promptResolution) els.promptResolution.textContent = error.message;
   }
 }
@@ -402,11 +402,11 @@ async function copyPrompt() {
   await refreshPrompt();
   try {
     await navigator.clipboard.writeText(els.promptOutput.value);
-    setStatus('Prompt copied.', 'success');
+    setStatus('提示词已复制。', 'success');
   } catch {
     els.promptOutput.focus();
     els.promptOutput.select();
-    setStatus('The browser did not grant clipboard permission. Copy it manually.', 'error');
+    setStatus('浏览器未授予剪贴板权限，请手动复制。', 'error');
   }
 }
 
@@ -459,18 +459,18 @@ function extractResponse() {
   els.visualOutput.value = visual;
 
   if (!scenes || !body) {
-    setStatus('scenes.json and body.html were not both found.', 'error');
+    setStatus('未同时找到 scenes.json 和 body.html。', 'error');
     return false;
   }
 
   try {
     JSON.parse(scenes);
   } catch {
-    setStatus('The extracted scenes.json is not valid JSON.', 'error');
+    setStatus('提取的 scenes.json 不是有效的 JSON。', 'error');
     return false;
   }
 
-  setStatus(`Source extracted${css ? ' with body.css' : ''}${visual ? ' and visual.js' : ''}.`, 'success');
+  setStatus(`源文件已提取${css ? '（含 body.css）' : ''}${visual ? '（含 visual.js）' : ''}。`, 'success');
   return true;
 }
 
@@ -496,19 +496,19 @@ function renderHeader() {
   const sceneCount = current.sceneCount ?? activeProject?.sceneCount ?? 0;
   const narrationChars = current.narrationChars ?? activeProject?.narrationChars ?? 0;
   const activeId = active?.id || activeProject?.id || '';
-  const currentTitle = active?.name || activeProject?.name || current.title || 'No project selected';
+  const currentTitle = active?.name || activeProject?.name || current.title || '未选择项目';
   const timelineLabel = timeline.matchesSource
     ? formatDuration(timeline.duration)
     : timeline.exists
-      ? 'Rebuild needed'
-      : 'Not generated';
+      ? '需要重新构建'
+      : '未生成';
   els.currentProjectName.textContent = currentTitle;
   els.timelineStatus.textContent = timelineLabel;
-  els.outputStatus.textContent = `${outputs.length} total`;
-  els.currentSourcePath.textContent = active?.relativePath || 'No current source files';
+  els.outputStatus.textContent = `共 ${outputs.length} 个`;
+  els.currentSourcePath.textContent = active?.relativePath || '没有当前源文件';
   els.workspaceProjectTitle.textContent = currentTitle;
   els.workspaceProjectTitle.title = currentTitle;
-  els.workspaceProjectId.textContent = activeId || 'Not loaded';
+  els.workspaceProjectId.textContent = activeId || '未加载';
   els.projectDetailTitle.textContent = currentTitle;
   els.workspaceSceneCount.textContent = `${sceneCount}`;
   els.workspaceNarrationChars.textContent = `${narrationChars}`;
@@ -516,11 +516,11 @@ function renderHeader() {
   els.workspaceTimelineState.classList.toggle('warning', !timeline.matchesSource);
   els.workspaceTimelineState.classList.toggle('success', Boolean(timeline.matchesSource));
   els.workspaceOutputCount.textContent = `${outputs.length}`;
-  els.guideTitle.textContent = appState?.guide?.title || 'Reading status';
-  els.guideBody.textContent = appState?.guide?.body || 'Studio is connecting to the local factory.';
-  els.guideBadge.textContent = (appState?.guide?.stage || 'ready').toUpperCase();
+  els.guideTitle.textContent = appState?.guide?.title || '正在读取状态';
+  els.guideBody.textContent = appState?.guide?.body || '工作室正在连接本地工厂。';
+  els.guideBadge.textContent = appState?.guide?.stage === 'ready' ? '就绪' : (appState?.guide?.stage || '就绪');
   els.loadStarterButton.disabled = !appState?.hasStarter;
-  els.loadStarterButton.querySelector('span').textContent = appState?.hasStarter ? 'Example' : 'Example unavailable';
+  els.loadStarterButton.querySelector('span').textContent = appState?.hasStarter ? '示例' : '示例不可用';
   els.editCurrentProjectButton.href = activeId ? `/studio/import?project=${encodeURIComponent(activeId)}` : '/studio/import';
   els.importCurrentProjectButton.href = activeId ? `/studio/import?project=${encodeURIComponent(activeId)}` : '/studio/import';
   els.editCurrentProjectButton.classList.toggle('is-disabled', !activeId);
@@ -589,7 +589,7 @@ function projectCard(project) {
 
   const meta = document.createElement('span');
   meta.className = 'project-meta';
-  meta.textContent = `${project.sceneCount} scenes · ${project.narrationChars} characters · ${formatDate(project.updatedAt)}`;
+  meta.textContent = `${project.sceneCount} 个场景 · ${project.narrationChars} 个字符 · ${formatDate(project.updatedAt)}`;
   button.title = project.relativePath;
   button.append(title, meta);
   return button;
@@ -601,12 +601,12 @@ function renderProjects() {
   if (!projects.length) {
     const empty = document.createElement('p');
     empty.className = 'empty-text';
-    empty.textContent = 'There are no .local/work projects yet.';
+    empty.textContent = '暂无 .local/work 项目。';
     els.projectList.append(empty);
     if (els.projectSelect) {
       const option = document.createElement('option');
       option.value = '';
-      option.textContent = 'No projects available';
+      option.textContent = '暂无项目';
       els.projectSelect.append(option);
       els.projectSelect.disabled = true;
     }
@@ -652,7 +652,7 @@ function renderOutputs() {
   if (isEmpty) {
     const empty = document.createElement('p');
     empty.className = 'empty-text';
-    empty.textContent = 'There are no exported videos yet.';
+    empty.textContent = '暂无已导出的视频。';
     els.outputList.append(empty);
     return;
   }
@@ -682,7 +682,7 @@ async function saveTheme(theme) {
     appState = data.state;
     reloadPreview();
     await refreshAll();
-    setStatus(`Theme changed to ${theme}.`, 'success');
+    setStatus(`主题已切换为 ${theme}。`, 'success');
   } catch (error) {
     renderThemeControls();
     setStatus(error.message, 'error');
@@ -696,8 +696,8 @@ function tourSteps() {
     {
       element: '.status-strip',
       popover: {
-        title: 'Start with the current status',
-        description: 'See which project is loaded, whether its timeline is generated, and whether it has output videos.',
+        title: '先查看当前状态',
+        description: '查看已加载的项目、时间轴是否已生成，以及是否已有导出视频。',
         side: 'bottom',
         align: 'center',
       },
@@ -705,8 +705,8 @@ function tourSteps() {
     {
       element: '.project-drawer',
       popover: {
-        title: 'Switch the current project here',
-        description: 'The project list activates projects. Select any project card to make it current.',
+        title: '在这里切换当前项目',
+        description: '项目列表可激活项目，选择任一项目卡片即可设为当前项目。',
         side: 'right',
         align: 'start',
       },
@@ -714,8 +714,8 @@ function tourSteps() {
     {
       element: '.current-project-panel',
       popover: {
-        title: 'Review the current project workspace',
-        description: 'This area brings together the current project title, status, next step, and editing entry points.',
+        title: '查看当前项目工作区',
+        description: '这里汇集当前项目名称、状态、下一步及编辑入口。',
         side: 'right',
         align: 'start',
       },
@@ -723,8 +723,8 @@ function tourSteps() {
     {
       element: '.quick-actions-panel',
       popover: {
-        title: 'Common actions are here',
-        description: 'Edit, import a replacement, open captions, or create a project from one place.',
+        title: '常用操作在这里',
+        description: '可在这里编辑、导入替换内容、打开字幕或创建项目。',
         side: 'bottom',
         align: 'start',
       },
@@ -732,8 +732,8 @@ function tourSteps() {
     {
       element: '.build-panel',
       popover: {
-        title: 'Build only the current project',
-        description: 'After selecting the current project, run Check, TTS, and Render here.',
+        title: '仅构建当前项目',
+        description: '选择当前项目后，可在这里执行检查、TTS 和导出。',
         side: 'top',
         align: 'center',
       },
@@ -741,8 +741,8 @@ function tourSteps() {
     {
       element: '.preview-panel',
       popover: {
-        title: 'The right side shows the current project only',
-        description: 'The preview and outputs both belong to the current project, so they always correspond.',
+        title: '右侧仅显示当前项目',
+        description: '预览和导出文件都属于当前项目，因此始终保持对应。',
         side: 'top',
         align: 'start',
       },
@@ -786,9 +786,9 @@ function startDriverTour(steps) {
     stageRadius: 8,
     overlayOpacity: 0.42,
     popoverClass: 'studio-tour-popover',
-    nextBtnText: 'Next',
-    prevBtnText: 'Back',
-    doneBtnText: 'Done',
+    nextBtnText: '下一步',
+    prevBtnText: '上一步',
+    doneBtnText: '完成',
     steps,
     onHighlightStarted: (_element, step) => {
       setProjectDrawerOpen(step?.element === '.project-drawer');
@@ -849,7 +849,7 @@ function startFallbackTour(steps) {
     title.textContent = step.popover.title;
     body.textContent = step.popover.description;
     prev.disabled = index === 0;
-    next.textContent = index === steps.length - 1 ? 'Done' : 'Next';
+    next.textContent = index === steps.length - 1 ? '完成' : '下一步';
     card.classList.toggle('is-last', index === steps.length - 1);
   }
 
@@ -912,7 +912,7 @@ async function refreshAll() {
 
 async function loadProject(project, { view = 'compose', closeDrawer = true } = {}) {
   try {
-    setStatus('Loading project...');
+    setStatus('正在加载项目…');
     const data = await postJson('/api/projects/load', { project });
     appState = data.state;
     resetWorkspaceUi({ name: data.project?.name || '', resetPrompt: false, resetImport: true });
@@ -920,7 +920,7 @@ async function loadProject(project, { view = 'compose', closeDrawer = true } = {
     setStudioRoute('main');
     reloadPreview();
     await refreshAll();
-    setStatus('Project loaded.', 'success');
+    setStatus('项目已加载。', 'success');
     return data.project;
   } catch (error) {
     setStatus(error.message, 'error');
@@ -929,14 +929,14 @@ async function loadProject(project, { view = 'compose', closeDrawer = true } = {
 }
 
 async function deleteProject(project) {
-  const confirmed = window.confirm(`Delete project ${project}? This removes its source files from .local/work.`);
+  const confirmed = window.confirm(`要删除项目 ${project} 吗？这将移除 .local/work 中的源文件。`);
   if (!confirmed) return;
   try {
-    setStatus(`Deleting project: ${project}...`);
+    setStatus(`正在删除项目：${project}…`);
     await postJson('/api/projects/delete', { project });
     await refreshAll();
     reloadPreview();
-    setStatus(`Project deleted: ${project}`, 'success');
+    setStatus(`项目已删除：${project}`, 'success');
   } catch (error) {
     setStatus(error.message, 'error');
   }
@@ -979,7 +979,7 @@ async function validateExtracted() {
       bodyCss: els.cssOutput.value,
       visualJs: els.visualOutput.value,
     });
-    setStatus(`Validation passed: ${result.sceneCount} scenes, ${result.narrationChars} narration characters.`, 'success');
+    setStatus(`验证通过：${result.sceneCount} 个场景，${result.narrationChars} 个旁白字符。`, 'success');
   } catch (error) {
     setStatus(error.message, 'error');
   }
@@ -989,11 +989,11 @@ async function saveProject() {
   if (!ensureExtracted()) return;
   const name = els.projectNameInput.value.trim();
   if (!name) {
-    setStatus('Enter a project name.', 'error');
+    setStatus('请输入项目名称。', 'error');
     return;
   }
   try {
-    setStatus('Saving project...');
+    setStatus('正在保存项目…');
     const created = await postJson('/api/projects', {
       project: importProjectId || undefined,
       name,
@@ -1013,7 +1013,7 @@ async function saveProject() {
     setStudioRoute('main');
     reloadPreview();
     await refreshAll();
-    setStatus(`Saved and loaded: ${created.project.name}`, 'success');
+    setStatus(`已保存并加载：${created.project.name}`, 'success');
   } catch (error) {
     setStatus(error.message, 'error');
   }
@@ -1022,7 +1022,7 @@ async function saveProject() {
 async function createBlankProject() {
   const name = els.newProjectNameInput.value.trim();
   if (!name) {
-    setStatus('Enter a new project name', 'error');
+    setStatus('请输入新项目名称。', 'error');
     els.newProjectNameInput.focus();
     return;
   }
@@ -1040,7 +1040,7 @@ async function createBlankProject() {
     setStudioRoute('main');
     reloadPreview();
     await refreshAll();
-    setStatus(`Created and loaded project: ${data.project.name}`, 'success');
+    setStatus(`已创建并加载项目：${data.project.name}`, 'success');
     window.location.href = `/studio/import?project=${encodeURIComponent(data.project.id)}`;
   } catch (error) {
     setStatus(error.message, 'error');
@@ -1059,23 +1059,23 @@ function setJobBusy(isBusy, task = '') {
     els.jobOverlay.setAttribute('aria-hidden', String(!showOverlay));
   }
   if (showOverlay) {
-    const taskLabel = task === 'tts' ? 'Narration generation' : 'MP4 export';
-    els.jobOverlayTitle.textContent = `${taskLabel} in progress`;
-    els.jobOverlayMessage.textContent = 'The current project is processing. Do not perform other actions.';
+    const taskLabel = task === 'tts' ? '旁白生成' : 'MP4 导出';
+    els.jobOverlayTitle.textContent = `${taskLabel}进行中`;
+    els.jobOverlayMessage.textContent = '当前项目正在处理，请勿执行其他操作。';
   }
 }
 
 function renderJob(job) {
   currentJobId = job.id;
   const labels = {
-    queued: 'Queued',
-    running: 'Running',
-    succeeded: 'Complete',
-    failed: 'Failed',
+    queued: '排队中',
+    running: '运行中',
+    succeeded: '已完成',
+    failed: '失败',
   };
   els.jobStatus.textContent = `${job.task}: ${labels[job.status] || job.status}`;
   els.jobStatus.className = `job-status ${job.status}`;
-  els.jobLog.textContent = job.log?.length ? job.log.join('\n') : 'Task started; waiting for logs.';
+  els.jobLog.textContent = job.log?.length ? job.log.join('\n') : '任务已启动，正在等待日志。';
   els.jobLog.scrollTop = els.jobLog.scrollHeight;
   setJobBusy(job.status === 'queued' || job.status === 'running', job.task);
 }
@@ -1094,9 +1094,9 @@ async function pollJob() {
     await refreshAll();
     if (data.job.status === 'succeeded') {
       if (['tts', 'offline'].includes(data.job.task)) reloadPreview();
-      setStatus(`${data.job.task} completed.`, 'success');
+      setStatus(`${data.job.task} 已完成。`, 'success');
     } else {
-      setStatus(`${data.job.task} failed. Check the log.`, 'error');
+      setStatus(`${data.job.task} 失败，请查看日志。`, 'error');
     }
   } catch (error) {
     setJobBusy(false);
@@ -1118,7 +1118,7 @@ async function startJob(task) {
     const data = await postJson('/api/jobs', payload);
     renderJob(data.job);
     pollTimer = window.setTimeout(pollJob, 500);
-    setStatus(`${task} started.`);
+    setStatus(`${task} 已启动。`);
     return data.job;
   } catch (error) {
     setJobBusy(false);
@@ -1187,7 +1187,7 @@ function bindEvents() {
   els.openCaptionsButton?.addEventListener('click', async () => {
     const projectId = appState?.activeProject?.id;
     if (!projectId) {
-      setStatus('Select a project first.', 'error');
+      setStatus('请先选择项目。', 'error');
       return;
     }
     await openProjectCaptions(projectId);
