@@ -62,7 +62,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--preset", default="slow")
     parser.add_argument("--frame-format", default="jpeg", choices=["jpeg", "png"])
     parser.add_argument("--jpeg-quality", type=int, default=96)
-    return parser.parse_args()
+    parser.add_argument("--transition", type=float, default=0.4)
+    args = parser.parse_args()
+    if not 0 <= args.transition <= 2:
+        parser.error("--transition must be between 0 and 2 seconds")
+    return args
 
 
 def ensure_render_assets_match_source() -> None:
@@ -126,11 +130,30 @@ def ffmpeg_common_output_args(args: argparse.Namespace, output: Path) -> list[st
     ]
 
 
-async def load_render_page(browser: object, theme: str, width: int, height: int) -> tuple[object, object, float]:
+async def wait_for_composition(page: object) -> None:
+    await page.wait_for_function(
+        "window.compositionReady === true || window.demoReady === true || Boolean(window.compositionError)"
+    )
+    error = await page.evaluate("() => window.compositionError || ''")
+    if error:
+        raise SystemExit(f"Composition failed to initialize: {error}")
+
+
+def render_page_url(theme: str, transition: float) -> str:
+    return f"{theme_url(theme)}?render=1&transition={transition:g}"
+
+
+async def load_render_page(
+    browser: object,
+    theme: str,
+    width: int,
+    height: int,
+    transition: float,
+) -> tuple[object, object, float]:
     context = await browser.new_context(viewport={"width": width, "height": height})
     page = await context.new_page()
-    await page.goto(f"{theme_url(theme)}?render=1", wait_until="networkidle")
-    await page.wait_for_function("window.compositionReady === true || window.demoReady === true")
+    await page.goto(render_page_url(theme, transition), wait_until="networkidle")
+    await wait_for_composition(page)
     duration = float(
         await page.evaluate(
             """() => {
@@ -152,7 +175,7 @@ async def capture_frames(
     output: Path,
     args: argparse.Namespace,
 ) -> None:
-    context, page, duration = await load_render_page(browser, theme, width, height)
+    context, page, duration = await load_render_page(browser, theme, width, height, args.transition)
     frame_count = max(1, math.ceil(duration * args.fps))
     print(
         f"Rendering frames: {frame_count} frames at {args.fps} fps "
@@ -222,8 +245,8 @@ async def capture_video(
     )
     recording_started = time.perf_counter()
     page = await context.new_page()
-    await page.goto(f"{theme_url(theme)}?render=1", wait_until="networkidle")
-    await page.wait_for_function("window.compositionReady === true || window.demoReady === true")
+    await page.goto(render_page_url(theme, args.transition), wait_until="networkidle")
+    await wait_for_composition(page)
     duration = float(
         await page.evaluate(
             """() => {

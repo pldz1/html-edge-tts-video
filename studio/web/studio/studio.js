@@ -22,6 +22,7 @@ const els = {
   guideBadge: $('#guideBadge'),
   projectList: $('#projectList'),
   projectSelect: $('#projectSelect'),
+  themeSelect: $('#themeSelect'),
   outputList: $('#outputList'),
   previewFrame: $('#previewFrame'),
   tourButton: $('#tourButton'),
@@ -41,12 +42,19 @@ const els = {
   audienceInput: $('#audienceInput'),
   toneInput: $('#toneInput'),
   sceneCountInput: $('#sceneCountInput'),
+  languageInput: $('#languageInput'),
+  contentThemeInput: $('#contentThemeInput'),
+  engineInput: $('#engineInput'),
+  promptTargetInput: $('#promptTargetInput'),
+  promptResolution: $('#promptResolution'),
   notesInput: $('#notesInput'),
   promptOutput: $('#promptOutput'),
   copyPromptButton: $('#copyPromptButton'),
   aiResponseInput: $('#aiResponseInput'),
   directScenesInput: $('#directScenesInput'),
   directBodyInput: $('#directBodyInput'),
+  directCssInput: $('#directCssInput'),
+  directVisualInput: $('#directVisualInput'),
   directImportGrid: $('#directImportGrid'),
   extractButton: $('#extractButton'),
   projectNameInput: $('#projectNameInput'),
@@ -54,12 +62,15 @@ const els = {
   saveProjectButton: $('#saveProjectButton'),
   scenesOutput: $('#scenesOutput'),
   bodyOutput: $('#bodyOutput'),
+  cssOutput: $('#cssOutput'),
+  visualOutput: $('#visualOutput'),
   checkButton: $('#checkButton'),
   offlineButton: $('#offlineButton'),
   ttsButton: $('#ttsButton'),
   renderButton: $('#renderButton'),
   renderSizeInput: $('#renderSizeInput'),
   renderOutputInput: $('#renderOutputInput'),
+  renderTransitionInput: $('#renderTransitionInput'),
   jobStatus: $('#jobStatus'),
   jobLog: $('#jobLog'),
   jobOverlay: $('#jobOverlay'),
@@ -75,6 +86,7 @@ let pollTimer = 0;
 let toastTimer = 0;
 let tourAutoStarted = false;
 let promptRefreshFrame = 0;
+let promptRequestId = 0;
 let importMode = 'smart';
 let importProjectId = '';
 
@@ -85,6 +97,10 @@ const INITIAL_FORM_VALUES = Object.freeze({
   audience: els.audienceInput?.value || '',
   tone: els.toneInput?.value || '',
   sceneCount: els.sceneCountInput?.value || '',
+  language: els.languageInput?.value || 'auto',
+  contentTheme: els.contentThemeInput?.value || 'editorial',
+  engine: els.engineInput?.value || 'auto',
+  promptTarget: els.promptTargetInput?.value || 'web-ai',
   notes: els.notesInput?.value || '',
   projectName: els.projectNameInput?.value || 'New video project',
   renderOutput: els.renderOutputInput?.value || 'studio-render.mp4',
@@ -92,14 +108,15 @@ const INITIAL_FORM_VALUES = Object.freeze({
 
 function routeKey() {
   const path = window.location.pathname.replace(/\/+$/, '');
-  if (path.endsWith('/prompt')) return 'prompt';
+  if (path.endsWith('/prompt') || path.endsWith('/create')) return 'prompt';
   if (path.endsWith('/import')) return 'import';
   if (path.endsWith('/new')) return 'new';
   return 'main';
 }
 
 function studioRoutePath(route = 'main') {
-  const cleanRoute = route === 'main' ? '' : `/${route}`;
+  const routeName = route === 'prompt' ? 'create' : route;
+  const cleanRoute = routeName === 'main' ? '' : `/${routeName}`;
   return `/studio${cleanRoute}`;
 }
 
@@ -123,11 +140,21 @@ async function initImportProjectContext() {
     const data = await api(`/api/projects/source?project=${encodeURIComponent(projectId)}`);
     const scenes = data?.files?.scenesJson || '';
     const body = data?.files?.bodyHtml || '';
+    const css = data?.files?.bodyCss || '';
+    const visual = data?.files?.visualJs || '';
     els.projectNameInput.value = data?.project?.name || '';
     els.scenesOutput.value = scenes;
     els.bodyOutput.value = body;
+    els.cssOutput.value = css;
+    els.visualOutput.value = visual;
     if (els.directScenesInput) els.directScenesInput.value = scenes;
     if (els.directBodyInput) els.directBodyInput.value = body;
+    if (els.directCssInput) els.directCssInput.value = css;
+    if (els.directVisualInput) els.directVisualInput.value = visual;
+    if (els.languageInput) els.languageInput.value = data?.project?.language || 'auto';
+    if (els.contentThemeInput) els.contentThemeInput.value = data?.project?.contentTheme || 'editorial';
+    renderEngineOptions(data?.project?.contentTheme || 'editorial');
+    if (els.engineInput) els.engineInput.value = data?.project?.engine || 'auto';
     setStatus(`Editing project: ${data?.project?.name || projectId}`, 'success');
   } catch (error) {
     setStatus(error.message || 'Unable to load the project source.', 'error');
@@ -203,6 +230,10 @@ function resetPromptComposer() {
   els.audienceInput.value = INITIAL_FORM_VALUES.audience;
   els.toneInput.value = INITIAL_FORM_VALUES.tone;
   els.sceneCountInput.value = INITIAL_FORM_VALUES.sceneCount;
+  els.languageInput.value = INITIAL_FORM_VALUES.language;
+  els.contentThemeInput.value = INITIAL_FORM_VALUES.contentTheme;
+  els.engineInput.value = INITIAL_FORM_VALUES.engine;
+  els.promptTargetInput.value = INITIAL_FORM_VALUES.promptTarget;
   els.notesInput.value = INITIAL_FORM_VALUES.notes;
   refreshPrompt();
 }
@@ -212,6 +243,12 @@ function resetImportComposer(name = INITIAL_FORM_VALUES.projectName) {
   els.aiResponseInput.value = '';
   els.scenesOutput.value = '';
   els.bodyOutput.value = '';
+  els.cssOutput.value = '';
+  els.visualOutput.value = '';
+  if (els.directScenesInput) els.directScenesInput.value = '';
+  if (els.directBodyInput) els.directBodyInput.value = '';
+  if (els.directCssInput) els.directCssInput.value = '';
+  if (els.directVisualInput) els.directVisualInput.value = '';
   els.projectNameInput.value = name || INITIAL_FORM_VALUES.projectName;
 }
 
@@ -322,148 +359,35 @@ function formatDuration(value) {
   return `${minutes}:${rest}`;
 }
 
-function buildPrompt() {
-  const topic = els.topicInput.value.trim();
-  const audience = els.audienceInput.value.trim();
-  const tone = els.toneInput.value.trim();
-  const sceneCount = els.sceneCountInput.value.trim();
-  const notes = els.notesInput.value.trim();
-  const preferredSceneCount = sceneCount ? `\nPreferred scene count:\n${sceneCount}` : '';
-  const additionalNotes = notes ? `\nAdditional requirement:\n${notes}` : '';
+function promptPayload() {
+  return {
+    topic: els.topicInput.value.trim(),
+    audience: els.audienceInput.value.trim(),
+    tone: els.toneInput.value.trim(),
+    sceneCount: els.sceneCountInput.value.trim(),
+    notes: els.notesInput.value.trim(),
+    language: els.languageInput.value,
+    contentTheme: els.contentThemeInput.value,
+    engine: els.engineInput.value,
+    target: els.promptTargetInput.value,
+  };
 
-  return `You are generating a source folder for an HTML edge-tts video factory.
-
-Output only these files:
-
-\`\`\`text
-scenes.json
-body.html
-media/ optional
-\`\`\`
-
-Do not output \`app.js\`, \`runtime.js\`, JavaScript, a renderer folder, MP3, timeline JSON, or MP4.
-The factory theme owns playback, captions, the continuous chapter rail, preview controls, and rendering.
-Do not output \`captions.json\`; the local factory creates editable captions after real TTS timing exists.
-
-Topic:
-${topic || '<PUT THE VIDEO TOPIC HERE>'}
-
-Audience:
-${audience || '<PUT THE TARGET AUDIENCE HERE>'}
-
-Tone:
-${tone || '<PUT THE TONE HERE>'}${preferredSceneCount}${additionalNotes}
-
-Visual direction:
-<PUT THE VISUAL DIRECTION HERE>
-
-Important visual requirement:
-Avoid text-only slides. Each scene should include at least one explanatory visual made from HTML
-elements or a compact inline SVG: a pipeline, state diagram, comparison matrix, metric cards, concept
-map, formula strip, or other structured graphic. Do not use <canvas> unless the canvas content is
-already rendered as media, because this source must not include JavaScript.
-
-## Output Contract
-
-Return the files as separate fenced code blocks with clear filenames:
-
-\`\`\`text
-// scenes.json
-...
-\`\`\`
-
-\`\`\`html
-<!-- body.html -->
-...
-\`\`\`
-
-If media assets are needed, describe the exact filenames and what each asset should contain.
-
-## Rules for \`scenes.json\`
-
-- Output valid JSON only.
-- Use an array of scene objects.
-- The first scene must have "id": "intro" and must introduce where the video starts, what it will explain, and the rough route of the video.
-- Every scene must contain:
-  - \`id\`: lowercase letters, digits, and hyphens only.
-  - \`category\`: a short English label, used by the factory's bottom chapter rail.
-  - \`title\`: visual title for the scene.
-  - \`summary\`: one sentence for the visual summary.
-  - \`narration\`: natural English spoken narration.
-- Optional fields such as \`visual_notes\` are allowed, but do not rely on JavaScript.
-- For an approximately three-minute video at edge-tts \`+12%\` rate, target roughly 450 to 550 English words total.
-- Keep each scene focused. Prefer 4 to 7 scenes for a short explainer.
-- Match every scene's narration with a visual aid, so the screen explains structure rather than only repeating the spoken text.
-
-Example scene:
-
-\`\`\`json
-{
-  "id": "intro",
-  "category": "Overview",
-  "title": "Start with the question",
-  "summary": "Explain the starting point and the route through the video.",
-  "narration": "This video starts with the central question, then breaks down the key idea, common misconceptions, and practical next steps."
-}
-\`\`\`
-
-## Rules for \`body.html\`
-
-- Output an HTML fragment, not a full HTML document.
-- Do not include \`<html>\`, \`<head>\`, \`<body>\`, \`<script>\`, inline event handlers, or JavaScript.
-- Do not include headers, footers, playback controls, scrubbers, timecodes, transport bars, or template chrome.
-- Do not include a per-scene progress bar such as \`progress-line\`.
-- Do not create the bottom chapter rail in \`body.html\`; the factory generates one continuous rail from \`scenes.json.category\` and the TTS timeline.
-- Include one top-level section per scene:
-
-\`\`\`html
-<section class="content-scene scene" data-scene="intro">
-  ...
-</section>
-\`\`\`
-
-- Every \`id\` in \`scenes.json\` must have a matching \`data-scene\` section.
-- The \`intro\` section must visually introduce the topic, starting point, and route. Do not jump straight into a detail scene.
-- Keep important visual content clear of the bottom 25% of the frame because captions and the generated chapter rail live there.
-- Use theme-friendly classes when helpful:
-  - \`scene-copy\`
-  - \`eyebrow\`
-  - \`summary\`
-  - \`scene-list\`
-  - \`visual-board\`
-  - \`visual-grid\`
-  - \`step-chip\` with \`data-step\`
-  - \`quote-panel\`
-  - \`diagram-flow\` with \`diagram-node\`
-  - \`comparison-grid\` with \`comparison-card\`
-  - \`metric-grid\` with \`metric-card\` and \`metric-value\`
-  - \`formula-strip\` with \`formula-token\`
-  - \`concept-map\` with \`concept-node\`
-  - \`diagram-svg\` for compact inline SVG diagrams
-- Reference local assets as \`media/name.ext\`.
-
-Example visual block:
-
-\`\`\`html
-<div class="visual-board">
-  <div class="diagram-flow">
-    <div class="diagram-node" data-step><b>Input</b><span>Question and material</span></div>
-    <div class="diagram-node" data-step><b>Process</b><span>Shape the structure</span></div>
-    <div class="diagram-node" data-step><b>Output</b><span>Visuals and narration</span></div>
-  </div>
-  <div class="formula-strip">
-    <div class="formula-token"><b>Concept</b><span>What it is</span></div>
-    <div class="formula-token operator">+</div>
-    <div class="formula-token"><b>Relationship</b><span>How it connects</span></div>
-    <div class="formula-token operator">=</div>
-    <div class="formula-token"><b>Conclusion</b><span>How to use it</span></div>
-  </div>
-</div>
-\`\`\``;
 }
 
-function refreshPrompt() {
-  els.promptOutput.value = buildPrompt();
+async function refreshPrompt() {
+  const requestId = ++promptRequestId;
+  try {
+    const result = await postJson('/api/prompt', promptPayload());
+    if (requestId !== promptRequestId) return;
+    els.promptOutput.value = result.prompt;
+    if (els.promptResolution) {
+      els.promptResolution.textContent = `Resolved: ${result.language} · ${result.contentTheme} · ${result.engine} · ${result.target}`;
+    }
+  } catch (error) {
+    if (requestId !== promptRequestId) return;
+    els.promptOutput.value = `Prompt generation failed: ${error.message}`;
+    if (els.promptResolution) els.promptResolution.textContent = error.message;
+  }
 }
 
 function schedulePromptRefresh() {
@@ -475,7 +399,7 @@ function schedulePromptRefresh() {
 }
 
 async function copyPrompt() {
-  refreshPrompt();
+  await refreshPrompt();
   try {
     await navigator.clipboard.writeText(els.promptOutput.value);
     setStatus('Prompt copied.', 'success');
@@ -515,12 +439,24 @@ function extractBody(text) {
   return text.slice(firstSection, lastSection + '</section>'.length).trim();
 }
 
+function extractCss(text) {
+  return extractFence(text, 'body.css', 'css');
+}
+
+function extractVisual(text) {
+  return extractFence(text, 'visual.js', 'js') || extractFence(text, 'visual.js', 'javascript');
+}
+
 function extractResponse() {
   const text = els.aiResponseInput.value;
   const scenes = els.directScenesInput?.value.trim() || extractScenes(text);
   const body = els.directBodyInput?.value.trim() || extractBody(text);
+  const css = els.directCssInput?.value.trim() || extractCss(text);
+  const visual = els.directVisualInput?.value.trim() || extractVisual(text);
   els.scenesOutput.value = scenes;
   els.bodyOutput.value = body;
+  els.cssOutput.value = css;
+  els.visualOutput.value = visual;
 
   if (!scenes || !body) {
     setStatus('scenes.json and body.html were not both found.', 'error');
@@ -534,7 +470,7 @@ function extractResponse() {
     return false;
   }
 
-  setStatus('scenes.json and body.html extracted.', 'success');
+  setStatus(`Source extracted${css ? ' with body.css' : ''}${visual ? ' and visual.js' : ''}.`, 'success');
   return true;
 }
 
@@ -590,6 +526,55 @@ function renderHeader() {
   els.editCurrentProjectButton.classList.toggle('is-disabled', !activeId);
   els.importCurrentProjectButton.classList.toggle('is-disabled', !activeId);
   els.openCaptionsButton?.classList.toggle('is-disabled', !activeId);
+  renderThemeControls();
+}
+
+function renderThemeControls() {
+  const themes = appState?.themes || [];
+  const activeTheme = appState?.theme || 'editorial';
+  const previewUrl = appState?.urls?.preview || '/themes/default/index.html';
+  document.querySelectorAll('[data-theme-preview]').forEach(link => {
+    link.href = previewUrl;
+  });
+  if (els.previewFrame && (els.previewFrame.src === 'about:blank' || !els.previewFrame.src)) {
+    els.previewFrame.src = `${previewUrl}?embed=1`;
+  }
+  [els.themeSelect, els.contentThemeInput].filter(Boolean).forEach(select => {
+    const selected = select === els.themeSelect ? activeTheme : (select.value || INITIAL_FORM_VALUES.contentTheme);
+    select.replaceChildren();
+    themes.forEach(theme => {
+      const option = document.createElement('option');
+      option.value = theme.id;
+      const locale = els.languageInput?.value === 'auto'
+        ? (appState?.activeProject?.resolvedLanguage || 'zh-CN')
+        : els.languageInput.value;
+      option.textContent = theme.labels?.[locale] || theme.label;
+      option.title = theme.descriptions?.[locale] || theme.description || '';
+      option.selected = theme.id === selected;
+      select.append(option);
+    });
+  });
+  if (els.themeSelect) els.themeSelect.disabled = !appState?.activeProject || themes.length < 2;
+  renderEngineOptions(els.contentThemeInput?.value || activeTheme);
+}
+
+function renderEngineOptions(themeId) {
+  if (!els.engineInput) return;
+  const theme = (appState?.themes || []).find(item => item.id === themeId);
+  const previous = els.engineInput.value || 'auto';
+  const engines = theme?.engines || ['dom'];
+  els.engineInput.replaceChildren();
+  const automatic = document.createElement('option');
+  automatic.value = 'auto';
+  automatic.textContent = `自动选择（${theme?.defaultEngine || engines[0]}）`;
+  els.engineInput.append(automatic);
+  engines.forEach(engine => {
+    const option = document.createElement('option');
+    option.value = engine;
+    option.textContent = engine === 'three' ? 'Three.js / WebGL' : 'HTML / CSS / SVG';
+    els.engineInput.append(option);
+  });
+  els.engineInput.value = engines.includes(previous) ? previous : 'auto';
 }
 
 function projectCard(project) {
@@ -678,8 +663,32 @@ function renderOutputs() {
 }
 
 function reloadPreview() {
-  const base = '/themes/default/index.html';
-  els.previewFrame.src = `${base}?studio=${Date.now()}`;
+  const base = appState?.urls?.preview || '/themes/default/index.html';
+  const transition = els.renderTransitionInput?.value || '0.4';
+  els.previewFrame.src = `${base}?embed=1&transition=${encodeURIComponent(transition)}&studio=${Date.now()}`;
+}
+
+async function saveTheme(theme) {
+  const project = appState?.activeProject?.id;
+  if (!project || !theme || theme === appState?.theme) return;
+  els.themeSelect.disabled = true;
+  try {
+    const profile = (appState?.themes || []).find(item => item.id === theme);
+    const data = await postJson('/api/projects/theme', {
+      project,
+      contentTheme: theme,
+      engine: profile?.defaultEngine || 'dom',
+    });
+    appState = data.state;
+    reloadPreview();
+    await refreshAll();
+    setStatus(`Theme changed to ${theme}.`, 'success');
+  } catch (error) {
+    renderThemeControls();
+    setStatus(error.message, 'error');
+  } finally {
+    els.themeSelect.disabled = false;
+  }
 }
 
 function tourSteps() {
@@ -905,6 +914,7 @@ async function loadProject(project, { view = 'compose', closeDrawer = true } = {
   try {
     setStatus('Loading project...');
     const data = await postJson('/api/projects/load', { project });
+    appState = data.state;
     resetWorkspaceUi({ name: data.project?.name || '', resetPrompt: false, resetImport: true });
     if (closeDrawer) setProjectDrawerOpen(false);
     setStudioRoute('main');
@@ -966,6 +976,8 @@ async function validateExtracted() {
     const result = await postJson('/api/source/validate', {
       scenesJson: els.scenesOutput.value,
       bodyHtml: els.bodyOutput.value,
+      bodyCss: els.cssOutput.value,
+      visualJs: els.visualOutput.value,
     });
     setStatus(`Validation passed: ${result.sceneCount} scenes, ${result.narrationChars} narration characters.`, 'success');
   } catch (error) {
@@ -987,6 +999,13 @@ async function saveProject() {
       name,
       scenesJson: els.scenesOutput.value,
       bodyHtml: els.bodyOutput.value,
+      bodyCss: els.cssOutput.value,
+      visualJs: els.visualOutput.value,
+      language: els.languageInput.value,
+      contentTheme: els.contentThemeInput.value,
+      engine: els.engineInput.value === 'auto'
+        ? ((appState?.themes || []).find(item => item.id === els.contentThemeInput.value)?.defaultEngine || 'dom')
+        : els.engineInput.value,
       overwrite: Boolean(importProjectId),
     });
     await postJson('/api/projects/load', { project: created.project.id });
@@ -1009,7 +1028,12 @@ async function createBlankProject() {
   }
   els.newProjectButton.disabled = true;
   try {
-    const data = await postJson('/api/projects/blank', { name });
+    const data = await postJson('/api/projects/blank', {
+      name,
+      language: els.languageInput?.value || 'auto',
+      contentTheme: els.contentThemeInput?.value || 'editorial',
+      engine: els.engineInput?.value || 'auto',
+    });
     appState = data.state;
     resetWorkspaceUi({ name: data.project?.name || name, resetPrompt: true, resetImport: true });
     setProjectDrawerOpen(false);
@@ -1086,6 +1110,7 @@ async function startJob(task) {
     payload.size = els.renderSizeInput.value;
     payload.output = els.renderOutputInput.value;
     payload.capture = 'auto';
+    payload.transition = Number(els.renderTransitionInput?.value || 0.4);
   }
   setJobBusy(true, task);
   try {
@@ -1105,6 +1130,14 @@ async function startJob(task) {
 function bindEvents() {
   [els.topicInput, els.audienceInput, els.toneInput, els.sceneCountInput, els.notesInput].filter(Boolean).forEach(input => {
     input.addEventListener('input', schedulePromptRefresh);
+  });
+  [els.languageInput, els.engineInput, els.promptTargetInput].filter(Boolean).forEach(input => {
+    input.addEventListener('change', schedulePromptRefresh);
+  });
+  els.languageInput?.addEventListener('change', renderThemeControls);
+  els.contentThemeInput?.addEventListener('change', () => {
+    renderEngineOptions(els.contentThemeInput.value);
+    schedulePromptRefresh();
   });
   els.copyPromptButton?.addEventListener('click', copyPrompt);
   els.tourButton.addEventListener('click', startTour);
@@ -1135,7 +1168,7 @@ function bindEvents() {
   document.querySelectorAll('[data-import-mode]').forEach(button => {
     button.addEventListener('click', () => setImportMode(button.dataset.importMode));
   });
-  [els.directScenesInput, els.directBodyInput].filter(Boolean).forEach(input => {
+  [els.directScenesInput, els.directBodyInput, els.directCssInput, els.directVisualInput].filter(Boolean).forEach(input => {
     input.addEventListener('input', () => {
       if (importMode === 'direct') extractResponse();
     });
@@ -1176,6 +1209,7 @@ function bindEvents() {
       els.renderSizeInput.value,
     );
   });
+  els.renderTransitionInput?.addEventListener('change', reloadPreview);
 
   els.projectList.addEventListener('click', event => {
     const card = event.target.closest('[data-project]');
@@ -1185,6 +1219,7 @@ function bindEvents() {
     const projectId = event.target.value;
     if (projectId) loadProject(projectId);
   });
+  els.themeSelect?.addEventListener('change', event => saveTheme(event.target.value));
 
   document.querySelectorAll('[data-provider]').forEach(button => {
     button.addEventListener('click', async () => {

@@ -1,0 +1,7 @@
+{
+  "id": "tech-schematic",
+  "label": {"zh-CN": "科技架构图", "en-US": "Tech Schematic"},
+  "description": {"zh-CN": "用拓扑、连接线和路径表达技术关系。", "en-US": "Topology, connectors, paths, and technical relationships."},
+  "defaultEngine": "dom",
+  "engines": ["dom", "three"]
+}

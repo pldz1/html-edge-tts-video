@@ -1,0 +1,7 @@
+:root { --content-accent: #ff7358; --content-accent-soft: #ffc6b8; }
+.visual-board { border: 0; background: transparent; box-shadow: none; }
+.comparison-card, .metric-card, .diagram-node, .concept-node, .formula-token {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}

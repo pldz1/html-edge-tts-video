@@ -11,9 +11,12 @@ The skill package has four durable concepts:
 - Project folder: `.local/work/<8-char-id>/`, containing `manifest.json`, source files, generated
   resources, and project outputs. The immutable ID is storage identity; `manifest.json.name` is the
   editable user-facing name.
-- Source files: `scenes.json`, `body.html`, optional `media/`, and optional `captions.json`.
+- Source files: `scenes.json`, `body.html`, recommended `body.css`, optional deterministic
+  `visual.js`, optional `media/`, and optional `captions.json`.
 - Current workspace: `.local/current/`, the normalized active source plus generated assets.
-- Theme runtime: `themes/default/`, the stable HTML/CSS/JS shell that renders the source.
+- Stable shell: `themes/default/`, the HTML/CSS/JS player that owns captions, footer, and rendering.
+- Content Themes: `docs/content-themes/`, prompt and CSS profiles that direct source visuals without
+  skinning Studio.
 - Output area: `<project>/output/` for managed projects, with `.local/output/` retained for external
   source folders and legacy exports.
 
@@ -40,7 +43,7 @@ project source files
 - `category`: short label used by the generated bottom chapter rail.
 - `title`: visual title.
 - `summary`: visual summary.
-- `narration`: Chinese narration text used by edge-tts.
+- `narration`: spoken text in the selected or inferred content language, used by edge-tts.
 
 `body.html` is an HTML fragment. It must contain a section matching every scene id:
 
@@ -50,6 +53,10 @@ project source files
 
 It must not contain runtime JavaScript, playback controls, chapter rail markup, progress bars,
 timecodes, or full document tags.
+
+`body.css` is optional project-specific visual styling loaded after the selected Content Theme.
+`visual.js` is optional for Canvas, Three.js, or WebGL and must export deterministic `mount()` and
+`renderAtTime()` functions. It must not own playback or start an animation loop.
 
 `timeline.json` is generated from real or offline-estimated narration timing:
 
@@ -139,9 +146,9 @@ repo-relative paths, migrated `.local/work/...` paths, and legacy `work/...` ref
 
 `ensure_theme(theme)` checks that `themes/<theme>/index.html`, `runtime.js`, and `theme.css` exist.
 
-`load_source(source, theme)` copies the source files into `.local/current/source/`, copies media and
-optional captions, ensures the theme exists, and writes `.local/current/project.json` with source,
-theme, and load timestamp.
+`load_source(source, theme)` copies scenes, body, optional body CSS, optional visual module, media,
+and captions into `.local/current/source/`. It writes shell, Content Theme, language, engine, source,
+and load timestamp to `.local/current/project.json`.
 
 `ensure_current()` fails if `.local/current/source/scenes.json` or `body.html` is missing.
 
@@ -175,7 +182,10 @@ matching `data-scene` section.
 `validate_theme(theme)` checks theme existence and verifies that `runtime.js` contains the required
 render contract names.
 
-`main()` optionally loads a provided source, validates scenes, body, captions, and theme, then
+`validate_visual_js()` requires deterministic `mount()` and `renderAtTime()` exports, rejects an
+independent requestAnimationFrame loop, and requires exact versions for Three.js CDN imports.
+
+`main()` optionally loads a provided source, validates scenes, body, visual module, captions, and shell, then
 prints scene and narration counts.
 
 ## TTS Build: pipeline/build_tts.py
@@ -392,13 +402,14 @@ sets duration, builds chapters, renders the first frame, and exposes readiness f
 - `shiftCurrentCue(delta)` nudges a cue earlier or later while keeping duration.
 - `restoreGeneratedCue()` resets the selected cue to generated timeline text and timing.
 
-`tools/studio.js` is a prompt helper for web AI:
+`studio/web/studio/studio.js` is the Studio workflow client:
 
-- `buildPrompt()` merges user inputs with the repository source rules.
+- `refreshPrompt()` calls the canonical Python Prompt Composer with the selected language, Content
+  Theme, renderer, and target.
 - `copyPrompt()` writes the generated prompt to the clipboard.
-- `extractFence()`, `extractScenes()`, and `extractBody()` pull `scenes.json` and `body.html` from a
-  pasted AI response.
-- `extractResponse()` validates extracted scene JSON and displays both source files for local use.
+- The extractors pull `scenes.json`, `body.html`, `body.css`, and optional `visual.js` from a pasted
+  AI response.
+- `extractResponse()` validates and displays all extracted source files before import.
 
 `tools/voices.js` renders voice previews:
 
@@ -407,7 +418,8 @@ sets duration, builds chapters, renders the first frame, and exposes readiness f
 
 ## Extension Points
 
-Add a new theme by creating `themes/<name>/index.html`, `runtime.js`, and `theme.css`. Keep the same
+Add a new Content Theme with `docs/content-themes/<name>/theme.json`, `prompt.md`, and `body.css`. Keep the
+stable shell under `themes/default/`; do not create alternate Studio skins. Keep the same
 browser render contract so `pipeline/render_video.py` continues to work.
 
 Add source validation in `pipeline/validate_sources.py` when it is about author input shape. Add

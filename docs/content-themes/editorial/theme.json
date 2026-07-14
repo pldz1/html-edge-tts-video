@@ -1,0 +1,7 @@
+{
+  "id": "editorial",
+  "label": {"zh-CN": "现代编辑设计", "en-US": "Editorial"},
+  "description": {"zh-CN": "强调排版、留白和少量主视觉。", "en-US": "Typography, whitespace, and one strong visual."},
+  "defaultEngine": "dom",
+  "engines": ["dom"]
+}

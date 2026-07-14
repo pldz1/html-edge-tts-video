@@ -9,6 +9,11 @@
   --red: #ef8f7d;
   --shadow: 0 28px 90px rgba(0, 0, 0, .42);
   --preview-chrome-height: 76px;
+  --content-safe-bottom: 20vh;
+  --caption-zone-bottom: 10vh;
+  --caption-zone-height: 10vh;
+  --footer-zone-height: 6vh;
+  --footer-zone-bottom: 1.5vh;
 }
 
 * {
@@ -44,6 +49,16 @@ input {
   background-size: 36px 36px, 36px 36px, auto, auto;
 }
 
+.scene-transition {
+  position: absolute;
+  z-index: 15;
+  inset: 0;
+  pointer-events: none;
+  background: #000;
+  opacity: 0;
+  will-change: opacity;
+}
+
 html.preview-mode body {
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
@@ -64,7 +79,7 @@ html.preview-mode .composition-shell {
   min-height: 0;
   display: grid;
   place-items: center;
-  padding: clamp(32px, 6vh, 82px) clamp(26px, 5vw, 72px) clamp(126px, 19vh, 190px);
+  padding: clamp(32px, 6vh, 82px) clamp(26px, 5vw, 72px) var(--content-safe-bottom);
 }
 
 .content-scene {
@@ -376,8 +391,10 @@ code {
   z-index: 8;
   left: clamp(18px, 5vw, 76px);
   right: clamp(18px, 5vw, 76px);
-  bottom: clamp(80px, 14vh, 138px);
+  bottom: var(--caption-zone-bottom);
+  height: var(--caption-zone-height);
   display: flex;
+  align-items: center;
   justify-content: center;
 }
 
@@ -415,16 +432,16 @@ html.render-mode .chapter-rail-fill {
   isolation: isolate;
   left: clamp(18px, 5vw, 76px);
   right: clamp(18px, 5vw, 76px);
-  bottom: clamp(18px, 4vh, 34px);
+  bottom: var(--footer-zone-bottom);
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
   align-items: end;
-  height: 54px;
+  height: var(--footer-zone-height);
   gap: 0;
 }
 
 html.preview-mode .chapter-rail {
-  bottom: clamp(18px, 4vh, 34px);
+  bottom: var(--footer-zone-bottom);
 }
 
 .chapter-rail::before,
@@ -433,7 +450,7 @@ html.preview-mode .chapter-rail {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 10px;
+  bottom: 6px;
   border-radius: 999px;
   pointer-events: none;
 }
@@ -459,10 +476,10 @@ html.preview-mode .chapter-rail {
   position: relative;
   z-index: 1;
   min-width: 0;
-  min-height: 54px;
+  min-height: clamp(30px, 4.8vh, 44px);
   display: block;
   overflow: visible;
-  padding: 0 8px 18px;
+  padding: 0 6px clamp(10px, 1.5vh, 14px);
   border: 0;
   border-left: 1px solid rgba(255, 250, 240, .34);
   border-radius: 0;
@@ -480,9 +497,9 @@ html.preview-mode .chapter-rail {
   position: absolute;
   z-index: 1;
   left: -4px;
-  bottom: 6px;
-  width: 7px;
-  height: 7px;
+  bottom: 2px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: rgba(255, 250, 240, .48);
 }
@@ -563,6 +580,20 @@ html.render-mode .preview-chrome {
   display: none;
 }
 
+html.embed-mode .preview-chrome {
+  display: none;
+}
+
+html.embed-mode body {
+  display: block;
+}
+
+html.embed-mode .composition-shell {
+  width: 100vw;
+  height: 100vh;
+  aspect-ratio: auto;
+}
+
 .play-button {
   height: 34px;
   border: 1px solid rgba(255, 250, 240, .22);
@@ -620,7 +651,7 @@ html.render-mode .preview-chrome {
   }
 
   .stage {
-    padding: clamp(58px, 6vh, 128px) clamp(70px, 6vw, 150px) clamp(170px, 18vh, 290px);
+    padding: clamp(58px, 6vh, 128px) clamp(70px, 6vw, 150px) var(--content-safe-bottom);
   }
 
   .scene {
@@ -785,7 +816,6 @@ html.render-mode .preview-chrome {
   .caption-safe {
     left: clamp(60px, 5vw, 150px);
     right: clamp(60px, 5vw, 150px);
-    bottom: clamp(140px, 14vh, 280px);
   }
 
   .caption {
@@ -798,22 +828,21 @@ html.render-mode .preview-chrome {
   .chapter-rail {
     left: clamp(60px, 5vw, 150px);
     right: clamp(60px, 5vw, 150px);
-    bottom: clamp(34px, 4vh, 68px);
-    height: 72px;
+    height: var(--footer-zone-height);
   }
 
   html.preview-mode .chapter-rail {
-    bottom: clamp(34px, 4vh, 68px);
+    bottom: var(--footer-zone-bottom);
   }
 
   .chapter-tile {
-    min-height: 72px;
-    padding: 0 12px 24px;
+    min-height: clamp(38px, 4.8vh, 58px);
+    padding: 0 10px clamp(14px, 1.5vh, 20px);
   }
 
   .chapter-tile::after {
     left: -5px;
-    bottom: 7px;
+    bottom: 3px;
     width: 9px;
     height: 9px;
   }
@@ -834,7 +863,7 @@ html.render-mode .preview-chrome {
   }
 
   .stage {
-    padding: clamp(110px, 6vh, 190px) clamp(140px, 6vw, 260px) clamp(300px, 18vh, 460px);
+    padding: clamp(110px, 6vh, 190px) clamp(140px, 6vw, 260px) var(--content-safe-bottom);
   }
 
   .scene {
@@ -924,17 +953,17 @@ html.render-mode .preview-chrome {
   }
 
   .chapter-rail {
-    height: 104px;
+    height: var(--footer-zone-height);
   }
 
   .chapter-tile {
-    min-height: 98px;
-    padding: 0 20px 32px;
+    min-height: clamp(54px, 4.8vh, 76px);
+    padding: 0 16px clamp(20px, 1.5vh, 28px);
   }
 
   .chapter-tile::after {
     left: -7px;
-    bottom: 5px;
+    bottom: 4px;
     width: 13px;
     height: 13px;
   }
@@ -952,7 +981,7 @@ html.render-mode .preview-chrome {
 @media (max-height: 560px) and (min-width: 761px) {
   .stage {
     padding-top: 28px;
-    padding-bottom: 126px;
+    padding-bottom: var(--content-safe-bottom);
   }
 
   h1 {
@@ -1004,13 +1033,9 @@ html.render-mode .preview-chrome {
     font-size: clamp(18px, 2.5vw, 25px);
   }
 
-  .caption-safe {
-    bottom: 72px;
-  }
-
   .chapter-tile {
-    min-height: 44px;
-    padding-bottom: 16px;
+    min-height: 30px;
+    padding-bottom: 10px;
   }
 }
 
@@ -1025,7 +1050,7 @@ html.render-mode .preview-chrome {
   }
 
   .stage {
-    padding-bottom: clamp(150px, 28vh, 230px);
+    padding-bottom: var(--content-safe-bottom);
   }
 
   .preview-chrome {

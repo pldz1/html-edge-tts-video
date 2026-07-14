@@ -71,7 +71,9 @@ class FactoryHandler(SimpleHTTPRequestHandler):
             "/studio/main": "/studio/web/studio/index.html",
             "/studio/new": "/studio/web/studio/index.html",
             "/studio/prompt": "/studio/web/studio/index.html",
+            "/studio/create": "/studio/web/studio/index.html",
             "/studio/import": "/studio/web/studio/index.html",
+            "/studio/voice": "/studio/web/voices/index.html",
             "/voices": "/studio/web/voices/index.html",
             "/captions": "/studio/web/captions/index.html",
         }

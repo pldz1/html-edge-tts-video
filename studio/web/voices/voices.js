@@ -102,7 +102,7 @@ function appendLog(message, tone = '') {
 function setJobStatus(label, status = '') {
   els.jobStatus.textContent = label;
   els.jobStatus.className = `job-status ${status}`.trim();
-  els.topStatus.textContent = label;
+  if (els.topStatus) els.topStatus.textContent = label;
 }
 
 function notify(message, tone = '') {

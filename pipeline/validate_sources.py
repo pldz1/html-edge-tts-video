@@ -8,9 +8,9 @@ import re
 from pathlib import Path
 
 try:
-    from .factory import CURRENT_SOURCE, ensure_theme, load_source
+    from .factory import CURRENT_SOURCE, ensure_theme, load_source, theme_runtime
 except ImportError:  # Direct script execution: python pipeline/validate_sources.py
-    from factory import CURRENT_SOURCE, ensure_theme, load_source
+    from factory import CURRENT_SOURCE, ensure_theme, load_source, theme_runtime
 
 
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
@@ -86,6 +86,28 @@ def validate_body(body_file: Path, scenes: list[dict]) -> None:
     if missing:
         fail(f"body.html is missing data-scene sections for: {', '.join(missing)}")
 
+    card_markers = ["comparison-card", "metric-card", "diagram-node", "step-chip", "formula-token", "concept-node"]
+    component_count = sum(body_lower.count(marker) for marker in card_markers)
+    if component_count > len(scenes) * 8:
+        print(
+            f"Source quality warning: body.html contains {component_count} card-like components; "
+            "prefer one dominant composition per scene."
+        )
+
+
+def validate_visual_js(visual_file: Path) -> None:
+    if not visual_file.exists():
+        return
+    source = visual_file.read_text(encoding="utf-8")
+    for export_name in ["mount", "renderAtTime"]:
+        if not re.search(rf"export\s+(?:async\s+)?function\s+{export_name}\b", source):
+            fail(f"visual.js must export {export_name}()")
+    if "requestAnimationFrame" in source:
+        fail("visual.js must use renderAtTime() instead of an independent requestAnimationFrame loop")
+    for url in re.findall(r"https?://[^'\"\s]+", source):
+        if "three" in url.lower() and not re.search(r"three@\d+\.\d+\.\d+", url):
+            fail("Three.js CDN imports in visual.js must pin an exact three@x.y.z version")
+
 
 def validate_captions(captions_file: Path) -> None:
     if not captions_file.exists():
@@ -110,7 +132,13 @@ def validate_captions(captions_file: Path) -> None:
 
 def validate_theme(theme: str) -> None:
     theme_dir = ensure_theme(theme)
-    source = (theme_dir / "runtime.js").read_text(encoding="utf-8")
+    index_source = (theme_dir / "index.html").read_text(encoding="utf-8")
+    runtime = theme_runtime(theme)
+    if runtime.parent == theme_dir and "runtime.js" not in index_source:
+        fail(f"theme {theme!r} index.html must load its runtime.js")
+    if runtime.parent != theme_dir and "../default/runtime.js" not in index_source:
+        fail(f"theme {theme!r} index.html must load ../default/runtime.js")
+    source = runtime.read_text(encoding="utf-8")
     required = [
         "compositionReady",
         "getCompositionDuration",
@@ -134,9 +162,11 @@ def main() -> None:
     scenes_file = CURRENT_SOURCE / "scenes.json"
     body_file = CURRENT_SOURCE / "body.html"
     captions_file = CURRENT_SOURCE / "captions.json"
+    visual_file = CURRENT_SOURCE / "visual.js"
     scenes = validate_scenes(scenes_file)
     validate_body(body_file, scenes)
     validate_captions(captions_file)
+    validate_visual_js(visual_file)
     validate_theme(args.theme)
     chars = sum(len(scene["narration"]) for scene in scenes)
     print(f"Source validation passed: {len(scenes)} scenes, {chars} narration characters")

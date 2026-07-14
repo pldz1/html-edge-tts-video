@@ -84,7 +84,7 @@
         >
           <a
             class="primary-button"
-            href="/studio/prompt"
+            href="/studio/create"
             data-studio-route="prompt"
             title="Create a project with AI"
             ><i data-lucide="sparkles"></i><span>Create</span></a
@@ -165,6 +165,16 @@
                 <option value="">No projects available</option>
               </select>
             </label>
+            <label
+              >Content Theme
+              <select
+                id="themeSelect"
+                class="project-select"
+                aria-label="Select project theme"
+              >
+                <option value="default">Default</option>
+              </select>
+            </label>
             <div class="detail-field">
               <span>Project name</span>
               <strong id="projectDetailTitle">No project selected</strong>
@@ -236,6 +246,7 @@
           </button>
           <a
             class="quiet-button"
+            data-theme-preview
             href="/themes/default/index.html"
             target="_blank"
             rel="noreferrer"
@@ -305,7 +316,11 @@
         <section class="workspace">
           <section class="preview-output-grid">
             <section class="panel preview-panel">
-              <section class="build-next-step" aria-live="polite">
+              <section
+                class="build-next-step"
+                style="margin-top: 4px !important"
+                aria-live="polite"
+              >
                 <span id="guideBadge" class="guide-badge">READY</span>
                 <div>
                   <span class="next-step-label">NEXT STEP</span>
@@ -322,6 +337,7 @@
                 </div>
                 <a
                   class="quiet-button"
+                  data-theme-preview
                   href="/themes/default/index.html"
                   target="_blank"
                   rel="noreferrer"
@@ -332,7 +348,7 @@
               <iframe
                 id="previewFrame"
                 title="Video preview"
-                src="/themes/default/index.html"
+                src="about:blank"
               ></iframe>
             </section>
 
@@ -388,6 +404,15 @@
                   type="text"
                   value="studio-render.mp4"
               /></label>
+              <label
+                >Scene transition (seconds)<input
+                  id="renderTransitionInput"
+                  type="number"
+                  min="0"
+                  max="2"
+                  step="0.05"
+                  value="0.4"
+              /></label>
               <button id="renderButton" class="primary-button" type="button">
                 <i data-lucide="download"></i><span>Export MP4</span>
               </button>
@@ -396,58 +421,249 @@
           </section>
         </section>
 
-        <section class="studio-route-panel prompt-route-panel" aria-label="AI prompt builder">
+        <section
+          class="studio-route-panel prompt-route-panel"
+          aria-label="AI prompt builder"
+        >
           <section class="panel prompt-form-panel">
             <div class="panel-heading">
-              <div><p class="section-label">01 · CREATE</p><h2>Generate a prompt</h2></div>
-              <button id="copyPromptButton" class="primary-button" type="button"><i data-lucide="copy"></i><span>Copy prompt</span></button>
+              <div>
+                <p class="section-label">01 · CREATE</p>
+                <h2>Generate a prompt</h2>
+              </div>
+              <button
+                id="copyPromptButton"
+                class="primary-button"
+                type="button"
+              >
+                <i data-lucide="copy"></i><span>Copy prompt</span>
+              </button>
             </div>
             <div class="field-grid">
-              <label>Topic<input id="topicInput" type="text" value="A local HTML edge-tts video factory" /></label>
-              <label>Audience<input id="audienceInput" type="text" value="Creators who want to make clear explainer videos with AI" /></label>
-              <label>Tone<input id="toneInput" type="text" value="Clear, practical, and concise" /></label>
-              <label>Scene count<input id="sceneCountInput" type="number" min="3" max="8" value="5" /></label>
+              <label
+                >Topic<input
+                  id="topicInput"
+                  type="text"
+                  placeholder="输入视频主题 / Describe the topic"
+              /></label>
+              <label
+                >Audience<input
+                  id="audienceInput"
+                  type="text"
+                  placeholder="目标受众 / Target audience"
+              /></label>
+              <label
+                >Tone<input
+                  id="toneInput"
+                  type="text"
+                  placeholder="表达语气 / Tone"
+              /></label>
+              <label
+                >Scene count<input
+                  id="sceneCountInput"
+                  type="number"
+                  min="3"
+                  max="8"
+                  value="5"
+              /></label>
+              <label
+                >内容语言<select id="languageInput">
+                  <option value="auto">自动检测（中/英）</option>
+                  <option value="zh-CN">中文</option>
+                  <option value="en-US">English</option>
+                </select></label
+              >
+              <label
+                >视频视觉风格<select id="contentThemeInput">
+                  <option value="editorial">现代编辑设计</option>
+                </select></label
+              >
+              <label
+                >渲染能力<select id="engineInput">
+                  <option value="auto">自动选择</option>
+                  <option value="dom">HTML / CSS / SVG</option>
+                  <option value="three">Three.js / WebGL</option>
+                </select></label
+              >
+              <label
+                >Prompt 目标<select id="promptTargetInput">
+                  <option value="web-ai">Web AI（复制代码块）</option>
+                  <option value="agent">Agent（直接创建文件）</option>
+                </select></label
+              >
             </div>
-            <label class="wide-label">Additional requirements<textarea id="notesInput">Generate only scenes.json and body.html. Do not generate app.js, playback controls, chapter rails, or caption files.</textarea></label>
+            <label class="wide-label"
+              >Additional requirements<textarea
+                id="notesInput"
+                placeholder="可选：品牌、颜色、素材或其他要求"
+              ></textarea>
+            </label>
+            <p id="promptResolution" class="field-hint">
+              Language and renderer will be resolved from the selected theme.
+            </p>
             <div class="provider-row">
-              <button data-provider="https://chat.openai.com/" type="button">ChatGPT</button>
-              <button data-provider="https://claude.ai/new" type="button">Claude</button>
-              <button data-provider="https://gemini.google.com/app" type="button">Gemini</button>
-              <a class="quiet-button" href="/studio/import" data-studio-route="import"><i data-lucide="arrow-right"></i><span>Import response</span></a>
+              <button data-provider="https://chat.openai.com/" type="button">
+                ChatGPT
+              </button>
+              <button data-provider="https://claude.ai/new" type="button">
+                Claude
+              </button>
+              <button
+                data-provider="https://gemini.google.com/app"
+                type="button"
+              >
+                Gemini
+              </button>
+              <a
+                class="quiet-button"
+                href="/studio/import"
+                data-studio-route="import"
+                ><i data-lucide="arrow-right"></i
+                ><span>Import response</span></a
+              >
             </div>
           </section>
           <section class="panel prompt-result-panel">
-            <div class="panel-heading"><div><p class="section-label">02 · COPY</p><h2>Prompt output</h2></div></div>
-            <textarea id="promptOutput" class="workflow-code code-field" spellcheck="false" aria-label="Generated AI prompt"></textarea>
+            <div class="panel-heading">
+              <div>
+                <p class="section-label">02 · COPY</p>
+                <h2>Prompt output</h2>
+              </div>
+            </div>
+            <textarea
+              id="promptOutput"
+              class="workflow-code code-field"
+              spellcheck="false"
+              aria-label="Generated AI prompt"
+            ></textarea>
           </section>
         </section>
 
-        <section class="studio-route-panel import-route-panel" aria-label="Source import">
+        <section
+          class="studio-route-panel import-route-panel"
+          aria-label="Source import"
+        >
           <section class="panel import-source-panel">
             <div class="panel-heading">
-              <div><p class="section-label">01 · IMPORT</p><h2>Import source content</h2></div>
-              <button id="extractButton" class="quiet-button" type="button"><i data-lucide="scan-text"></i><span>Extract</span></button>
+              <div>
+                <p class="section-label">01 · IMPORT</p>
+                <h2>Import source content</h2>
+              </div>
+              <button id="extractButton" class="quiet-button" type="button">
+                <i data-lucide="scan-text"></i><span>Extract</span>
+              </button>
             </div>
-            <div class="import-mode-tabs" role="tablist" aria-label="Import mode">
-              <button class="active" type="button" data-import-mode="smart"><i data-lucide="scan-text"></i><span>Smart paste</span></button>
-              <button type="button" data-import-mode="direct"><i data-lucide="columns-2"></i><span>Paste separately</span></button>
+            <div
+              class="import-mode-tabs"
+              role="tablist"
+              aria-label="Import mode"
+            >
+              <button class="active" type="button" data-import-mode="smart">
+                <i data-lucide="scan-text"></i><span>Smart paste</span>
+              </button>
+              <button type="button" data-import-mode="direct">
+                <i data-lucide="columns-2"></i><span>Paste separately</span>
+              </button>
             </div>
-            <textarea id="aiResponseInput" class="workflow-response" spellcheck="false" placeholder="Paste a complete AI response containing scenes.json and body.html."></textarea>
+            <textarea
+              id="aiResponseInput"
+              class="workflow-response"
+              spellcheck="false"
+              placeholder="Paste a complete AI response containing scenes.json, body.html, body.css, and optional visual.js."
+            ></textarea>
             <div id="directImportGrid" class="direct-import-grid" hidden>
-              <label>scenes.json<textarea id="directScenesInput" class="code-field" spellcheck="false" placeholder="Paste scenes.json"></textarea></label>
-              <label>body.html / index.html<textarea id="directBodyInput" class="code-field" spellcheck="false" placeholder="Paste body.html or index.html"></textarea></label>
+              <label
+                >scenes.json<textarea
+                  id="directScenesInput"
+                  class="code-field"
+                  spellcheck="false"
+                  placeholder="Paste scenes.json"
+                ></textarea>
+              </label>
+              <label
+                >body.html / index.html<textarea
+                  id="directBodyInput"
+                  class="code-field"
+                  spellcheck="false"
+                  placeholder="Paste body.html or index.html"
+                ></textarea>
+              </label>
+              <label
+                >body.css<textarea
+                  id="directCssInput"
+                  class="code-field"
+                  spellcheck="false"
+                  placeholder="Paste body.css"
+                ></textarea>
+              </label>
+              <label
+                >visual.js（optional）<textarea
+                  id="directVisualInput"
+                  class="code-field"
+                  spellcheck="false"
+                  placeholder="Paste visual.js for Three.js, Canvas, or WebGL"
+                ></textarea>
+              </label>
             </div>
             <div class="save-row workflow-save-row">
-              <label>Project name<input id="projectNameInput" type="text" value="New video project" /></label>
-              <button id="validateExtractedButton" class="quiet-button" type="button"><i data-lucide="shield-check"></i><span>Validate</span></button>
-              <button id="saveProjectButton" class="primary-button" type="button"><i data-lucide="save"></i><span>Save and load</span></button>
+              <label
+                >Project name<input
+                  id="projectNameInput"
+                  type="text"
+                  value="New video project"
+              /></label>
+              <button
+                id="validateExtractedButton"
+                class="quiet-button"
+                type="button"
+              >
+                <i data-lucide="shield-check"></i><span>Validate</span>
+              </button>
+              <button
+                id="saveProjectButton"
+                class="primary-button"
+                type="button"
+              >
+                <i data-lucide="save"></i><span>Save and load</span>
+              </button>
             </div>
           </section>
           <section class="panel import-preview-panel">
-            <div class="panel-heading"><div><p class="section-label">02 · REVIEW</p><h2>Current source files</h2></div></div>
+            <div class="panel-heading">
+              <div>
+                <p class="section-label">02 · REVIEW</p>
+                <h2>Current source files</h2>
+              </div>
+            </div>
             <div class="extract-grid workflow-extract-grid">
-              <label>scenes.json<textarea id="scenesOutput" class="code-field" spellcheck="false"></textarea></label>
-              <label>body.html<textarea id="bodyOutput" class="code-field" spellcheck="false"></textarea></label>
+              <label
+                >scenes.json<textarea
+                  id="scenesOutput"
+                  class="code-field"
+                  spellcheck="false"
+                ></textarea>
+              </label>
+              <label
+                >body.html<textarea
+                  id="bodyOutput"
+                  class="code-field"
+                  spellcheck="false"
+                ></textarea>
+              </label>
+              <label
+                >body.css<textarea
+                  id="cssOutput"
+                  class="code-field"
+                  spellcheck="false"
+                ></textarea>
+              </label>
+              <label
+                >visual.js<textarea
+                  id="visualOutput"
+                  class="code-field"
+                  spellcheck="false"
+                ></textarea>
+              </label>
             </div>
           </section>
         </section>

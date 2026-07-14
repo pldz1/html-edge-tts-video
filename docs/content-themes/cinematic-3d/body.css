@@ -1,0 +1,4 @@
+:root { --content-accent: #72d9ff; --content-accent-soft: #b28cff; }
+.visual-board { position: absolute; inset: 0; border: 0; padding: 0; background: transparent; box-shadow: none; }
+.visual-board canvas { width: 100%; height: 100%; display: block; }
+.scene-copy { position: relative; z-index: 2; max-width: min(44vw, 760px); pointer-events: none; }

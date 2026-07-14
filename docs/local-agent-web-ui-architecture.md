@@ -41,6 +41,8 @@ Python factory server
   manifest.json
   scenes.json
   body.html
+  body.css
+  visual.js optional
   media/
   generated/
   output/<video>.mp4
@@ -89,9 +91,9 @@ http://127.0.0.1:8765/studio
 The studio should provide:
 
 - Project/source folder selector.
-- Prompt composer with reusable prompt templates.
+- Canonical Prompt Composer with language, Content Theme, renderer, and target selectors.
 - Buttons that open ChatGPT, Claude, Gemini, or another AI chat in a new tab.
-- Paste boxes for `scenes.json` and `body.html`.
+- Paste/import boxes for `scenes.json`, `body.html`, `body.css`, and optional `visual.js`.
 - Source validation before writing files.
 - TTS/build buttons with progress output.
 - Preview, caption editor, and render buttons.
@@ -113,26 +115,31 @@ This is easier and more reliable than rewriting the engine as a desktop frontend
 
 ## Prompt Builder Flow
 
-The Web UI should not ask a web AI to generate runtime JavaScript. It should generate a prompt that asks for source files only:
+The Web UI asks a web AI for source files only. Active graphics may use the constrained
+`visual.js` module; playback/runtime code remains owned by the stable shell:
 
 ```text
 Return only:
 1. scenes.json
 2. body.html
-3. optional media plan
+3. body.css
+4. optional visual.js for deterministic Canvas, Three.js, or WebGL
+5. optional media plan
 
-Do not generate app.js, playback controls, chapter rails, progress bars, or subtitles.
+Do not generate app.js, playback controls, chapter rails, progress bars, or subtitles. visual.js
+must export mount() and renderAtTime() and must not start requestAnimationFrame.
 ```
 
 Suggested flow:
 
 1. User describes the video topic, tone, audience, length, and scene count.
-2. Studio merges user input with the repository constraints from `SKILL.md` and `docs/agent-skill.md`.
+2. Studio calls the same Python Prompt Composer as the CLI, resolving language, Content Theme,
+   renderer, and target from the repository prompt fragments.
 3. User clicks an AI provider button.
 4. Studio copies the prompt and opens the selected AI chat page.
 5. User pastes the AI response back into Studio.
-6. Studio extracts or validates `scenes.json` and `body.html`.
-7. Python writes `.local/work/<slug>/scenes.json` and `.local/work/<slug>/body.html`.
+6. Studio extracts or validates all returned source files.
+7. Python writes them under `.local/work/<8-char-project-id>/` with project metadata.
 8. User clicks TTS, captions, preview, and render.
 
 ## Where Each Technology Lives

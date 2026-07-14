@@ -13,6 +13,7 @@ import threading
 import time
 import uuid
 from datetime import datetime, timezone
+from html import escape
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -40,7 +41,8 @@ from pipeline.factory import (
     slug,
     theme_url,
 )
-from pipeline.validate_sources import validate_body, validate_scenes, validate_theme
+from pipeline.validate_sources import validate_body, validate_captions, validate_scenes, validate_theme, validate_visual_js
+from pipeline.prompt_composer import compose_prompt, detect_language, list_content_themes, load_theme
 
 
 PYTHON = sys.executable
@@ -50,6 +52,8 @@ RENDER_SIZES = {"480p", "720p", "1080p", "2k", "1440p", "4k", "2160p"}
 CAPTURE_MODES = {"auto", "video", "frames"}
 VOICE_PREVIEW_DIR = LOCAL_ASSETS / "voice-preview"
 VOICE_OPTIONS = [
+    {"id": "zh-CN-XiaoxiaoNeural", "label": "晓晓", "locale": "zh-CN", "gender": "Female"},
+    {"id": "zh-CN-YunxiNeural", "label": "云希", "locale": "zh-CN", "gender": "Male"},
     {"id": "en-US-JennyNeural", "label": "Jenny", "locale": "en-US", "gender": "Female"},
     {"id": "en-US-GuyNeural", "label": "Guy", "locale": "en-US", "gender": "Male"},
     {"id": "en-US-AriaNeural", "label": "Aria", "locale": "en-US", "gender": "Female"},
@@ -64,6 +68,10 @@ DEFAULT_TTS_SETTINGS = {
     "rate": "+12%",
     "pitch": "+0Hz",
     "gap": "0.28",
+}
+DEFAULT_VOICE_BY_LANGUAGE = {
+    "zh-CN": "zh-CN-XiaoxiaoNeural",
+    "en-US": "en-US-JennyNeural",
 }
 PROJECT_SETTINGS_FILE = ".studio.json"
 OUTPUT_INDEX_FILE = LOCAL_OUTPUT / ".studio-outputs.json"
@@ -163,9 +171,10 @@ def project_display_name(value: str) -> str:
     return cleaned or "New video project"
 
 
-def normalize_tts_settings(value: Any | None = None) -> dict[str, str]:
+def normalize_tts_settings(value: Any | None = None, language: str = "en-US") -> dict[str, str]:
     data = value if isinstance(value, dict) else {}
     settings = {**DEFAULT_TTS_SETTINGS}
+    settings["voice"] = DEFAULT_VOICE_BY_LANGUAGE.get(language, settings["voice"])
     settings["voice"] = str(data.get("voice") or settings["voice"]).strip()
     settings["rate"] = str(data.get("rate") or settings["rate"]).strip()
     settings["pitch"] = str(data.get("pitch") or settings["pitch"]).strip()
@@ -194,6 +203,10 @@ def ensure_project_manifest(
     *,
     name: str | None = None,
     project_id: str | None = None,
+    theme: str | None = None,
+    content_theme: str | None = None,
+    language: str | None = None,
+    engine: str | None = None,
 ) -> dict[str, Any]:
     manifest_path = source_root / PROJECT_MANIFEST_FILE
     existing = read_json_file(manifest_path)
@@ -210,15 +223,41 @@ def ensure_project_manifest(
         else:
             current_id = hashlib.sha256(str(source_root.resolve()).encode("utf-8")).hexdigest()[:8]
     now = utc_now()
+    requested_language = str(language or data.get("language") or "auto")
+    if requested_language not in {"auto", "zh-CN", "en-US"}:
+        requested_language = "auto"
+    scenes = read_json_file(source_root / "scenes.json")
+    language_text = " ".join(
+        str(scene.get(key) or "")
+        for scene in scenes if isinstance(scene, dict)
+        for key in ["title", "summary", "narration"]
+    ) if isinstance(scenes, list) else ""
+    resolved_language = detect_language(language_text) if requested_language == "auto" else requested_language
+    selected_content_theme = str(content_theme or data.get("contentTheme") or "editorial")
+    try:
+        theme_profile = load_theme(selected_content_theme)
+    except (ValueError, json.JSONDecodeError):
+        selected_content_theme = "editorial"
+        theme_profile = load_theme(selected_content_theme)
+    selected_engine = str(engine or data.get("engine") or theme_profile.get("defaultEngine") or "dom")
+    shell_theme = str(theme or data.get("theme") or DEFAULT_THEME)
+    try:
+        validate_theme(shell_theme)
+    except SystemExit:
+        shell_theme = DEFAULT_THEME
     manifest = {
         **data,
-        "version": 1,
+        "version": 2,
         "id": current_id,
         "name": str(name or data.get("name") or project_name_from_source(source_root)).strip() or "Untitled project",
-        "theme": str(data.get("theme") or DEFAULT_THEME),
+        "theme": shell_theme,
+        "language": requested_language,
+        "resolvedLanguage": resolved_language,
+        "contentTheme": selected_content_theme,
+        "engine": selected_engine,
         "createdAt": str(data.get("createdAt") or now),
         "updatedAt": str(data.get("updatedAt") or now),
-        "tts": normalize_tts_settings(data.get("tts") or legacy_settings.get("tts")),
+        "tts": normalize_tts_settings(data.get("tts") or legacy_settings.get("tts"), resolved_language),
     }
     if is_local_project(source_root):
         source_root.mkdir(parents=True, exist_ok=True)
@@ -262,13 +301,15 @@ def migrate_local_projects() -> None:
 
 def read_project_settings(source_root: Path) -> dict[str, Any]:
     manifest = ensure_project_manifest(source_root)
-    return {"tts": normalize_tts_settings(manifest.get("tts"))}
+    return {"tts": normalize_tts_settings(manifest.get("tts"), str(manifest.get("resolvedLanguage") or "en-US"))}
 
 
 def write_project_settings(source_root: Path, settings: dict[str, Any]) -> None:
     manifest = ensure_project_manifest(source_root)
     if "tts" in settings:
-        manifest["tts"] = normalize_tts_settings(settings["tts"])
+        manifest["tts"] = normalize_tts_settings(
+            settings["tts"], str(manifest.get("resolvedLanguage") or "en-US")
+        )
     manifest["updatedAt"] = utc_now()
     if is_local_project(source_root):
         (source_root / PROJECT_MANIFEST_FILE).write_text(
@@ -319,6 +360,13 @@ def source_summary(source_root: Path) -> dict[str, Any]:
         "updatedAt": datetime.fromtimestamp(updated_at, timezone.utc).isoformat(),
         "hasCaptions": bool(resolved["captions"]),
         "hasMedia": bool(resolved["media"]),
+        "hasBodyCss": bool(resolved["body_css"]),
+        "hasVisualJs": bool(resolved["visual_js"]),
+        "theme": str(manifest.get("contentTheme") or "editorial"),
+        "contentTheme": str(manifest.get("contentTheme") or "editorial"),
+        "language": str(manifest.get("language") or "auto"),
+        "resolvedLanguage": str(manifest.get("resolvedLanguage") or "zh-CN"),
+        "engine": str(manifest.get("engine") or "dom"),
         "settings": read_project_settings(resolved["root"]),
         "active": bool(active and active.resolve() == resolved["root"].resolve()),
     }
@@ -436,7 +484,12 @@ def active_project_meta() -> dict[str, Any] | None:
         "name": manifest["name"],
         "path": str(source),
         "relativePath": rel(source),
-        "theme": active_theme(),
+        "theme": manifest.get("contentTheme", "editorial"),
+        "contentTheme": manifest.get("contentTheme", "editorial"),
+        "shellTheme": active_theme(),
+        "language": manifest.get("language", "auto"),
+        "resolvedLanguage": manifest.get("resolvedLanguage", "zh-CN"),
+        "engine": manifest.get("engine", "dom"),
         "settings": read_project_settings(source),
         "loadedAt": meta.get("loaded_at") if isinstance(meta, dict) else None,
     }
@@ -480,13 +533,17 @@ def guide_state(state: dict[str, Any]) -> dict[str, str]:
 
 
 def studio_state() -> dict[str, Any]:
-    theme = active_theme()
+    shell_theme = active_theme()
     active_project = active_project_meta()
+    content_theme = str(active_project.get("contentTheme") if active_project else "editorial")
+    locale = str(active_project.get("resolvedLanguage") if active_project else "zh-CN")
     output_project_id = active_project["id"] if active_project else None
     output_path = active_project["path"] if active_project else None
     state: dict[str, Any] = {
         "activeProject": active_project,
-        "theme": theme,
+        "theme": content_theme,
+        "shellTheme": shell_theme,
+        "themes": list_content_themes(locale),
         "hasStarter": STARTER_SOURCE.exists(),
         "current": current_scenes_summary(),
         "settings": active_source_settings(),
@@ -495,10 +552,10 @@ def studio_state() -> dict[str, Any]:
         "outputs": list_outputs(limit=5, project_slug=output_project_id, project_path=output_path),
         "urls": {
             "studio": "/studio",
-            "studioPrompt": "/studio/prompt",
+            "studioPrompt": "/studio/create",
             "studioImport": "/studio/import",
             "studioNew": "/studio/new",
-            "preview": theme_url(theme),
+            "preview": theme_url(shell_theme),
             "captions": "/captions",
             "voices": "/voices",
         },
@@ -507,7 +564,13 @@ def studio_state() -> dict[str, Any]:
     return state
 
 
-def validate_source_text(scenes_json: str, body_html: str, theme: str | None = None) -> dict[str, Any]:
+def validate_source_text(
+    scenes_json: str,
+    body_html: str,
+    body_css: str = "",
+    visual_js: str = "",
+    theme: str | None = None,
+) -> dict[str, Any]:
     if not scenes_json.strip():
         raise ApiError(400, "scenesJson is required")
     if not body_html.strip():
@@ -516,11 +579,18 @@ def validate_source_text(scenes_json: str, body_html: str, theme: str | None = N
         temp = Path(temp_dir)
         scenes_path = temp / "scenes.json"
         body_path = temp / "body.html"
+        css_path = temp / "body.css"
+        visual_path = temp / "visual.js"
         scenes_path.write_text(scenes_json, encoding="utf-8")
         body_path.write_text(body_html, encoding="utf-8")
+        if body_css.strip():
+            css_path.write_text(body_css, encoding="utf-8")
+        if visual_js.strip():
+            visual_path.write_text(visual_js, encoding="utf-8")
         try:
             scenes = validate_scenes(scenes_path)
             validate_body(body_path, scenes)
+            validate_visual_js(visual_path)
             validate_theme(theme or active_theme() or DEFAULT_THEME)
         except SystemExit as exc:
             raise ApiError(422, str(exc)) from exc
@@ -528,6 +598,9 @@ def validate_source_text(scenes_json: str, body_html: str, theme: str | None = N
         "ok": True,
         "sceneCount": len(scenes),
         "narrationChars": sum(len(scene["narration"]) for scene in scenes),
+        "resolvedLanguage": detect_language(" ".join(str(scene.get("narration") or "") for scene in scenes)),
+        "hasBodyCss": bool(body_css.strip()),
+        "hasVisualJs": bool(visual_js.strip()),
     }
 
 
@@ -536,9 +609,9 @@ def validate_project(source_root: Path, theme: str | None = None) -> dict[str, A
         resolved = resolve_source(source_root)
         scenes = validate_scenes(resolved["scenes"])
         validate_body(resolved["body"], scenes)
+        if resolved["visual_js"]:
+            validate_visual_js(resolved["visual_js"])
         if resolved["captions"]:
-            from validate_sources import validate_captions
-
             validate_captions(resolved["captions"])
         validate_theme(theme or active_theme() or DEFAULT_THEME)
     except SystemExit as exc:
@@ -555,8 +628,10 @@ def create_project(payload: dict[str, Any]) -> dict[str, Any]:
     project_id = str(payload.get("project") or payload.get("id") or "").strip().lower()
     scenes_json = str(payload.get("scenesJson") or "")
     body_html = str(payload.get("bodyHtml") or "")
+    body_css = str(payload.get("bodyCss") or "")
+    visual_js = str(payload.get("visualJs") or "")
     overwrite = bool(payload.get("overwrite"))
-    validation = validate_source_text(scenes_json, body_html, str(payload.get("theme") or active_theme()))
+    validation = validate_source_text(scenes_json, body_html, body_css, visual_js, active_theme())
 
     if overwrite:
         if not project_id:
@@ -574,7 +649,32 @@ def create_project(payload: dict[str, Any]) -> dict[str, Any]:
     target.mkdir(parents=True, exist_ok=True)
     (target / "scenes.json").write_text(scenes_json.strip() + "\n", encoding="utf-8")
     (target / "body.html").write_text(body_html.strip() + "\n", encoding="utf-8")
-    ensure_project_manifest(target, name=name, project_id=project_id)
+    for filename, value in [("body.css", body_css), ("visual.js", visual_js)]:
+        path = target / filename
+        if value.strip():
+            path.write_text(value.strip() + "\n", encoding="utf-8")
+        elif overwrite and path.exists():
+            path.unlink()
+    existing = existing_manifest if overwrite else {}
+    content_theme = str(payload.get("contentTheme") or existing.get("contentTheme") or "editorial")
+    language = str(payload.get("language") or existing.get("language") or "auto")
+    profile = load_theme(content_theme)
+    engine = str(payload.get("engine") or existing.get("engine") or profile.get("defaultEngine") or "dom")
+    if engine == "auto":
+        engine = str(profile.get("defaultEngine") or "dom")
+    if engine not in profile.get("engines", []):
+        raise ApiError(422, f"content theme {content_theme!r} does not support engine {engine!r}")
+    if engine == "three" and not visual_js.strip():
+        raise ApiError(422, "Three.js / WebGL projects must include visual.js")
+    ensure_project_manifest(
+        target,
+        name=name,
+        project_id=project_id,
+        theme=DEFAULT_THEME,
+        content_theme=content_theme,
+        language=language,
+        engine=engine,
+    )
     if payload.get("tts") is not None:
         write_project_settings(target, {"tts": payload.get("tts")})
     active = active_source_root()
@@ -591,20 +691,36 @@ def create_blank_project(payload: dict[str, Any]) -> dict[str, Any]:
     display_name = str(payload.get("name") or "").strip() or "New video project"
     project_id = new_project_id()
     target = LOCAL_WORK / project_id
+    requested_language = str(payload.get("language") or "auto")
+    resolved_language = detect_language(display_name) if requested_language == "auto" else requested_language
+    content_theme = str(payload.get("contentTheme") or "editorial")
+    engine = str(payload.get("engine") or "auto")
+    try:
+        profile = load_theme(content_theme)
+    except (ValueError, json.JSONDecodeError) as exc:
+        raise ApiError(422, str(exc)) from exc
+    if engine == "auto":
+        engine = str(profile.get("defaultEngine") or "dom")
+    if engine not in profile.get("engines", []):
+        raise ApiError(422, f"content theme {content_theme!r} does not support engine {engine!r}")
+    chinese = resolved_language == "zh-CN"
     scenes = [
         {
             "id": "intro",
-            "category": "Overview",
+            "category": "总览" if chinese else "Overview",
             "title": display_name,
-            "summary": f"Start planning the topic, scenes, and narration for {display_name} here.",
-            "narration": f"This is the new video project {display_name}. Next, describe the topic, audience, and key points to cover.",
+            "summary": f"从这里规划 {display_name} 的主题、场景和旁白。" if chinese else f"Start planning the topic, scenes, and narration for {display_name} here.",
+            "narration": f"这是新的视频项目 {display_name}。接下来请描述主题、受众和需要覆盖的重点。" if chinese else f"This is the new video project {display_name}. Next, describe the topic, audience, and key points to cover.",
         }
     ]
+    blank_summary = f"从这里规划 {display_name} 的主题、场景和旁白。" if chinese else f"Start planning the topic, scenes, and narration for {display_name} here."
+    safe_display_name = escape(display_name)
+    safe_blank_summary = escape(blank_summary)
     body_html = f"""<section class=\"content-scene scene\" data-scene=\"intro\">
   <div class=\"scene-copy\">
     <div class=\"eyebrow\">INTRO</div>
-    <h1>{display_name}</h1>
-    <p class=\"summary\">Start planning the topic, scenes, and narration for {display_name} here.</p>
+    <h1>{safe_display_name}</h1>
+    <p class=\"summary\">{safe_blank_summary}</p>
   </div>
   <div class=\"visual-board\"></div>
 </section>
@@ -612,10 +728,74 @@ def create_blank_project(payload: dict[str, Any]) -> dict[str, Any]:
     target.mkdir(parents=True, exist_ok=True)
     (target / "scenes.json").write_text(json.dumps(scenes, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     (target / "body.html").write_text(body_html, encoding="utf-8")
-    ensure_project_manifest(target, name=display_name, project_id=project_id)
-    write_project_settings(target, {"tts": DEFAULT_TTS_SETTINGS})
+    if engine == "three":
+        (target / "visual.js").write_text("""import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
+
+let host;
+let renderer;
+let scene;
+let camera;
+let group;
+
+export async function mount({ root }) {
+  host = root.querySelector('.visual-board') || root;
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setClearColor(0x000000, 0);
+  host.replaceChildren(renderer.domElement);
+
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(42, 16 / 9, 0.1, 100);
+  camera.position.set(0, 0, 6);
+  group = new THREE.Group();
+  scene.add(group);
+
+  const core = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(1.15, 2),
+    new THREE.MeshStandardMaterial({ color: 0x72d9ff, roughness: 0.28, metalness: 0.2 }),
+  );
+  const orbit = new THREE.Mesh(
+    new THREE.TorusGeometry(2, 0.035, 12, 120),
+    new THREE.MeshBasicMaterial({ color: 0xb28cff, transparent: true, opacity: 0.8 }),
+  );
+  orbit.rotation.x = Math.PI * 0.55;
+  group.add(core, orbit);
+  scene.add(new THREE.HemisphereLight(0xbfeaff, 0x111122, 2.4));
+  const key = new THREE.DirectionalLight(0xffffff, 2.8);
+  key.position.set(3, 4, 5);
+  scene.add(key);
+}
+
+export function renderAtTime(seconds, { sceneProgress }) {
+  if (!renderer || !host || !group) return;
+  const width = Math.max(1, host.clientWidth);
+  const height = Math.max(1, host.clientHeight);
+  renderer.setSize(width, height, false);
+  camera.aspect = width / height;
+  camera.updateProjectionMatrix();
+  group.rotation.set(seconds * 0.16, seconds * 0.32, sceneProgress * 0.2);
+  const scale = 0.92 + Math.sin(sceneProgress * Math.PI) * 0.08;
+  group.scale.setScalar(scale);
+  renderer.render(scene, camera);
+}
+
+export function destroy() {
+  renderer?.dispose();
+  renderer?.domElement?.remove();
+  host = renderer = scene = camera = group = null;
+}
+""", encoding="utf-8")
+    ensure_project_manifest(
+        target,
+        name=display_name,
+        project_id=project_id,
+        theme=DEFAULT_THEME,
+        content_theme=content_theme,
+        language=requested_language,
+        engine=engine,
+    )
     try:
-        load_source(target, str(payload.get("theme") or DEFAULT_THEME))
+        load_source(target, DEFAULT_THEME)
     except SystemExit as exc:
         raise ApiError(422, str(exc)) from exc
     return {"project": source_summary(target), "state": studio_state()}
@@ -627,8 +807,10 @@ def load_project(payload: dict[str, Any]) -> dict[str, Any]:
         source_root = STARTER_SOURCE
     else:
         source_root = safe_project_path(value)
+    manifest = ensure_project_manifest(source_root)
+    theme = str(manifest.get("theme") or DEFAULT_THEME)
     try:
-        load_source(source_root, str(payload.get("theme") or DEFAULT_THEME))
+        load_source(source_root, theme)
     except SystemExit as exc:
         raise ApiError(422, str(exc)) from exc
     return {"project": source_summary(source_root), "state": studio_state()}
@@ -648,6 +830,8 @@ def project_source(query: dict[str, list[str]]) -> dict[str, Any]:
         "files": {
             "scenesJson": resolved["scenes"].read_text(encoding="utf-8"),
             "bodyHtml": resolved["body"].read_text(encoding="utf-8"),
+            "bodyCss": resolved["body_css"].read_text(encoding="utf-8") if resolved["body_css"] else "",
+            "visualJs": resolved["visual_js"].read_text(encoding="utf-8") if resolved["visual_js"] else "",
         },
     }
 
@@ -661,6 +845,51 @@ def save_project_settings(payload: dict[str, Any]) -> dict[str, Any]:
         raise ApiError(404, f"project not found: {source_root.name}")
     write_project_settings(source_root, {"tts": payload.get("tts") or payload})
     return {"project": source_summary(source_root), "settings": read_project_settings(source_root)}
+
+
+def save_project_theme(payload: dict[str, Any]) -> dict[str, Any]:
+    value = str(payload.get("project") or payload.get("id") or "").strip()
+    theme = str(payload.get("contentTheme") or payload.get("theme") or "").strip()
+    engine = str(payload.get("engine") or "auto").strip()
+    source_root = safe_project_path(value) if value else active_source_root()
+    if not source_root:
+        raise ApiError(409, "no loaded source; load or create a project first")
+    if not source_root.exists() or not source_root.is_dir():
+        raise ApiError(404, f"project not found: {source_root.name}")
+    try:
+        profile = load_theme(theme)
+    except (ValueError, json.JSONDecodeError) as exc:
+        raise ApiError(422, str(exc)) from exc
+    if engine == "auto":
+        engine = str(profile.get("defaultEngine") or "dom")
+    if engine not in profile.get("engines", []):
+        raise ApiError(422, f"content theme {theme!r} does not support engine {engine!r}")
+    try:
+        resolved = resolve_source(source_root)
+        if engine == "three" and not resolved["visual_js"]:
+            raise ApiError(
+                422,
+                "Three.js / WebGL themes require visual.js; add a deterministic visual module before switching themes",
+            )
+        if resolved["visual_js"]:
+            validate_visual_js(resolved["visual_js"])
+    except SystemExit as exc:
+        raise ApiError(422, str(exc)) from exc
+
+    # Only mutate the manifest after all compatibility checks pass. This keeps a
+    # failed theme change from leaving the project metadata and source out of sync.
+    manifest = ensure_project_manifest(source_root, content_theme=theme, engine=engine)
+    manifest["updatedAt"] = utc_now()
+    if is_local_project(source_root):
+        (source_root / PROJECT_MANIFEST_FILE).write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+    try:
+        load_source(source_root, DEFAULT_THEME)
+    except SystemExit as exc:
+        raise ApiError(422, str(exc)) from exc
+    return {"project": source_summary(source_root), "state": studio_state()}
 
 
 def update_project_metadata(payload: dict[str, Any]) -> dict[str, Any]:
@@ -829,6 +1058,8 @@ def command_for_job(payload: dict[str, Any]) -> tuple[str, list[str]]:
             pitch,
         ]
 
+    theme_args = ["--theme", active_theme()]
+
     if task == "tts":
         tts_settings = normalize_tts_settings(payload)
         source = active_source_root()
@@ -846,16 +1077,17 @@ def command_for_job(payload: dict[str, Any]) -> tuple[str, list[str]]:
             tts_settings["pitch"],
             "--gap",
             tts_settings["gap"],
+            *theme_args,
         ]
         if payload.get("force"):
             command.append("--force")
         return task, command
 
     if task == "offline":
-        return task, [PYTHON, "main.py", "offline"]
+        return task, [PYTHON, "main.py", "offline", *theme_args]
 
     if task == "check":
-        return task, [PYTHON, "main.py", "check"]
+        return task, [PYTHON, "main.py", "check", *theme_args]
 
     size = str(payload.get("size") or "720p").lower()
     capture = str(payload.get("capture") or "auto").lower()
@@ -865,6 +1097,12 @@ def command_for_job(payload: dict[str, Any]) -> tuple[str, list[str]]:
         raise ApiError(400, "invalid capture mode")
     fps = int(payload.get("fps") or 15)
     fps = min(max(fps, 1), 60)
+    try:
+        transition = float(payload.get("transition", 0.4))
+    except (TypeError, ValueError) as exc:
+        raise ApiError(400, "transition must be a number between 0 and 2 seconds") from exc
+    if not 0 <= transition <= 2:
+        raise ApiError(400, "transition must be between 0 and 2 seconds")
     return task, [
         PYTHON,
         "main.py",
@@ -877,6 +1115,9 @@ def command_for_job(payload: dict[str, Any]) -> tuple[str, list[str]]:
         str(fps),
         "--output",
         clean_output_name(str(payload.get("output") or "studio-render.mp4")),
+        "--transition",
+        f"{transition:g}",
+        *theme_args,
     ]
 
 
@@ -966,6 +1207,11 @@ def handle_get(path: str, query: dict[str, list[str]]) -> tuple[int, Any] | None
 
 
 def handle_post(path: str, payload: dict[str, Any]) -> tuple[int, Any] | None:
+    if path == "/api/prompt":
+        try:
+            return 200, compose_prompt(payload)
+        except (ValueError, OSError, json.JSONDecodeError) as exc:
+            raise ApiError(422, str(exc)) from exc
     if path == "/api/projects":
         return 201, create_project(payload)
     if path == "/api/projects/blank":
@@ -974,6 +1220,8 @@ def handle_post(path: str, payload: dict[str, Any]) -> tuple[int, Any] | None:
         return 200, load_project(payload)
     if path == "/api/projects/settings":
         return 200, save_project_settings(payload)
+    if path == "/api/projects/theme":
+        return 200, save_project_theme(payload)
     if path == "/api/projects/update":
         return 200, update_project_metadata(payload)
     if path == "/api/projects/delete":
@@ -981,7 +1229,12 @@ def handle_post(path: str, payload: dict[str, Any]) -> tuple[int, Any] | None:
     if path == "/api/source/validate":
         if payload.get("project") or payload.get("id"):
             return 200, validate_project(safe_project_path(str(payload.get("project") or payload.get("id"))))
-        return 200, validate_source_text(str(payload.get("scenesJson") or ""), str(payload.get("bodyHtml") or ""))
+        return 200, validate_source_text(
+            str(payload.get("scenesJson") or ""),
+            str(payload.get("bodyHtml") or ""),
+            str(payload.get("bodyCss") or ""),
+            str(payload.get("visualJs") or ""),
+        )
     if path == "/api/jobs":
         return 202, start_job(payload)
     return None

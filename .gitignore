@@ -14,14 +14,7 @@ pnpm-debug.log*
 
 # Factory workspace, local projects, generated media, and render outputs.
 .local/
-
-# Legacy generated folders kept ignored for older checkouts.
-.factory/
-work/
-content/
-renderer/
-output/
-assets/
+tests/
 
 # OS/editor noise
 .DS_Store

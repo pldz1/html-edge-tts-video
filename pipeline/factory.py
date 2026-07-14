@@ -26,6 +26,7 @@ PROJECT_OUTPUT_DIR = "output"
 STARTER_SOURCE = ROOT / "templates" / "starter"
 THEMES = ROOT / "themes"
 DEFAULT_THEME = "default"
+THEME_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 
 
 def rel(path: Path) -> str:
@@ -107,6 +108,8 @@ def resolve_source(source: Path) -> dict[str, Path | None]:
 
     scenes = find_first(source, ["scenes.json", "content/scenes.json"])
     body = find_first(source, ["body.html", "content/body.html", "index.html", "content/index.html"])
+    body_css = find_first(source, ["body.css", "content/body.css"])
+    visual_js = find_first(source, ["visual.js", "content/visual.js"])
     media = find_first(source, ["media", "content/media"])
     captions = find_first(source, ["captions.json", "content/captions.json"])
 
@@ -117,20 +120,84 @@ def resolve_source(source: Path) -> dict[str, Path | None]:
     if media and not media.is_dir():
         raise SystemExit(f"media path must be a directory: {media}")
 
-    return {"root": source, "scenes": scenes, "body": body, "media": media, "captions": captions}
+    return {
+        "root": source,
+        "scenes": scenes,
+        "body": body,
+        "body_css": body_css,
+        "visual_js": visual_js,
+        "media": media,
+        "captions": captions,
+    }
 
 
 def ensure_theme(theme: str) -> Path:
+    if not THEME_NAME_RE.fullmatch(theme):
+        raise SystemExit(f"invalid theme name: {theme!r}")
     theme_dir = THEMES / theme
-    missing = [name for name in ["index.html", "runtime.js", "theme.css"] if not (theme_dir / name).exists()]
+    missing = [name for name in ["index.html", "theme.css"] if not (theme_dir / name).exists()]
     if missing:
         raise SystemExit(f"theme {theme!r} is missing: {', '.join(missing)}")
     return theme_dir
 
 
-def load_source(source: Path, theme: str = DEFAULT_THEME) -> None:
+def theme_runtime(theme: str) -> Path:
+    theme_dir = ensure_theme(theme)
+    runtime = theme_dir / "runtime.js"
+    if runtime.exists():
+        return runtime
+    fallback = THEMES / DEFAULT_THEME / "runtime.js"
+    if not fallback.exists():
+        raise SystemExit(f"theme {theme!r} has no runtime.js and the default runtime is missing")
+    return fallback
+
+
+def list_themes() -> list[dict[str, str | bool]]:
+    if not THEMES.exists():
+        return []
+    result = []
+    for theme_dir in sorted(THEMES.iterdir(), key=lambda path: path.name):
+        if not theme_dir.is_dir() or not THEME_NAME_RE.fullmatch(theme_dir.name):
+            continue
+        try:
+            ensure_theme(theme_dir.name)
+            runtime = theme_runtime(theme_dir.name)
+        except SystemExit:
+            continue
+        index_source = (theme_dir / "index.html").read_text(encoding="utf-8")
+        if runtime.parent == theme_dir:
+            if "runtime.js" not in index_source:
+                continue
+        elif "../default/runtime.js" not in index_source:
+            continue
+        result.append(
+            {
+                "id": theme_dir.name,
+                "label": theme_dir.name.replace("-", " ").title(),
+                "inheritsRuntime": not (theme_dir / "runtime.js").exists(),
+            }
+        )
+    return result
+
+
+def load_source(
+    source: Path,
+    theme: str = DEFAULT_THEME,
+    *,
+    content_theme: str | None = None,
+    language: str | None = None,
+    engine: str | None = None,
+) -> None:
     resolved = resolve_source(source)
     ensure_theme(theme)
+    source_manifest = resolved["root"] / PROJECT_MANIFEST_FILE
+    try:
+        manifest = json.loads(source_manifest.read_text(encoding="utf-8")) if source_manifest.exists() else {}
+    except json.JSONDecodeError:
+        manifest = {}
+    content_theme = content_theme or str(manifest.get("contentTheme") or "editorial")
+    language = language or str(manifest.get("resolvedLanguage") or manifest.get("language") or "auto")
+    engine = engine or str(manifest.get("engine") or "dom")
     previous_source = active_source_root()
     same_source = bool(previous_source and previous_source.resolve() == resolved["root"].resolve())
 
@@ -148,6 +215,10 @@ def load_source(source: Path, theme: str = DEFAULT_THEME) -> None:
 
     shutil.copy2(resolved["scenes"], CURRENT_SOURCE / "scenes.json")
     shutil.copy2(resolved["body"], CURRENT_SOURCE / "body.html")
+    if resolved["body_css"]:
+        shutil.copy2(resolved["body_css"], CURRENT_SOURCE / "body.css")
+    if resolved["visual_js"]:
+        shutil.copy2(resolved["visual_js"], CURRENT_SOURCE / "visual.js")
     if resolved["captions"]:
         shutil.copy2(resolved["captions"], CURRENT_SOURCE / "captions.json")
     if resolved["media"]:
@@ -159,6 +230,9 @@ def load_source(source: Path, theme: str = DEFAULT_THEME) -> None:
             {
                 "source": str(resolved["root"]),
                 "theme": theme,
+                "content_theme": content_theme,
+                "language": language,
+                "engine": engine,
                 "loaded_at": datetime.now(timezone.utc).isoformat(),
             },
             ensure_ascii=False,
@@ -168,6 +242,7 @@ def load_source(source: Path, theme: str = DEFAULT_THEME) -> None:
     )
     print(f"Loaded source: {resolved['root']}")
     print(f"Theme: {theme}")
+    print(f"Content theme: {content_theme} ({engine}, {language})")
     print(f"Factory workspace: {rel(CURRENT)}")
 
 
@@ -193,6 +268,21 @@ def active_theme() -> str:
         except json.JSONDecodeError:
             pass
     return DEFAULT_THEME
+
+
+def active_content_settings() -> dict[str, str]:
+    defaults = {"contentTheme": "editorial", "language": "auto", "engine": "dom"}
+    if not CURRENT_META.exists():
+        return defaults
+    try:
+        meta = json.loads(CURRENT_META.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return defaults
+    return {
+        "contentTheme": str(meta.get("content_theme") or defaults["contentTheme"]),
+        "language": str(meta.get("language") or defaults["language"]),
+        "engine": str(meta.get("engine") or defaults["engine"]),
+    }
 
 
 def active_source_root() -> Path | None:

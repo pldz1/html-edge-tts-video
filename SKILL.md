@@ -1,59 +1,72 @@
-﻿---
+---
 name: html-edge-tts-video
-description: Build Chinese narrated videos from a small source folder containing scenes.json, body.html, optional media, and optional editable captions.json. Use when Codex should load a source folder into the HTML video skill package, generate edge-tts narration and WordBoundary captions, optionally edit caption text through the local caption editor, render through a stable theme runtime, and output an MP4 locally.
+description: Build locally rendered narrated HTML videos in the user's requested or inferred content language. Use when Codex should create or import scenes.json, body.html, project-specific body.css, optional deterministic visual.js for Three.js/Canvas/WebGL, generate edge-tts narration and captions, preview through the stable shell, and render an MP4.
 ---
 
 # HTML edge-tts Video Skill Package
 
-Use this skill to build a narrated Chinese MP4 from a source folder:
+Read the full workflow before changing source or running builds:
+
+```text
+docs/agent-skill.md
+```
+
+Use this source contract:
 
 ```text
 source/
   scenes.json
   body.html
+  body.css recommended
+  visual.js optional for Canvas, Three.js, or WebGL
   media/ optional
-  captions.json optional after manual subtitle edits
+  captions.json optional after subtitle edits
 ```
 
-The source folder is the AI/user output. The skill package owns the runtime:
+Choose the content language in this order:
 
-```text
-themes/default/index.html
-themes/default/runtime.js
-themes/default/theme.css
-```
+1. Follow an explicit user language request.
+2. Follow a Studio language selection.
+3. Infer the dominant language from the user's question or imported narration.
+4. Preserve an imported source language unless the user asks to translate it.
 
-Read the full workflow before changing files or running builds:
+The first version supports only Simplified Chinese (`zh-CN`) and US English (`en-US`). Studio's
+`auto` mode resolves between those two languages, and an explicit selection wins.
 
-```text
-docs/agent-skill.md
+Keep technical names such as React or Three.js unchanged while making the surrounding content use
+the selected language. Let the resolved language choose the default edge-tts voice.
+
+Choose a Content Theme from `docs/content-themes/`. A Content Theme controls the AI prompt, composition
+grammar, project `body.css`, and permitted renderer. It does not skin the Studio UI. The stable shell
+under `themes/default/` owns captions, the compact chapter rail, playback, and rendering.
+
+Generate the same canonical prompt for an agent or web AI:
+
+```bash
+python main.py prompt --topic "<topic>" --language auto --content-theme editorial --target agent
+python main.py prompt --topic "<topic>" --language auto --content-theme cinematic-3d --target web-ai
 ```
 
 Core build:
 
 ```bash
 python main.py tts --source <source-folder>
-python main.py captions --source <source-folder>  # optional manual subtitle pass
 python main.py check
+python main.py preview
 python main.py render --output video.mp4
 ```
 
-The source is copied into `.local/current/source/`; generated audio and timing use
-`.local/current/assets/` as the active cache. Studio-managed projects persist that cache under
-`<project>/generated/` and write final videos under `<project>/output/`. External source folders use
-the legacy `.local/output/` destination.
-
-Do not ask web AI to generate `app.js`. It should generate only `scenes.json`, `body.html`, and
-optional `media/`.
-
-Do not ask web AI to generate `captions.json`; the skill package creates it from the real TTS timeline when
-the user saves manual edits in the caption editor.
-
 Content rules:
 
-- The first scene must be `id: "intro"` and introduce the video's starting point and route.
-- Every scene needs a short `category`; the theme uses it for the bottom chapter rail.
-- Prefer explanatory HTML/CSS/SVG visuals in `body.html`, not text-only slides. Use diagrams,
-  comparison blocks, metric cards, concept maps, or formula strips inside `visual-board`.
-- `body.html` must not include scripts, playback controls, headers, footers, scrubbers, timecodes,
-  per-scene progress bars, or the chapter rail. The theme owns those.
+- Start `scenes.json` with `id: "intro"` and give every scene a short `category`.
+- Build one dominant visual composition per scene; avoid nested card grids and dashboard UI.
+- Keep source visuals in the top 80% of the frame. The shell reserves 80%–90% for captions and
+  90%–100% for the footer, while the visible rail stays compact.
+- Keep scripts out of `body.html`. Put active visuals in `visual.js` and export deterministic
+  `mount()` and `renderAtTime()` functions.
+- Pin external CDN dependency versions. Do not run an independent requestAnimationFrame loop.
+- Do not generate `app.js`, playback controls, captions, footers, timecodes, or chapter rails.
+- Do not generate scene transitions; the stable shell owns deterministic dip-to-black transitions.
+
+The source is copied into `.local/current/source/`; generated narration and timing live under
+`.local/current/assets/`. Do not treat `.local/`, `assets/`, or `output/` as tracked source.

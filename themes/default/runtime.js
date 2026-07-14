@@ -1,6 +1,18 @@
 const SOURCE_BASE = '/.local/current/source';
 const ASSET_BASE = '/.local/current/assets';
 const NARRATION_SRC = `${ASSET_BASE}/narration.mp3`;
+const DEFAULT_SCENE_TRANSITION_SECONDS = 0.4;
+const MAX_SCENE_TRANSITION_SECONDS = 2;
+
+function resolveTransitionSeconds(search) {
+  const raw = new URLSearchParams(search).get('transition');
+  if (raw === null || raw.trim() === '') return DEFAULT_SCENE_TRANSITION_SECONDS;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return DEFAULT_SCENE_TRANSITION_SECONDS;
+  return Math.max(0, Math.min(MAX_SCENE_TRANSITION_SECONDS, parsed));
+}
+
+const SCENE_TRANSITION_SECONDS = resolveTransitionSeconds(window.location.search);
 
 const state = {
   scenes: [],
@@ -13,6 +25,9 @@ const state = {
   startOffset: 0,
   hasNarrationAudio: false,
   renderMode: new URLSearchParams(location.search).has('render'),
+  embedMode: new URLSearchParams(location.search).has('embed'),
+  projectMeta: {},
+  visualModule: null,
 };
 
 const stage = document.querySelector('#stage');
@@ -23,9 +38,11 @@ const scrubber = document.querySelector('#scrubber');
 const timecode = document.querySelector('#timecode');
 const durationLabel = document.querySelector('#durationLabel');
 const chapterRail = document.querySelector('#chapterRail');
+const sceneTransition = document.querySelector('#sceneTransition');
 
 document.documentElement.classList.toggle('render-mode', state.renderMode);
 document.documentElement.classList.toggle('preview-mode', !state.renderMode);
+document.documentElement.classList.toggle('embed-mode', state.embedMode);
 
 const pad = (value, width = 2) => String(value).padStart(width, '0');
 
@@ -52,6 +69,27 @@ async function fetchText(path) {
   const response = await fetch(path, { cache: 'no-store' });
   if (!response.ok) throw new Error(`${path} returned ${response.status}`);
   return response.text();
+}
+
+async function fetchOptionalText(path) {
+  const response = await fetch(path, { cache: 'no-store' });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`${path} returned ${response.status}`);
+  return response.text();
+}
+
+function loadStylesheet(href, id) {
+  const existing = document.querySelector(`#${id}`);
+  if (existing) existing.remove();
+  const link = document.createElement('link');
+  link.id = id;
+  link.rel = 'stylesheet';
+  link.href = href;
+  document.head.append(link);
+  return new Promise(resolve => {
+    link.addEventListener('load', resolve, { once: true });
+    link.addEventListener('error', resolve, { once: true });
+  });
 }
 
 async function fetchOptionalJson(path) {
@@ -118,11 +156,42 @@ function rebaseMediaUrls(root) {
 }
 
 function sceneIndexAt(seconds) {
-  if (!state.timeline?.scenes?.length) return 0;
-  const index = state.timeline.scenes.findIndex(scene => (
-    seconds >= scene.start && seconds < scene.start + scene.duration
-  ));
-  return index === -1 ? state.timeline.scenes.length - 1 : index;
+  const scenes = state.timeline?.scenes || [];
+  if (!scenes.length) return 0;
+  let index = 0;
+  for (let candidate = 1; candidate < scenes.length; candidate += 1) {
+    const previous = scenes[candidate - 1];
+    const previousEnd = Number(previous.start || 0) + Number(previous.duration || 0);
+    const nextStart = Number(scenes[candidate].start || previousEnd);
+    const cut = (previousEnd + nextStart) / 2;
+    if (seconds < cut) break;
+    index = candidate;
+  }
+  return index;
+}
+
+function transitionOpacityAt(seconds) {
+  const scenes = state.timeline?.scenes || [];
+  if (scenes.length < 2 || SCENE_TRANSITION_SECONDS <= 0) return 0;
+
+  for (let index = 0; index < scenes.length - 1; index += 1) {
+    const current = scenes[index];
+    const next = scenes[index + 1];
+    const currentEnd = Number(current.start || 0) + Number(current.duration || 0);
+    const nextStart = Number(next.start || currentEnd);
+    const midpoint = (currentEnd + nextStart) / 2;
+    const halfDuration = SCENE_TRANSITION_SECONDS / 2;
+    const transitionStart = midpoint - halfDuration;
+    const transitionEnd = midpoint + halfDuration;
+
+    if (seconds >= transitionStart && seconds < midpoint) {
+      return Math.max(0, Math.min(1, (seconds - transitionStart) / halfDuration));
+    }
+    if (seconds >= midpoint && seconds < transitionEnd) {
+      return Math.max(0, Math.min(1, 1 - (seconds - midpoint) / halfDuration));
+    }
+  }
+  return 0;
 }
 
 function progressAt(scene, seconds) {
@@ -306,7 +375,9 @@ function activateScene(scene, progress) {
 function renderAtTime(seconds) {
   state.current = Math.max(0, Math.min(state.duration, Number(seconds) || 0));
   const index = sceneIndexAt(state.current);
-  const scene = state.timeline.scenes[index] || state.timeline.scenes[0] || {};
+  const timelineScene = state.timeline.scenes[index] || state.timeline.scenes[0] || {};
+  const sourceScene = state.scenes.find(item => item.id === timelineScene.id) || state.scenes[index] || {};
+  const scene = { ...sourceScene, ...timelineScene };
   const progress = progressAt(scene, state.current);
   const cue = activeCueAt(state.current);
 
@@ -314,6 +385,21 @@ function renderAtTime(seconds) {
   caption.textContent = cue?.text || '';
   caption.classList.toggle('show', Boolean(cue));
   updateChapterRail(index);
+  if (sceneTransition) sceneTransition.style.opacity = transitionOpacityAt(state.current).toFixed(4);
+
+  if (state.visualModule?.renderAtTime) {
+    state.visualModule.renderAtTime(state.current, {
+      root: stage,
+      scenes: state.scenes,
+      scene,
+      sceneIndex: index,
+      sceneTime: Math.max(0, state.current - (Number(scene.start) || 0)),
+      sceneProgress: progress,
+      duration: state.duration,
+      mediaBase: `${SOURCE_BASE}/media`,
+      renderMode: state.renderMode,
+    });
+  }
 
   if (timecode) timecode.textContent = formatTime(state.current, true);
   if (scrubber) scrubber.value = state.current;
@@ -385,8 +471,14 @@ if (scrubber) {
 
 async function init() {
   state.scenes = await fetchJson(`${SOURCE_BASE}/scenes.json`);
+  state.projectMeta = await fetchOptionalJson('/.local/current/project.json') || {};
+  const contentTheme = state.projectMeta.content_theme || 'editorial';
+  await loadStylesheet(`/docs/content-themes/${contentTheme}/body.css`, 'content-theme-style');
   stage.innerHTML = await fetchText(`${SOURCE_BASE}/body.html`);
   rebaseMediaUrls(stage);
+  if (await fetchOptionalText(`${SOURCE_BASE}/body.css`) !== null) {
+    await loadStylesheet(`${SOURCE_BASE}/body.css`, 'source-body-style');
+  }
 
   try {
     const timeline = await fetchJson(`${ASSET_BASE}/timeline.json`);
@@ -407,6 +499,21 @@ async function init() {
   if (durationLabel) durationLabel.textContent = formatTime(state.duration);
   setupChapterRail();
 
+  if (await fetchOptionalText(`${SOURCE_BASE}/visual.js`) !== null) {
+    state.visualModule = await import(`${SOURCE_BASE}/visual.js?loaded=${Date.now()}`);
+    if (typeof state.visualModule.mount !== 'function' || typeof state.visualModule.renderAtTime !== 'function') {
+      throw new Error('visual.js must export mount() and renderAtTime()');
+    }
+    await state.visualModule.mount({
+      root: stage,
+      scenes: state.scenes,
+      timeline: state.timeline,
+      duration: state.duration,
+      mediaBase: `${SOURCE_BASE}/media`,
+      renderMode: state.renderMode,
+    });
+  }
+
   renderAtTime(0);
 
   window.compositionReady = true;
@@ -416,14 +523,19 @@ async function init() {
 window.getCompositionDuration = () => state.duration;
 window.getDemoDuration = window.getCompositionDuration;
 window.renderAtTime = renderAtTime;
+window.compositionError = null;
 window.startCompositionPlayback = () => {
   state.current = 0;
   renderAtTime(0);
   return startPlayback();
 };
 window.startDeterministicPlayback = window.startCompositionPlayback;
+window.addEventListener('beforeunload', () => state.visualModule?.destroy?.());
 
 init().catch(error => {
-  stage.innerHTML = `<pre class="load-error">${error.message}</pre>`;
+  const message = error instanceof Error ? error.message : String(error);
+  window.compositionError = message;
+  stage.innerHTML = `<pre class="load-error"></pre>`;
+  stage.querySelector('.load-error').textContent = message;
   throw error;
 });

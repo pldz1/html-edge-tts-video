@@ -1,0 +1,4 @@
+:root { --content-accent: #66e3c4; --content-accent-soft: #9bbcff; }
+.visual-board { border-color: rgba(102, 227, 196, .24); background-color: rgba(8, 18, 28, .36); }
+.diagram-svg line, .diagram-svg path { stroke: var(--content-accent); }
+.diagram-node { border-width: 0 0 0 2px; border-radius: 0; background: transparent; box-shadow: none; }

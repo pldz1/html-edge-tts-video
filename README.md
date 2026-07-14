@@ -1,6 +1,6 @@
 ﻿# HTML edge-tts Video Skill Package
 
-This repo is a skill package: it loads a video source folder, generates Chinese TTS and caption
+This repo is a skill package: it loads a video source folder, resolves the content language, generates TTS and caption
 timing, records a stable HTML theme shell, then writes an MP4 into the active project's `output/`
 folder.
 
@@ -10,11 +10,13 @@ AI output is intentionally small:
 my-video-source/
   scenes.json
   body.html
+  body.css recommended
+  visual.js optional
   media/ optional
   captions.json optional after manual subtitle edits
 ```
 
-The skill package owns the runtime:
+The skill package owns a stable shell:
 
 ```text
 themes/default/
@@ -22,6 +24,9 @@ themes/default/
   runtime.js
   theme.css
 ```
+
+Content Themes live under `docs/content-themes/` and control prompts, project visuals, and allowed
+renderers. Select one in `/studio/create` or with `python main.py prompt --content-theme <name>`.
 
 The rendered video is clean: preview controls, scrubbers, headers, timecodes, and transport bars are
 hidden in render mode. The bottom chapter rail reads labels from `scenes.json.category`, reads timing
@@ -44,13 +49,15 @@ Studio-managed projects use an immutable 8-character ID and keep their metadata 
   manifest.json
   scenes.json
   body.html
+  body.css recommended
+  visual.js optional
   media/ optional
   captions.json optional, created by caption editor
   generated/ narration and timeline cache
   output/ rendered videos
 ```
 
-`manifest.json` owns the editable project name and TTS settings. The folder ID does not change when
+`manifest.json` owns the editable project name, language, Content Theme, renderer, and TTS settings. The folder ID does not change when
 the project is renamed. Standalone source folders outside `.local/work/` remain supported.
 
 Build it:
@@ -111,7 +118,7 @@ Rules:
 
 - The first scene must use `id: "intro"` and introduce what the video will cover.
 - Every scene needs `category`, `title`, `summary`, and `narration`.
-- `category` should be a short Chinese label, 2 to 12 characters.
+- `category` should be a short label in the selected content language, up to 12 characters.
 
 `body.html` is the visual content. Add one section per scene:
 
@@ -127,7 +134,8 @@ Rules:
 
 Prefer visual explanation over text-only slides. Put structured HTML/CSS/SVG graphics inside
 `visual-board`: `diagram-flow`, `comparison-grid`, `metric-grid`, `formula-strip`, `concept-map`, or
-small inline SVG diagrams. Do not use canvas that needs JavaScript.
+small inline SVG diagrams. For Canvas, Three.js, or WebGL, keep scripts out of `body.html` and use
+the deterministic `visual.js` module contract documented in `docs/agent-skill.md`.
 
 Do not put app/runtime behavior into `body.html`. Avoid:
 
@@ -173,7 +181,7 @@ python main.py preview
 python main.py render --output my-video.mp4
 ```
 
-Preview URL:
+Stable shell preview URL:
 
 ```text
 http://127.0.0.1:8765/themes/default/index.html
@@ -191,7 +199,7 @@ http://127.0.0.1:8765/voices
 python main.py install        # install Python dependencies, managed FFmpeg, and Playwright Chromium
 python main.py init           # copy templates/starter to .local/work/starter
 python main.py load --source <folder>
-python main.py voices         # list Chinese edge-tts voices
+python main.py voices         # list supported edge-tts voices
 python main.py voice-preview  # generate local voice samples
 python main.py tts --source <folder>
 python main.py offline --source <folder>
@@ -217,6 +225,9 @@ Render size examples:
 python main.py render --size 1080p --output tutorial-1080p.mp4
 python main.py render --width 1080 --height 1920 --output vertical.mp4
 ```
+
+Scene transitions default to a deterministic `0.4` second dip-to-black with no black hold. Adjust
+exports with `--transition 0.3`, or disable transitions with `--transition 0`.
 
 ## Build Workspace
 
