@@ -83,7 +83,7 @@ python main.py studio
 Then open:
 
 ```text
-http://127.0.0.1:8765/tools/studio.html
+http://127.0.0.1:8765/studio
 ```
 
 The studio should provide:
@@ -165,7 +165,7 @@ High resolution must mean more than a larger canvas.
 
 1. Keep `main.py` stable for agents.
 2. Add `main.py studio` as a friendlier alias for the local server.
-3. Add `tools/studio.html`, `tools/studio.css`, and `tools/studio.js`.
+3. Add `studio/web/studio/` with `index.html`, `studio.css`, and `studio.js`.
 4. Add API endpoints:
    - `GET /api/projects`
    - `POST /api/source`

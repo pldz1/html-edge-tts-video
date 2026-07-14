@@ -6,6 +6,7 @@ import argparse
 import asyncio
 import math
 import json
+import os
 import subprocess
 import threading
 import time
@@ -15,8 +16,12 @@ from pathlib import Path
 from playwright.async_api import async_playwright
 from playwright.async_api import Error as PlaywrightError
 
-from factory import CURRENT_ASSETS, LOCAL_PLAYWRIGHT, ROOT, active_theme, load_scenes, load_source, output_path, theme_url
-from toolchain import ffmpeg_executable
+try:
+    from .factory import CURRENT_ASSETS, LOCAL_PLAYWRIGHT, ROOT, active_theme, load_scenes, load_source, output_path, theme_url
+    from .toolchain import ffmpeg_executable
+except ImportError:  # Direct script execution: python pipeline/render_video.py
+    from factory import CURRENT_ASSETS, LOCAL_PLAYWRIGHT, ROOT, active_theme, load_scenes, load_source, output_path, theme_url
+    from toolchain import ffmpeg_executable
 
 
 SIZES = {

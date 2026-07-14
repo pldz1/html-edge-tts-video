@@ -7,7 +7,10 @@ import json
 import re
 from pathlib import Path
 
-from factory import CURRENT_SOURCE, ensure_theme, load_source
+try:
+    from .factory import CURRENT_SOURCE, ensure_theme, load_source
+except ImportError:  # Direct script execution: python pipeline/validate_sources.py
+    from factory import CURRENT_SOURCE, ensure_theme, load_source
 
 
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")

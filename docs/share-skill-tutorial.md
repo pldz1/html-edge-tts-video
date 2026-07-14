@@ -16,7 +16,7 @@ main.py
 templates/starter/
 themes/default/
 pipeline/
-tools/
+studio/
 docs/
 ```
 

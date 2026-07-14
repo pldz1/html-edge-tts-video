@@ -1,9 +1,9 @@
 ﻿---
 name: html-edge-tts-video
-description: Build Chinese narrated videos from a small source folder containing scenes.json, body.html, optional media, and optional editable captions.json. Use when Codex should load a source folder into the HTML video factory, generate edge-tts narration and WordBoundary captions, optionally edit caption text through the local caption editor, render through a stable theme runtime, and output an MP4 locally.
+description: Build Chinese narrated videos from a small source folder containing scenes.json, body.html, optional media, and optional editable captions.json. Use when Codex should load a source folder into the HTML video skill package, generate edge-tts narration and WordBoundary captions, optionally edit caption text through the local caption editor, render through a stable theme runtime, and output an MP4 locally.
 ---
 
-# HTML edge-tts Video Factory
+# HTML edge-tts Video Skill Package
 
 Use this skill to build a narrated Chinese MP4 from a source folder:
 
@@ -15,7 +15,7 @@ source/
   captions.json optional after manual subtitle edits
 ```
 
-The source folder is the AI/user output. The factory owns the runtime:
+The source folder is the AI/user output. The skill package owns the runtime:
 
 ```text
 themes/default/index.html
@@ -46,7 +46,7 @@ the legacy `.local/output/` destination.
 Do not ask web AI to generate `app.js`. It should generate only `scenes.json`, `body.html`, and
 optional `media/`.
 
-Do not ask web AI to generate `captions.json`; the factory creates it from the real TTS timeline when
+Do not ask web AI to generate `captions.json`; the skill package creates it from the real TTS timeline when
 the user saves manual edits in the caption editor.
 
 Content rules:

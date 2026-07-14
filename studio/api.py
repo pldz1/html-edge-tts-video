@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
-from factory import (
+from pipeline.factory import (
     CURRENT_ASSETS,
     CURRENT_META,
     CURRENT_SOURCE,
@@ -40,7 +40,7 @@ from factory import (
     slug,
     theme_url,
 )
-from validate_sources import validate_body, validate_scenes, validate_theme
+from pipeline.validate_sources import validate_body, validate_scenes, validate_theme
 
 
 PYTHON = sys.executable
@@ -50,19 +50,17 @@ RENDER_SIZES = {"480p", "720p", "1080p", "2k", "1440p", "4k", "2160p"}
 CAPTURE_MODES = {"auto", "video", "frames"}
 VOICE_PREVIEW_DIR = LOCAL_ASSETS / "voice-preview"
 VOICE_OPTIONS = [
-    {"id": "zh-CN-XiaoxiaoNeural", "label": "晓晓", "locale": "zh-CN", "gender": "Female"},
-    {"id": "zh-CN-XiaoyiNeural", "label": "晓伊", "locale": "zh-CN", "gender": "Female"},
-    {"id": "zh-CN-YunjianNeural", "label": "云健", "locale": "zh-CN", "gender": "Male"},
-    {"id": "zh-CN-YunxiNeural", "label": "云希", "locale": "zh-CN", "gender": "Male"},
-    {"id": "zh-CN-YunxiaNeural", "label": "云夏", "locale": "zh-CN", "gender": "Male"},
-    {"id": "zh-CN-YunyangNeural", "label": "云扬", "locale": "zh-CN", "gender": "Male"},
-    {"id": "zh-CN-liaoning-XiaobeiNeural", "label": "晓北（东北）", "locale": "zh-CN-liaoning", "gender": "Female"},
-    {"id": "zh-CN-shaanxi-XiaoniNeural", "label": "晓妮（陕西）", "locale": "zh-CN-shaanxi", "gender": "Female"},
-    {"id": "zh-HK-HiuGaaiNeural", "label": "晓佳（粤语）", "locale": "zh-HK", "gender": "Female"},
-    {"id": "zh-TW-HsiaoChenNeural", "label": "晓臻（台湾）", "locale": "zh-TW", "gender": "Female"},
+    {"id": "en-US-JennyNeural", "label": "Jenny", "locale": "en-US", "gender": "Female"},
+    {"id": "en-US-GuyNeural", "label": "Guy", "locale": "en-US", "gender": "Male"},
+    {"id": "en-US-AriaNeural", "label": "Aria", "locale": "en-US", "gender": "Female"},
+    {"id": "en-US-DavisNeural", "label": "Davis", "locale": "en-US", "gender": "Male"},
+    {"id": "en-GB-SoniaNeural", "label": "Sonia", "locale": "en-GB", "gender": "Female"},
+    {"id": "en-GB-RyanNeural", "label": "Ryan", "locale": "en-GB", "gender": "Male"},
+    {"id": "en-AU-NatashaNeural", "label": "Natasha", "locale": "en-AU", "gender": "Female"},
+    {"id": "en-AU-WilliamNeural", "label": "William", "locale": "en-AU", "gender": "Male"},
 ]
 DEFAULT_TTS_SETTINGS = {
-    "voice": "zh-CN-XiaoxiaoNeural",
+    "voice": "en-US-JennyNeural",
     "rate": "+12%",
     "pitch": "+0Hz",
     "gap": "0.28",
@@ -162,7 +160,7 @@ def output_belongs_to_project(path: Path, project_slug: str | None, project_path
 
 def project_display_name(value: str) -> str:
     cleaned = re.sub(r"[-_.]+", " ", value).strip()
-    return cleaned or "新建视频项目"
+    return cleaned or "New video project"
 
 
 def normalize_tts_settings(value: Any | None = None) -> dict[str, str]:
@@ -216,7 +214,7 @@ def ensure_project_manifest(
         **data,
         "version": 1,
         "id": current_id,
-        "name": str(name or data.get("name") or project_name_from_source(source_root)).strip() or "未命名项目",
+        "name": str(name or data.get("name") or project_name_from_source(source_root)).strip() or "Untitled project",
         "theme": str(data.get("theme") or DEFAULT_THEME),
         "createdAt": str(data.get("createdAt") or now),
         "updatedAt": str(data.get("updatedAt") or now),
@@ -453,31 +451,31 @@ def guide_state(state: dict[str, Any]) -> dict[str, str]:
     if not has_projects and not has_source:
         return {
             "stage": "create",
-            "title": "先创建一个视频源",
-            "body": "填写提示词，去 Web AI 生成 scenes.json 和 body.html，然后粘贴回来保存为本地项目。",
+            "title": "Create a video source first",
+            "body": "Fill in the prompt, use a web AI to generate scenes.json and body.html, then paste them here to save a local project.",
         }
     if not has_source:
         return {
             "stage": "load",
-            "title": "选择一个本地项目",
-            "body": "从左侧项目列表加载源文件，Studio 会把它放入当前工厂工作区。",
+            "title": "Choose a local project",
+            "body": "Load source files from the project list. Studio will place them in the current factory workspace.",
         }
     if not has_ready_timeline:
         return {
             "stage": "build",
-            "title": "下一步生成 TTS 和时间线",
-            "body": "当前源文件已经加载，可以先 Check，再运行 TTS 或 Offline Preview。",
+            "title": "Generate TTS and the timeline next",
+            "body": "The current source is loaded. Run Check first, then TTS or Silent Preview.",
         }
     if not has_outputs:
         return {
             "stage": "preview",
-            "title": "可以预览并渲染",
-            "body": "时间线和旁白已就绪，检查画面后可以编辑字幕或渲染 MP4。",
+            "title": "Ready to preview and render",
+            "body": "The timeline and narration are ready. Review the visuals, then edit captions or render an MP4.",
         }
     return {
         "stage": "done",
-        "title": "已有可查看的渲染结果",
-        "body": "你可以继续迭代源文件，也可以从 Outputs 里直接播放最近的成片。",
+        "title": "A rendered result is ready to view",
+        "body": "You can continue iterating on the source files or play the latest finished video directly from Outputs.",
     }
 
 
@@ -571,7 +569,7 @@ def create_project(payload: dict[str, Any]) -> dict[str, Any]:
     else:
         project_id = new_project_id()
         target = LOCAL_WORK / project_id
-    name = name or "未命名项目"
+    name = name or "Untitled project"
 
     target.mkdir(parents=True, exist_ok=True)
     (target / "scenes.json").write_text(scenes_json.strip() + "\n", encoding="utf-8")
@@ -590,23 +588,23 @@ def create_project(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def create_blank_project(payload: dict[str, Any]) -> dict[str, Any]:
-    display_name = str(payload.get("name") or "").strip() or "新建视频项目"
+    display_name = str(payload.get("name") or "").strip() or "New video project"
     project_id = new_project_id()
     target = LOCAL_WORK / project_id
     scenes = [
         {
             "id": "intro",
-            "category": "总览",
+            "category": "Overview",
             "title": display_name,
-            "summary": f"从这里开始规划 {display_name} 的主题、场景和旁白。",
-            "narration": f"这是 {display_name} 的新建视频项目。接下来请说明主题、受众和需要讲述的内容。",
+            "summary": f"Start planning the topic, scenes, and narration for {display_name} here.",
+            "narration": f"This is the new video project {display_name}. Next, describe the topic, audience, and key points to cover.",
         }
     ]
     body_html = f"""<section class=\"content-scene scene\" data-scene=\"intro\">
   <div class=\"scene-copy\">
     <div class=\"eyebrow\">INTRO</div>
     <h1>{display_name}</h1>
-    <p class=\"summary\">从这里开始规划 {display_name} 的主题、场景和旁白。</p>
+    <p class=\"summary\">Start planning the topic, scenes, and narration for {display_name} here.</p>
   </div>
   <div class=\"visual-board\"></div>
 </section>
@@ -930,6 +928,7 @@ def get_job(query: dict[str, list[str]]) -> dict[str, Any]:
 
 
 def voice_preview_state() -> dict[str, Any]:
+    VOICE_PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
     manifest = read_json_file(VOICE_PREVIEW_DIR / "manifest.json")
     if not isinstance(manifest, dict):
         manifest = {"samples": [], "history": []}

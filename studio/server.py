@@ -1,23 +1,36 @@
 #!/usr/bin/env python3
-"""Serve preview tools and caption editing API for the active factory workspace."""
+"""Serve the Studio web app and its local JSON API."""
 from __future__ import annotations
 
 import json
 import os
+import sys
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from captions import default_doc, load_effective_doc, load_timeline, save_doc
-from factory import ROOT, active_theme, theme_url
-from studio_api import ApiError, handle_get, handle_post
+APP_ROOT = Path(__file__).resolve().parents[1]
+if str(APP_ROOT) not in sys.path:
+    sys.path.insert(0, str(APP_ROOT))
+
+from pipeline.captions import default_doc, load_effective_doc, load_timeline, save_doc
+from pipeline.factory import CURRENT_SOURCE, ROOT, active_theme, theme_url
+from studio.api import ApiError, handle_get, handle_post
 
 
 class FactoryHandler(SimpleHTTPRequestHandler):
     def log_message(self, message: str, *args: object) -> None:
         if self.path.startswith("/api/"):
             print(f"[http] {self.command} {self.path} - {message % args}", flush=True)
+
+    def copyfile(self, source, outputfile) -> None:
+        try:
+            super().copyfile(source, outputfile)
+        except (BrokenPipeError, ConnectionResetError):
+            # Browsers commonly cancel asset requests during reloads or navigation.
+            # Treat those disconnects as normal and avoid noisy tracebacks on Windows.
+            return
 
     def send_json(self, status: int, payload: object) -> None:
         body = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
@@ -52,19 +65,28 @@ class FactoryHandler(SimpleHTTPRequestHandler):
         path = parsed.path
         query = parse_qs(parsed.query)
         tool_routes = {
-            "": "/tools/studio.html",
-            "/": "/tools/studio.html",
-            "/studio": "/tools/studio.html",
-            "/studio/main": "/tools/studio.html",
-            "/studio/new": "/tools/studio.html",
-            "/studio/prompt": "/tools/studio-prompt.html",
-            "/studio/import": "/tools/studio-import.html",
-            "/voices": "/tools/voices.html",
-            "/captions": "/tools/captions.html",
+            "": "/studio/web/studio/index.html",
+            "/": "/studio/web/studio/index.html",
+            "/studio": "/studio/web/studio/index.html",
+            "/studio/main": "/studio/web/studio/index.html",
+            "/studio/new": "/studio/web/studio/index.html",
+            "/studio/prompt": "/studio/web/studio/index.html",
+            "/studio/import": "/studio/web/studio/index.html",
+            "/voices": "/studio/web/voices/index.html",
+            "/captions": "/studio/web/captions/index.html",
         }
         if path in tool_routes:
+            # Serve the app entry internally so the browser keeps the friendly
+            # route. Studio uses that route to select the main/prompt/import view.
             self.path = tool_routes[path]
             super().do_GET()
+            return
+
+        # captions.json is optional until the user saves manual edits. Return
+        # JSON null so the theme can use generated timeline cues without a
+        # noisy missing-resource error in every preview iframe.
+        if path == "/.local/current/source/captions.json" and not (CURRENT_SOURCE / "captions.json").exists():
+            self.send_json(200, None)
             return
 
         try:

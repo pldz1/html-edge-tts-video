@@ -17,8 +17,8 @@ command option and must not be written to user or system package-manager configu
 
 Use `SKILL.md` as the entrypoint and `docs/agent-skill.md` as the full workflow and constraints.
 
-This is a factory. Per-video source folders contain `scenes.json`, `body.html`, optional
-`media/`, and optional editor-created `captions.json`. The factory loads a source folder into `.local/current/` and renders through
+This is a skill package. Per-video source folders contain `scenes.json`, `body.html`, optional
+`media/`, and optional editor-created `captions.json`. The skill package loads a source folder into `.local/current/` and renders through
 `themes/default/`. Do not ask users or web AI to generate `app.js`.
 
 Source folders must start with an `intro` scene, include a short `category` per scene, and keep

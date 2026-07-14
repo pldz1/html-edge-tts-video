@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Video Studio</title>
+    <link rel="icon" href="/studio/web/shared/favicon.ico" />
+    <link
+      rel="stylesheet"
+      href="https://cdn.bootcdn.net/ajax/libs/driver.js/1.3.6/driver.min.css"
+      onerror="this.onerror=null;this.href='https://cdn.jsdelivr.net/npm/driver.js@1.3.6/dist/driver.css'"
+    />
+    <link rel="stylesheet" href="/studio/web/studio/studio.css" />
+    <link rel="stylesheet" href="/studio/web/studio/workflow.css" />
+    <link rel="stylesheet" href="/studio/web/shared/app-shell.css" />
+    <script
+      defer
+      src="https://cdn.bootcdn.net/ajax/libs/driver.js/1.3.6/driver.min.js.iife.js"
+      onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/driver.js@1.3.6/dist/driver.js.iife.js'"
+    ></script>
+    <script
+      defer
+      src="https://cdn.jsdelivr.net/npm/lucide@0.513.0/dist/umd/lucide.min.js"
+    ></script>
+    <script defer src="/studio/web/studio/studio.js"></script>
+  </head>
+  <body>
+    <main class="studio-app">
+      <header
+        class="studio-header studio-project-header"
+        aria-label="Current project status"
+      >
+        <section class="project-identity" aria-label="Current project">
+          <div class="project-title-row">
+            <h1 id="workspaceProjectTitle" title="No project selected">
+              No project selected
+            </h1>
+            <button
+              id="projectEditButton"
+              class="icon-button project-edit-button"
+              type="button"
+              title="Edit project details"
+              aria-controls="projectDetails"
+              aria-expanded="false"
+            >
+              <i data-lucide="square-pen"></i><span>Edit</span>
+            </button>
+          </div>
+        </section>
+
+        <section class="status-summary" aria-label="Project status summary">
+          <article>
+            <span>Scenes</span>
+            <strong
+              ><span id="workspaceSceneCount">0</span
+              ><small>total</small></strong
+            >
+          </article>
+          <article>
+            <span>Narration</span>
+            <strong
+              ><span id="workspaceNarrationChars">0</span
+              ><small>characters</small></strong
+            >
+          </article>
+          <article>
+            <span>Timeline</span>
+            <strong id="workspaceTimelineState" class="status-badge warning"
+              >Not generated</strong
+            >
+          </article>
+          <article>
+            <span>Outputs</span>
+            <strong
+              ><span id="workspaceOutputCount">0</span
+              ><small>total</small></strong
+            >
+          </article>
+        </section>
+
+        <nav
+          class="header-actions quick-actions-panel"
+          aria-label="Project actions"
+        >
+          <a
+            class="primary-button"
+            href="/studio/prompt"
+            data-studio-route="prompt"
+            title="Create a project with AI"
+            ><i data-lucide="sparkles"></i><span>Create</span></a
+          >
+          <a
+            id="editCurrentProjectButton"
+            class="quiet-button secondary-action"
+            href="/studio/import"
+            data-studio-route="import"
+            ><i data-lucide="square-pen"></i><span>Source</span></a
+          >
+          <button
+            id="tourButton"
+            class="quiet-button utility-action"
+            type="button"
+            title="Open guide"
+          >
+            <i data-lucide="map"></i><span>Guide</span>
+          </button>
+          <details class="more-menu">
+            <summary class="quiet-button" title="More project actions">
+              <i data-lucide="ellipsis"></i><span>More</span>
+            </summary>
+            <div class="more-menu-panel">
+              <a
+                id="importCurrentProjectButton"
+                href="/studio/import"
+                title="Import and replace the current project"
+                style="
+                  display: flex;
+                  align-items: center;
+                  justify-content: flex-start;
+                  gap: 9px;
+                  height: 36px;
+                  line-height: 1;
+                "
+                ><i data-lucide="file-input"></i><span>Replace</span></a
+              >
+              <button
+                id="openCaptionsButton"
+                type="button"
+                title="Edit captions"
+              >
+                <i data-lucide="captions"></i><span>Captions</span>
+              </button>
+              <button
+                id="openProjectsShortcut"
+                type="button"
+                title="Switch projects"
+              >
+                <i data-lucide="folder-open"></i><span>Projects</span>
+              </button>
+              <button
+                id="newWorkspaceProjectButton"
+                type="button"
+                title="Create a new project"
+              >
+                <i data-lucide="plus"></i><span>New project</span>
+              </button>
+            </div>
+          </details>
+        </nav>
+
+        <section
+          id="projectDetails"
+          class="project-details"
+          aria-label="Project details"
+          hidden
+        >
+          <div class="project-details-panel">
+            <label
+              >Select project
+              <select
+                id="projectSelect"
+                class="project-select"
+                aria-label="Select project"
+              >
+                <option value="">No projects available</option>
+              </select>
+            </label>
+            <div class="detail-field">
+              <span>Project name</span>
+              <strong id="projectDetailTitle">No project selected</strong>
+            </div>
+            <div class="detail-field">
+              <span>Project ID</span>
+              <strong id="workspaceProjectId">Not loaded</strong>
+            </div>
+            <div class="detail-field detail-field-wide">
+              <span>Local path</span>
+              <strong id="currentSourcePath">No current source files</strong>
+            </div>
+            <form id="projectEditForm" class="project-edit-form" hidden>
+              <label
+                >Project name<input
+                  id="projectTitleInput"
+                  type="text"
+                  autocomplete="off"
+              /></label>
+              <div class="project-edit-actions">
+                <button
+                  id="saveProjectMetaButton"
+                  class="primary-button"
+                  type="button"
+                >
+                  <i data-lucide="save"></i><span>Save</span>
+                </button>
+              </div>
+            </form>
+            <div
+              id="projectSidebar"
+              class="project-create-tools"
+              aria-label="Project creation"
+            >
+              <button id="refreshButton" class="quiet-button" type="button">
+                <i data-lucide="refresh-cw"></i><span>Refresh</span>
+              </button>
+              <button id="loadStarterButton" class="quiet-button" type="button">
+                <i data-lucide="sparkles"></i><span>Example</span>
+              </button>
+              <input
+                id="newProjectNameInput"
+                type="text"
+                placeholder="New project name"
+                aria-label="New project name"
+              />
+              <button id="newProjectButton" class="quiet-button" type="button">
+                <i data-lucide="plus"></i><span>Create</span>
+              </button>
+            </div>
+            <div id="projectList" class="project-list" hidden></div>
+          </div>
+        </section>
+
+        <div class="header-status-mirror" aria-hidden="true">
+          <span id="currentProjectName">Not loaded</span>
+          <span id="timelineStatus">Not generated</span>
+          <span id="outputStatus">0 total</span>
+        </div>
+        <nav class="top-actions" aria-hidden="true">
+          <button
+            id="sidebarToggle"
+            class="quiet-button sidebar-toggle"
+            type="button"
+            aria-controls="projectSidebar"
+            aria-expanded="true"
+          >
+            <i data-lucide="folder-tree"></i><span>Projects</span>
+          </button>
+          <a
+            class="quiet-button"
+            href="/themes/default/index.html"
+            target="_blank"
+            rel="noreferrer"
+          >
+            <i data-lucide="monitor-play"></i><span>Preview</span>
+          </a>
+          <a
+            class="quiet-button"
+            href="/captions"
+            target="_blank"
+            rel="noreferrer"
+          >
+            <i data-lucide="captions"></i><span>Captions</span>
+          </a>
+          <a
+            class="quiet-button"
+            href="/voices"
+            target="_blank"
+            rel="noreferrer"
+          >
+            <i data-lucide="audio-lines"></i><span>Voice</span>
+          </a>
+        </nav>
+      </header>
+
+      <div class="studio-layout">
+        <aside class="app-sidebar">
+          <div class="sidebar-brand">
+            <div class="brand-mark">VF</div>
+            <div>
+              <p class="eyebrow">LOCAL VIDEO FACTORY</p>
+              <h1>Video Factory</h1>
+            </div>
+          </div>
+          <nav class="product-nav" aria-label="Product tools">
+            <p class="nav-label">PRODUCT TOOLS</p>
+            <a class="active" href="/studio" aria-current="page"
+              ><i data-lucide="folder"></i><span>Studio</span></a
+            >
+            <a href="/voices"
+              ><i data-lucide="audio-lines"></i><span>Voice Preview</span></a
+            >
+            <a href="/captions"
+              ><i data-lucide="captions"></i><span>Captions</span></a
+            >
+          </nav>
+          <div class="sidebar-spacer"></div>
+          <section class="engine-card">
+            <div class="engine-row">
+              <span class="status-dot"></span>
+              <div>
+                <strong>Engine status</strong>
+                <p>Running normally</p>
+              </div>
+            </div>
+            <small>TTS · LOCAL · AI ENGINE</small>
+          </section>
+        </aside>
+
+        <button
+          id="projectDrawerBackdrop"
+          class="project-drawer-backdrop"
+          type="button"
+          aria-label="Close project list"
+        ></button>
+
+        <section class="workspace">
+          <section class="preview-output-grid">
+            <section class="panel preview-panel">
+              <section class="build-next-step" aria-live="polite">
+                <span id="guideBadge" class="guide-badge">READY</span>
+                <div>
+                  <span class="next-step-label">NEXT STEP</span>
+                  <strong id="guideTitle">Reading status</strong>
+                  <p id="guideBody">
+                    Studio is connecting to the local factory.
+                  </p>
+                </div>
+              </section>
+              <div class="panel-heading">
+                <div>
+                  <p class="section-label">Preview</p>
+                  <h2>Project preview</h2>
+                </div>
+                <a
+                  class="quiet-button"
+                  href="/themes/default/index.html"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <i data-lucide="maximize-2"></i><span>Open fullscreen</span>
+                </a>
+              </div>
+              <iframe
+                id="previewFrame"
+                title="Video preview"
+                src="/themes/default/index.html"
+              ></iframe>
+            </section>
+
+            <section class="panel outputs-panel is-empty">
+              <div class="panel-heading">
+                <div>
+                  <p class="section-label">Exports</p>
+                  <h2>Project exports</h2>
+                </div>
+                <button
+                  id="refreshOutputsButton"
+                  class="icon-button"
+                  type="button"
+                  title="Refresh outputs"
+                >
+                  <i data-lucide="refresh-cw"></i><span>Refresh</span>
+                </button>
+              </div>
+              <div id="outputList" class="output-list"></div>
+            </section>
+          </section>
+
+          <section class="panel build-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="section-label">Build & Export</p>
+                <h2>Generate and export</h2>
+              </div>
+              <p id="jobStatus" class="job-status">Idle</p>
+            </div>
+            <div class="build-controls">
+              <button id="checkButton" class="quiet-button" type="button">
+                <i data-lucide="check-circle-2"></i><span>Check project</span>
+              </button>
+              <button id="offlineButton" class="quiet-button" type="button">
+                <i data-lucide="file-video"></i><span>Silent preview</span>
+              </button>
+              <button id="ttsButton" class="primary-button" type="button">
+                <i data-lucide="radio-tower"></i><span>Generate narration</span>
+              </button>
+              <label
+                >Size
+                <select id="renderSizeInput">
+                  <option value="720p">720p</option>
+                  <option value="1080p">1080p</option>
+                  <option value="2k">2K</option>
+                  <option value="4k">4K</option>
+                </select>
+              </label>
+              <label
+                >Output name<input
+                  id="renderOutputInput"
+                  type="text"
+                  value="studio-render.mp4"
+              /></label>
+              <button id="renderButton" class="primary-button" type="button">
+                <i data-lucide="download"></i><span>Export MP4</span>
+              </button>
+            </div>
+            <pre id="jobLog" class="job-log">Waiting for a task.</pre>
+          </section>
+        </section>
+
+        <section class="studio-route-panel prompt-route-panel" aria-label="AI prompt builder">
+          <section class="panel prompt-form-panel">
+            <div class="panel-heading">
+              <div><p class="section-label">01 · CREATE</p><h2>Generate a prompt</h2></div>
+              <button id="copyPromptButton" class="primary-button" type="button"><i data-lucide="copy"></i><span>Copy prompt</span></button>
+            </div>
+            <div class="field-grid">
+              <label>Topic<input id="topicInput" type="text" value="A local HTML edge-tts video factory" /></label>
+              <label>Audience<input id="audienceInput" type="text" value="Creators who want to make clear explainer videos with AI" /></label>
+              <label>Tone<input id="toneInput" type="text" value="Clear, practical, and concise" /></label>
+              <label>Scene count<input id="sceneCountInput" type="number" min="3" max="8" value="5" /></label>
+            </div>
+            <label class="wide-label">Additional requirements<textarea id="notesInput">Generate only scenes.json and body.html. Do not generate app.js, playback controls, chapter rails, or caption files.</textarea></label>
+            <div class="provider-row">
+              <button data-provider="https://chat.openai.com/" type="button">ChatGPT</button>
+              <button data-provider="https://claude.ai/new" type="button">Claude</button>
+              <button data-provider="https://gemini.google.com/app" type="button">Gemini</button>
+              <a class="quiet-button" href="/studio/import" data-studio-route="import"><i data-lucide="arrow-right"></i><span>Import response</span></a>
+            </div>
+          </section>
+          <section class="panel prompt-result-panel">
+            <div class="panel-heading"><div><p class="section-label">02 · COPY</p><h2>Prompt output</h2></div></div>
+            <textarea id="promptOutput" class="workflow-code code-field" spellcheck="false" aria-label="Generated AI prompt"></textarea>
+          </section>
+        </section>
+
+        <section class="studio-route-panel import-route-panel" aria-label="Source import">
+          <section class="panel import-source-panel">
+            <div class="panel-heading">
+              <div><p class="section-label">01 · IMPORT</p><h2>Import source content</h2></div>
+              <button id="extractButton" class="quiet-button" type="button"><i data-lucide="scan-text"></i><span>Extract</span></button>
+            </div>
+            <div class="import-mode-tabs" role="tablist" aria-label="Import mode">
+              <button class="active" type="button" data-import-mode="smart"><i data-lucide="scan-text"></i><span>Smart paste</span></button>
+              <button type="button" data-import-mode="direct"><i data-lucide="columns-2"></i><span>Paste separately</span></button>
+            </div>
+            <textarea id="aiResponseInput" class="workflow-response" spellcheck="false" placeholder="Paste a complete AI response containing scenes.json and body.html."></textarea>
+            <div id="directImportGrid" class="direct-import-grid" hidden>
+              <label>scenes.json<textarea id="directScenesInput" class="code-field" spellcheck="false" placeholder="Paste scenes.json"></textarea></label>
+              <label>body.html / index.html<textarea id="directBodyInput" class="code-field" spellcheck="false" placeholder="Paste body.html or index.html"></textarea></label>
+            </div>
+            <div class="save-row workflow-save-row">
+              <label>Project name<input id="projectNameInput" type="text" value="New video project" /></label>
+              <button id="validateExtractedButton" class="quiet-button" type="button"><i data-lucide="shield-check"></i><span>Validate</span></button>
+              <button id="saveProjectButton" class="primary-button" type="button"><i data-lucide="save"></i><span>Save and load</span></button>
+            </div>
+          </section>
+          <section class="panel import-preview-panel">
+            <div class="panel-heading"><div><p class="section-label">02 · REVIEW</p><h2>Current source files</h2></div></div>
+            <div class="extract-grid workflow-extract-grid">
+              <label>scenes.json<textarea id="scenesOutput" class="code-field" spellcheck="false"></textarea></label>
+              <label>body.html<textarea id="bodyOutput" class="code-field" spellcheck="false"></textarea></label>
+            </div>
+          </section>
+        </section>
+      </div>
+
+      <section
+        id="jobOverlay"
+        class="job-overlay"
+        aria-live="assertive"
+        aria-hidden="true"
+        hidden
+      >
+        <div class="job-overlay-card" role="status">
+          <i data-lucide="loader-circle" aria-hidden="true"></i>
+          <strong id="jobOverlayTitle">Task in progress</strong>
+          <p id="jobOverlayMessage">
+            Processing. Do not perform other actions.
+          </p>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

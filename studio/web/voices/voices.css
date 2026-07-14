@@ -256,7 +256,6 @@ h1 {
 }
 
 .project-title,
-.ready-state,
 .open-output-button,
 .step-heading,
 .section-heading,
@@ -282,19 +281,6 @@ h1 {
   background: var(--blue-soft);
   color: #5a7fac;
   font-size: 9px;
-}
-
-.ready-state {
-  gap: 5px;
-  color: #68798c;
-  font-size: 9px;
-}
-
-.ready-state > i {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--green);
 }
 
 .open-output-button,
@@ -437,6 +423,8 @@ select:focus {
 .quiet-button {
   gap: 6px;
   font-size: 10px;
+  display: flex;
+  align-items: center;
 }
 
 .settings-panel {

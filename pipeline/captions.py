@@ -8,7 +8,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from factory import CURRENT_ASSETS, CURRENT_SOURCE, active_source_root, ensure_current, load_scenes
+try:
+    from .factory import CURRENT_ASSETS, CURRENT_SOURCE, active_source_root, ensure_current, load_scenes
+except ImportError:  # Direct script execution: python pipeline/captions.py
+    from factory import CURRENT_ASSETS, CURRENT_SOURCE, active_source_root, ensure_current, load_scenes
 
 
 KIND = "html-edge-tts-captions"

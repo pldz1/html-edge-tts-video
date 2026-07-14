@@ -12,8 +12,12 @@ from pathlib import Path
 
 import edge_tts
 
-from factory import CURRENT_ASSETS, load_scenes, load_source, persist_current_assets
-from toolchain import ffmpeg_executable, media_duration
+try:
+    from .factory import CURRENT_ASSETS, load_scenes, load_source, persist_current_assets
+    from .toolchain import ffmpeg_executable, media_duration
+except ImportError:  # Direct script execution: python pipeline/build_tts.py
+    from factory import CURRENT_ASSETS, load_scenes, load_source, persist_current_assets
+    from toolchain import ffmpeg_executable, media_duration
 
 
 SCENE_AUDIO = CURRENT_ASSETS / "scenes"
@@ -188,7 +192,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source")
     parser.add_argument("--theme", default="default")
-    parser.add_argument("--voice", default="zh-CN-XiaoxiaoNeural")
+    parser.add_argument("--voice", default="en-US-JennyNeural")
     parser.add_argument("--rate", default="+12%")
     parser.add_argument("--pitch", default="+0Hz")
     parser.add_argument("--gap", type=float, default=0.28)

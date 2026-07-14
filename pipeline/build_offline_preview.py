@@ -8,8 +8,12 @@ import re
 import subprocess
 from pathlib import Path
 
-from factory import CURRENT_ASSETS, load_scenes, load_source, persist_current_assets
-from toolchain import ffmpeg_executable
+try:
+    from .factory import CURRENT_ASSETS, load_scenes, load_source, persist_current_assets
+    from .toolchain import ffmpeg_executable
+except ImportError:  # Direct script execution: python pipeline/build_offline_preview.py
+    from factory import CURRENT_ASSETS, load_scenes, load_source, persist_current_assets
+    from toolchain import ffmpeg_executable
 
 
 BREAK_RE = re.compile(r".{1,22}?[\u3002\uff01\uff1f\uff1b\uff0c\u3001\uff1a]|.{1,22}$")

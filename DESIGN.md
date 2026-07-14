@@ -1,12 +1,12 @@
 # Function Logic Design
 
-This document describes the concrete function-level design of the HTML edge-tts video factory.
+This document describes the concrete function-level design of the HTML edge-tts video skill package.
 It is written for local agents and maintainers who need to change behavior without rediscovering
 the pipeline from scratch.
 
 ## Core Data Flow
 
-The factory has four durable concepts:
+The skill package has four durable concepts:
 
 - Project folder: `.local/work/<8-char-id>/`, containing `manifest.json`, source files, generated
   resources, and project outputs. The immutable ID is storage identity; `manifest.json.name` is the
@@ -115,7 +115,7 @@ runtime/tool JavaScript files with Node, and byte-compiles `main.py` and every `
 
 `main()` parses CLI arguments and dispatches to the selected handler.
 
-## Factory Workspace: pipeline/factory.py
+## Workspace Module: pipeline/factory.py
 
 Path constants define the repository root, `.local/` workspace, active source/assets, starter
 source, theme root, and default theme. Other modules import these constants instead of rebuilding
@@ -421,4 +421,4 @@ Add new local web tools under `tools/` and serve them through `pipeline/serve.py
 JSON API. Static-only tools can be served by the existing file server.
 
 Keep generated or local state under `.local/`. Do not introduce new root-level `work/`, `output/`,
-`assets/`, or `.factory/` paths for new behavior.
+`assets/`, or historical `.factory/` paths for new behavior.

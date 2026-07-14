@@ -23,22 +23,10 @@ const els = {
   projectList: $('#projectList'),
   projectSelect: $('#projectSelect'),
   outputList: $('#outputList'),
-  outputPlayer: $('#outputPlayer'),
   previewFrame: $('#previewFrame'),
   tourButton: $('#tourButton'),
   sidebarToggle: $('#sidebarToggle'),
   projectDrawerBackdrop: $('#projectDrawerBackdrop'),
-  settingsButton: $('#settingsButton'),
-  settingsDrawer: $('#settingsDrawer'),
-  settingsBackdrop: $('#settingsBackdrop'),
-  closeSettingsButton: $('#closeSettingsButton'),
-  settingsVoice: $('#settingsVoice'),
-  settingsRate: $('#settingsRate'),
-  settingsPitch: $('#settingsPitch'),
-  settingsGap: $('#settingsGap'),
-  settingsReducedMotion: $('#settingsReducedMotion'),
-  saveSettingsButton: $('#saveSettingsButton'),
-  resetSettingsButton: $('#resetSettingsButton'),
   refreshButton: $('#refreshButton'),
   refreshOutputsButton: $('#refreshOutputsButton'),
   loadStarterButton: $('#loadStarterButton'),
@@ -57,6 +45,9 @@ const els = {
   promptOutput: $('#promptOutput'),
   copyPromptButton: $('#copyPromptButton'),
   aiResponseInput: $('#aiResponseInput'),
+  directScenesInput: $('#directScenesInput'),
+  directBodyInput: $('#directBodyInput'),
+  directImportGrid: $('#directImportGrid'),
   extractButton: $('#extractButton'),
   projectNameInput: $('#projectNameInput'),
   validateExtractedButton: $('#validateExtractedButton'),
@@ -71,36 +62,31 @@ const els = {
   renderOutputInput: $('#renderOutputInput'),
   jobStatus: $('#jobStatus'),
   jobLog: $('#jobLog'),
+  jobOverlay: $('#jobOverlay'),
+  jobOverlayTitle: $('#jobOverlayTitle'),
+  jobOverlayMessage: $('#jobOverlayMessage'),
 };
 
 let appState = null;
 let projects = [];
 let outputs = [];
-let selectedOutputUrl = '';
 let currentJobId = '';
 let pollTimer = 0;
 let toastTimer = 0;
 let tourAutoStarted = false;
 let promptRefreshFrame = 0;
-let appliedProjectSettingsKey = '';
+let importMode = 'smart';
+let importProjectId = '';
 
 const TOUR_STORAGE_KEY = 'html-edge-tts-video:studio-tour-seen:v1';
 const PROJECT_DRAWER_STORAGE_KEY = 'html-edge-tts-video:studio-project-drawer-open:v1';
-const STUDIO_SETTINGS_KEY = 'html-edge-tts-video:studio-settings:v1';
-const DEFAULT_STUDIO_SETTINGS = Object.freeze({
-  voice: 'zh-CN-XiaoxiaoNeural',
-  rate: '+12%',
-  pitch: '+0Hz',
-  gap: '0.28',
-  reducedMotion: false,
-});
 const INITIAL_FORM_VALUES = Object.freeze({
   topic: els.topicInput?.value || '',
   audience: els.audienceInput?.value || '',
   tone: els.toneInput?.value || '',
   sceneCount: els.sceneCountInput?.value || '',
   notes: els.notesInput?.value || '',
-  projectName: els.projectNameInput?.value || '新建视频项目',
+  projectName: els.projectNameInput?.value || 'New video project',
   renderOutput: els.renderOutputInput?.value || 'studio-render.mp4',
 });
 
@@ -124,6 +110,30 @@ function setStudioRoute(route = 'main', replace = false) {
   window.history[method]({}, '', nextPath);
 }
 
+function projectFromUrl() {
+  return new URLSearchParams(window.location.search).get('project') || '';
+}
+
+async function initImportProjectContext() {
+  if (!els.projectNameInput) return;
+  const projectId = projectFromUrl();
+  if (!projectId) return;
+  importProjectId = projectId;
+  try {
+    const data = await api(`/api/projects/source?project=${encodeURIComponent(projectId)}`);
+    const scenes = data?.files?.scenesJson || '';
+    const body = data?.files?.bodyHtml || '';
+    els.projectNameInput.value = data?.project?.name || '';
+    els.scenesOutput.value = scenes;
+    els.bodyOutput.value = body;
+    if (els.directScenesInput) els.directScenesInput.value = scenes;
+    if (els.directBodyInput) els.directBodyInput.value = body;
+    setStatus(`Editing project: ${data?.project?.name || projectId}`, 'success');
+  } catch (error) {
+    setStatus(error.message || 'Unable to load the project source.', 'error');
+  }
+}
+
 function applyRouteFocus(route = routeKey()) {
   document.body.dataset.studioRoute = route;
   document.querySelectorAll('[data-studio-route]').forEach(link => {
@@ -140,15 +150,23 @@ function cleanFileName(value) {
     .replace(/^-+|-+$/g, '') || 'video';
 }
 
+function outputNameForSize(value, size) {
+  const baseName = String(value || '')
+    .trim()
+    .replace(/\.mp4$/i, '')
+    .replace(/-(?:720p|1080p|2k|4k)$/i, '');
+  return `${cleanFileName(baseName)}-${size}.mp4`;
+}
+
 function setProjectEditMode(editing) {
   els.projectDetails?.toggleAttribute('hidden', !editing);
   els.projectEditForm?.toggleAttribute('hidden', !editing);
   document.body.classList.toggle('project-meta-editing', editing);
   if (els.projectEditButton) {
     els.projectEditButton.setAttribute('aria-expanded', String(editing));
-    els.projectEditButton.title = editing ? '收起项目信息' : '编辑项目信息';
+    els.projectEditButton.title = editing ? 'Collapse project details' : 'Edit project details';
     const label = els.projectEditButton.querySelector('span');
-    if (label) label.textContent = editing ? '收起' : '编辑';
+    if (label) label.textContent = editing ? 'Collapse' : 'Edit';
   }
   if (!editing) return;
   const active = appState?.activeProject;
@@ -161,19 +179,19 @@ function setProjectEditMode(editing) {
 async function saveProjectMetaEdit() {
   const active = appState?.activeProject;
   if (!active?.id) {
-    setStatus('请先选择一个项目。', 'error');
+    setStatus('Select a project first.', 'error');
     return;
   }
   const name = (els.projectTitleInput?.value || '').trim();
   if (!name) {
-    setStatus('项目名称不能为空。', 'error');
+    setStatus('Project name cannot be empty.', 'error');
     return;
   }
   try {
     await postJson('/api/projects/update', { project: active.id, name });
     setProjectEditMode(false);
     await refreshAll();
-    setStatus('项目名称已更新。', 'success');
+    setStatus('Project name updated.', 'success');
   } catch (error) {
     setStatus(error.message, 'error');
   }
@@ -202,24 +220,20 @@ function resetBuildState(name = '') {
   pollTimer = 0;
   currentJobId = '';
   setJobBusy(false);
-  els.jobStatus.textContent = '空闲';
+  els.jobStatus.textContent = 'Idle';
   els.jobStatus.className = 'job-status';
-  els.jobLog.textContent = '等待任务。';
+  els.jobLog.textContent = 'Waiting for a task.';
   els.renderSizeInput.value = '720p';
-  els.renderOutputInput.value = `${cleanFileName(name || INITIAL_FORM_VALUES.renderOutput.replace(/\.mp4$/i, ''))}.mp4`;
-}
-
-function resetPreviewState() {
-  selectedOutputUrl = '';
-  els.outputPlayer.removeAttribute('src');
-  els.outputPlayer.load();
+  els.renderOutputInput.value = outputNameForSize(
+    name || INITIAL_FORM_VALUES.renderOutput,
+    els.renderSizeInput.value,
+  );
 }
 
 function resetWorkspaceUi({ name = '', resetPrompt = false, resetImport = true } = {}) {
   if (resetPrompt) resetPromptComposer();
   if (resetImport) resetImportComposer(name);
   resetBuildState(name);
-  resetPreviewState();
 }
 
 function setProjectDrawerOpen(open) {
@@ -228,94 +242,14 @@ function setProjectDrawerOpen(open) {
     document.body.classList.remove('projects-open');
     els.sidebarToggle.setAttribute('aria-expanded', 'true');
     const desktopLabel = els.sidebarToggle.querySelector('span');
-    if (desktopLabel) desktopLabel.textContent = '项目';
+    if (desktopLabel) desktopLabel.textContent = 'Projects';
     return;
   }
   document.body.classList.toggle('projects-open', open);
   els.sidebarToggle.setAttribute('aria-expanded', String(open));
   const label = els.sidebarToggle.querySelector('span');
-  if (label) label.textContent = open ? '关闭项目' : '项目';
+  if (label) label.textContent = open ? 'Close projects' : 'Projects';
   localStorage.setItem(PROJECT_DRAWER_STORAGE_KEY, open ? '1' : '0');
-}
-
-function settingsFromStorage() {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(STUDIO_SETTINGS_KEY) || 'null');
-    return { ...DEFAULT_STUDIO_SETTINGS, ...(parsed && typeof parsed === 'object' ? parsed : {}) };
-  } catch {
-    return { ...DEFAULT_STUDIO_SETTINGS };
-  }
-}
-
-function applyStudioSettings(settings) {
-  els.settingsVoice.value = settings.voice || DEFAULT_STUDIO_SETTINGS.voice;
-  els.settingsRate.value = settings.rate || DEFAULT_STUDIO_SETTINGS.rate;
-  els.settingsPitch.value = settings.pitch || DEFAULT_STUDIO_SETTINGS.pitch;
-  els.settingsGap.value = settings.gap || DEFAULT_STUDIO_SETTINGS.gap;
-  els.settingsReducedMotion.checked = Boolean(settings.reducedMotion);
-  document.body.classList.toggle('reduce-motion', Boolean(settings.reducedMotion));
-}
-
-function applyProjectTtsSettings(ttsSettings) {
-  applyStudioSettings({
-    ...getStudioSettings(),
-    ...(ttsSettings || DEFAULT_STUDIO_SETTINGS),
-    reducedMotion: getStudioSettings().reducedMotion,
-  });
-}
-
-function getStudioSettings() {
-  return {
-    voice: els.settingsVoice.value,
-    rate: els.settingsRate.value.trim(),
-    pitch: els.settingsPitch.value.trim(),
-    gap: els.settingsGap.value,
-    reducedMotion: els.settingsReducedMotion.checked,
-  };
-}
-
-function setSettingsOpen(open) {
-  document.body.classList.toggle('settings-open', open);
-  els.settingsDrawer.setAttribute('aria-hidden', String(!open));
-}
-
-async function saveStudioSettings() {
-  const settings = getStudioSettings();
-  if (!/^[+-](?:\d|[1-9]\d)%$/.test(settings.rate)) {
-    setStatus('语速格式应类似 +12%', 'error');
-    return;
-  }
-  if (!/^[+-](?:\d|[1-9]\d)Hz$/.test(settings.pitch)) {
-    setStatus('音调格式应类似 +0Hz', 'error');
-    return;
-  }
-  const gap = Number(settings.gap);
-  if (!Number.isFinite(gap) || gap < 0 || gap > 3) {
-    setStatus('场景间隔需要在 0 到 3 秒之间', 'error');
-    return;
-  }
-  settings.gap = String(gap);
-  localStorage.setItem(STUDIO_SETTINGS_KEY, JSON.stringify(settings));
-  try {
-    if (appState?.activeProject?.id) {
-      await postJson('/api/projects/settings', {
-        project: appState.activeProject.id,
-        tts: {
-          voice: settings.voice,
-          rate: settings.rate,
-          pitch: settings.pitch,
-          gap: settings.gap,
-        },
-      });
-      appliedProjectSettingsKey = '';
-      await refreshAll();
-    }
-    applyStudioSettings(settings);
-    setSettingsOpen(false);
-    setStatus(`已保存当前项目 TTS 参数：${settings.voice}`, 'success');
-  } catch (error) {
-    setStatus(error.message, 'error');
-  }
 }
 
 function renderIcons() {
@@ -365,7 +299,7 @@ function postJson(path, payload) {
 }
 
 function formatDate(value) {
-  if (!value) return '未知时间';
+  if (!value) return 'Unknown time';
   return new Intl.DateTimeFormat('zh-CN', {
     month: '2-digit',
     day: '2-digit',
@@ -375,14 +309,14 @@ function formatDate(value) {
 }
 
 function formatBytes(value) {
-  if (!Number.isFinite(value)) return '未知大小';
+  if (!Number.isFinite(value)) return 'Unknown size';
   if (value < 1024 * 1024) return `${Math.round(value / 1024)} KB`;
   return `${(value / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function formatDuration(value) {
   const seconds = Number(value);
-  if (!Number.isFinite(seconds)) return '已生成';
+  if (!Number.isFinite(seconds)) return 'Generated';
   const minutes = Math.floor(seconds / 60);
   const rest = Math.round(seconds % 60).toString().padStart(2, '0');
   return `${minutes}:${rest}`;
@@ -452,12 +386,12 @@ If media assets are needed, describe the exact filenames and what each asset sho
 - The first scene must have "id": "intro" and must introduce where the video starts, what it will explain, and the rough route of the video.
 - Every scene must contain:
   - \`id\`: lowercase letters, digits, and hyphens only.
-  - \`category\`: a short Chinese label, 2 to 12 characters, used by the factory's bottom chapter rail.
+  - \`category\`: a short English label, used by the factory's bottom chapter rail.
   - \`title\`: visual title for the scene.
   - \`summary\`: one sentence for the visual summary.
-  - \`narration\`: natural Chinese spoken narration.
+  - \`narration\`: natural English spoken narration.
 - Optional fields such as \`visual_notes\` are allowed, but do not rely on JavaScript.
-- For an approximately three-minute video at edge-tts \`+12%\` rate, target 1,150 to 1,250 Chinese characters total.
+- For an approximately three-minute video at edge-tts \`+12%\` rate, target roughly 450 to 550 English words total.
 - Keep each scene focused. Prefer 4 to 7 scenes for a short explainer.
 - Match every scene's narration with a visual aid, so the screen explains structure rather than only repeating the spoken text.
 
@@ -466,10 +400,10 @@ Example scene:
 \`\`\`json
 {
   "id": "intro",
-  "category": "总览",
-  "title": "从问题入口开始",
-  "summary": "先说明本视频从哪里切入，以及后面会讲什么。",
-  "narration": "这条视频先从问题入口讲起，然后拆解核心概念、常见误区和最后的操作建议。"
+  "category": "Overview",
+  "title": "Start with the question",
+  "summary": "Explain the starting point and the route through the video.",
+  "narration": "This video starts with the central question, then breaks down the key idea, common misconceptions, and practical next steps."
 }
 \`\`\`
 
@@ -513,16 +447,16 @@ Example visual block:
 \`\`\`html
 <div class="visual-board">
   <div class="diagram-flow">
-    <div class="diagram-node" data-step><b>输入</b><span>问题和素材</span></div>
-    <div class="diagram-node" data-step><b>处理</b><span>拆成结构</span></div>
-    <div class="diagram-node" data-step><b>输出</b><span>画面和旁白</span></div>
+    <div class="diagram-node" data-step><b>Input</b><span>Question and material</span></div>
+    <div class="diagram-node" data-step><b>Process</b><span>Shape the structure</span></div>
+    <div class="diagram-node" data-step><b>Output</b><span>Visuals and narration</span></div>
   </div>
   <div class="formula-strip">
-    <div class="formula-token"><b>概念</b><span>是什么</span></div>
+    <div class="formula-token"><b>Concept</b><span>What it is</span></div>
     <div class="formula-token operator">+</div>
-    <div class="formula-token"><b>关系</b><span>怎么连</span></div>
+    <div class="formula-token"><b>Relationship</b><span>How it connects</span></div>
     <div class="formula-token operator">=</div>
-    <div class="formula-token"><b>结论</b><span>怎么用</span></div>
+    <div class="formula-token"><b>Conclusion</b><span>How to use it</span></div>
   </div>
 </div>
 \`\`\``;
@@ -544,11 +478,11 @@ async function copyPrompt() {
   refreshPrompt();
   try {
     await navigator.clipboard.writeText(els.promptOutput.value);
-    setStatus('Prompt 已复制。', 'success');
+    setStatus('Prompt copied.', 'success');
   } catch {
     els.promptOutput.focus();
     els.promptOutput.select();
-    setStatus('浏览器没有授予剪贴板权限，请手动复制。', 'error');
+    setStatus('The browser did not grant clipboard permission. Copy it manually.', 'error');
   }
 }
 
@@ -583,25 +517,34 @@ function extractBody(text) {
 
 function extractResponse() {
   const text = els.aiResponseInput.value;
-  const scenes = extractScenes(text);
-  const body = extractBody(text);
+  const scenes = els.directScenesInput?.value.trim() || extractScenes(text);
+  const body = els.directBodyInput?.value.trim() || extractBody(text);
   els.scenesOutput.value = scenes;
   els.bodyOutput.value = body;
 
   if (!scenes || !body) {
-    setStatus('没有同时找到 scenes.json 和 body.html。', 'error');
+    setStatus('scenes.json and body.html were not both found.', 'error');
     return false;
   }
 
   try {
     JSON.parse(scenes);
   } catch {
-    setStatus('提取出的 scenes.json 不是合法 JSON。', 'error');
+    setStatus('The extracted scenes.json is not valid JSON.', 'error');
     return false;
   }
 
-  setStatus('已提取 scenes.json 和 body.html。', 'success');
+  setStatus('scenes.json and body.html extracted.', 'success');
   return true;
+}
+
+function setImportMode(mode) {
+  importMode = mode === 'direct' ? 'direct' : 'smart';
+  document.querySelectorAll('[data-import-mode]').forEach(button => {
+    button.classList.toggle('active', button.dataset.importMode === importMode);
+  });
+  if (els.directImportGrid) els.directImportGrid.hidden = importMode !== 'direct';
+  if (els.aiResponseInput) els.aiResponseInput.hidden = importMode === 'direct';
 }
 
 function ensureExtracted() {
@@ -617,19 +560,19 @@ function renderHeader() {
   const sceneCount = current.sceneCount ?? activeProject?.sceneCount ?? 0;
   const narrationChars = current.narrationChars ?? activeProject?.narrationChars ?? 0;
   const activeId = active?.id || activeProject?.id || '';
-  const currentTitle = active?.name || activeProject?.name || current.title || '未选择项目';
+  const currentTitle = active?.name || activeProject?.name || current.title || 'No project selected';
   const timelineLabel = timeline.matchesSource
     ? formatDuration(timeline.duration)
     : timeline.exists
-      ? '需重建'
-      : '待生成';
+      ? 'Rebuild needed'
+      : 'Not generated';
   els.currentProjectName.textContent = currentTitle;
   els.timelineStatus.textContent = timelineLabel;
-  els.outputStatus.textContent = `${outputs.length} 个`;
-  els.currentSourcePath.textContent = active?.relativePath || '暂无当前源文件';
+  els.outputStatus.textContent = `${outputs.length} total`;
+  els.currentSourcePath.textContent = active?.relativePath || 'No current source files';
   els.workspaceProjectTitle.textContent = currentTitle;
   els.workspaceProjectTitle.title = currentTitle;
-  els.workspaceProjectId.textContent = activeId || '未加载';
+  els.workspaceProjectId.textContent = activeId || 'Not loaded';
   els.projectDetailTitle.textContent = currentTitle;
   els.workspaceSceneCount.textContent = `${sceneCount}`;
   els.workspaceNarrationChars.textContent = `${narrationChars}`;
@@ -637,11 +580,11 @@ function renderHeader() {
   els.workspaceTimelineState.classList.toggle('warning', !timeline.matchesSource);
   els.workspaceTimelineState.classList.toggle('success', Boolean(timeline.matchesSource));
   els.workspaceOutputCount.textContent = `${outputs.length}`;
-  els.guideTitle.textContent = appState?.guide?.title || '读取状态中';
-  els.guideBody.textContent = appState?.guide?.body || 'Studio 正在连接本地工厂。';
+  els.guideTitle.textContent = appState?.guide?.title || 'Reading status';
+  els.guideBody.textContent = appState?.guide?.body || 'Studio is connecting to the local factory.';
   els.guideBadge.textContent = (appState?.guide?.stage || 'ready').toUpperCase();
   els.loadStarterButton.disabled = !appState?.hasStarter;
-  els.loadStarterButton.querySelector('span').textContent = appState?.hasStarter ? '示例' : '示例不可用';
+  els.loadStarterButton.querySelector('span').textContent = appState?.hasStarter ? 'Example' : 'Example unavailable';
   els.editCurrentProjectButton.href = activeId ? `/studio/import?project=${encodeURIComponent(activeId)}` : '/studio/import';
   els.importCurrentProjectButton.href = activeId ? `/studio/import?project=${encodeURIComponent(activeId)}` : '/studio/import';
   els.editCurrentProjectButton.classList.toggle('is-disabled', !activeId);
@@ -661,7 +604,7 @@ function projectCard(project) {
 
   const meta = document.createElement('span');
   meta.className = 'project-meta';
-  meta.textContent = `${project.sceneCount} scenes · ${project.narrationChars} 字 · ${formatDate(project.updatedAt)}`;
+  meta.textContent = `${project.sceneCount} scenes · ${project.narrationChars} characters · ${formatDate(project.updatedAt)}`;
   button.title = project.relativePath;
   button.append(title, meta);
   return button;
@@ -673,12 +616,12 @@ function renderProjects() {
   if (!projects.length) {
     const empty = document.createElement('p');
     empty.className = 'empty-text';
-    empty.textContent = '还没有 .local/work 项目。';
+    empty.textContent = 'There are no .local/work projects yet.';
     els.projectList.append(empty);
     if (els.projectSelect) {
       const option = document.createElement('option');
       option.value = '';
-      option.textContent = '暂无项目';
+      option.textContent = 'No projects available';
       els.projectSelect.append(option);
       els.projectSelect.disabled = true;
     }
@@ -698,10 +641,12 @@ function renderProjects() {
 }
 
 function outputCard(output) {
-  const button = document.createElement('button');
-  button.className = `output-card${output.url === selectedOutputUrl ? ' active' : ''}`;
-  button.type = 'button';
-  button.dataset.output = output.url;
+  const link = document.createElement('a');
+  link.className = 'output-card';
+  link.href = output.url;
+  link.target = '_blank';
+  link.rel = 'noreferrer';
+  link.title = `Open ${output.name}`;
 
   const title = document.createElement('span');
   title.className = 'output-title';
@@ -711,28 +656,20 @@ function outputCard(output) {
   meta.className = 'output-meta';
   meta.textContent = `${formatBytes(output.size)} · ${formatDate(output.modifiedAt)}`;
 
-  button.append(title, meta);
-  return button;
+  link.append(title, meta);
+  return link;
 }
 
 function renderOutputs() {
   els.outputList.replaceChildren();
   const isEmpty = !outputs.length;
-  els.outputPlayer.closest('.outputs-panel').classList.toggle('is-empty', isEmpty);
+  els.outputList.closest('.outputs-panel').classList.toggle('is-empty', isEmpty);
   if (isEmpty) {
-    selectedOutputUrl = '';
-    els.outputPlayer.removeAttribute('src');
-    els.outputPlayer.load();
     const empty = document.createElement('p');
     empty.className = 'empty-text';
-    empty.textContent = '还没有可预览的成片。';
+    empty.textContent = 'There are no exported videos yet.';
     els.outputList.append(empty);
     return;
-  }
-
-  if (!outputs.some(output => output.url === selectedOutputUrl)) {
-    selectedOutputUrl = outputs[0].url;
-    els.outputPlayer.src = selectedOutputUrl;
   }
 
   outputs.forEach(output => {
@@ -741,7 +678,7 @@ function renderOutputs() {
 }
 
 function reloadPreview() {
-  const base = '../themes/default/index.html';
+  const base = '/themes/default/index.html';
   els.previewFrame.src = `${base}?studio=${Date.now()}`;
 }
 
@@ -750,8 +687,8 @@ function tourSteps() {
     {
       element: '.status-strip',
       popover: {
-        title: '先看当前状态',
-        description: '这里会告诉你当前加载了哪个项目、时间线是否已生成，以及是否已有输出视频。',
+        title: 'Start with the current status',
+        description: 'See which project is loaded, whether its timeline is generated, and whether it has output videos.',
         side: 'bottom',
         align: 'center',
       },
@@ -759,8 +696,8 @@ function tourSteps() {
     {
       element: '.project-drawer',
       popover: {
-        title: '这里切换当前项目',
-        description: '左侧项目列表负责激活项目。点任意项目卡片，就会把它切换成当前项目。',
+        title: 'Switch the current project here',
+        description: 'The project list activates projects. Select any project card to make it current.',
         side: 'right',
         align: 'start',
       },
@@ -768,8 +705,8 @@ function tourSteps() {
     {
       element: '.current-project-panel',
       popover: {
-        title: '先看当前项目工作台',
-        description: '这里集中显示当前项目的标题、状态、下一步和编辑入口，不再和项目列表重复。',
+        title: 'Review the current project workspace',
+        description: 'This area brings together the current project title, status, next step, and editing entry points.',
         side: 'right',
         align: 'start',
       },
@@ -777,8 +714,8 @@ function tourSteps() {
     {
       element: '.quick-actions-panel',
       popover: {
-        title: '常用操作在这里',
-        description: '编辑项目、导入替换、切字幕和新建项目都放在同一块，避免来回找入口。',
+        title: 'Common actions are here',
+        description: 'Edit, import a replacement, open captions, or create a project from one place.',
         side: 'bottom',
         align: 'start',
       },
@@ -786,8 +723,8 @@ function tourSteps() {
     {
       element: '.build-panel',
       popover: {
-        title: '构建只针对当前项目',
-        description: '当前项目切好以后，在这里做 Check、TTS 和 Render，语义会更清楚。',
+        title: 'Build only the current project',
+        description: 'After selecting the current project, run Check, TTS, and Render here.',
         side: 'top',
         align: 'center',
       },
@@ -795,8 +732,8 @@ function tourSteps() {
     {
       element: '.preview-panel',
       popover: {
-        title: '右侧只看当前项目',
-        description: '上面是当前项目预览，下面是当前项目自己的输出结果，预览和成片终于对应起来。',
+        title: 'The right side shows the current project only',
+        description: 'The preview and outputs both belong to the current project, so they always correspond.',
         side: 'top',
         align: 'start',
       },
@@ -840,9 +777,9 @@ function startDriverTour(steps) {
     stageRadius: 8,
     overlayOpacity: 0.42,
     popoverClass: 'studio-tour-popover',
-    nextBtnText: '下一步',
-    prevBtnText: '上一步',
-    doneBtnText: '完成',
+    nextBtnText: 'Next',
+    prevBtnText: 'Back',
+    doneBtnText: 'Done',
     steps,
     onHighlightStarted: (_element, step) => {
       setProjectDrawerOpen(step?.element === '.project-drawer');
@@ -862,9 +799,9 @@ function startFallbackTour(steps) {
       <h2></h2>
       <p class="tour-fallback-body"></p>
       <div class="tour-fallback-actions">
-        <button type="button" data-tour-prev>上一步</button>
-        <button type="button" data-tour-next>下一步</button>
-        <button type="button" data-tour-close>完成</button>
+        <button type="button" data-tour-prev>Back</button>
+        <button type="button" data-tour-next>Next</button>
+        <button type="button" data-tour-close>Done</button>
       </div>
     </section>
   `;
@@ -903,7 +840,7 @@ function startFallbackTour(steps) {
     title.textContent = step.popover.title;
     body.textContent = step.popover.description;
     prev.disabled = index === 0;
-    next.textContent = index === steps.length - 1 ? '完成' : '下一步';
+    next.textContent = index === steps.length - 1 ? 'Done' : 'Next';
     card.classList.toggle('is-last', index === steps.length - 1);
   }
 
@@ -954,11 +891,6 @@ async function refreshAll() {
     projects = projectData.projects || [];
     outputs = outputData.outputs || [];
     appState.outputs = outputs;
-    const settingsKey = appState?.activeProject?.id || '';
-    if (settingsKey !== appliedProjectSettingsKey) {
-      applyProjectTtsSettings(appState?.settings?.tts || appState?.activeProject?.settings?.tts);
-      appliedProjectSettingsKey = settingsKey;
-    }
     renderHeader();
     renderProjects();
     renderOutputs();
@@ -971,16 +903,14 @@ async function refreshAll() {
 
 async function loadProject(project, { view = 'compose', closeDrawer = true } = {}) {
   try {
-    setStatus('正在加载项目...');
+    setStatus('Loading project...');
     const data = await postJson('/api/projects/load', { project });
-    applyProjectTtsSettings(data.project?.settings?.tts);
-    appliedProjectSettingsKey = data.project?.id || '';
     resetWorkspaceUi({ name: data.project?.name || '', resetPrompt: false, resetImport: true });
     if (closeDrawer) setProjectDrawerOpen(false);
     setStudioRoute('main');
     reloadPreview();
     await refreshAll();
-    setStatus('项目已加载。', 'success');
+    setStatus('Project loaded.', 'success');
     return data.project;
   } catch (error) {
     setStatus(error.message, 'error');
@@ -989,14 +919,14 @@ async function loadProject(project, { view = 'compose', closeDrawer = true } = {
 }
 
 async function deleteProject(project) {
-  const confirmed = window.confirm(`确定删除项目 ${project} 吗？这个操作会删除 .local/work 中的源文件。`);
+  const confirmed = window.confirm(`Delete project ${project}? This removes its source files from .local/work.`);
   if (!confirmed) return;
   try {
-    setStatus(`正在删除项目：${project}...`);
+    setStatus(`Deleting project: ${project}...`);
     await postJson('/api/projects/delete', { project });
     await refreshAll();
     reloadPreview();
-    setStatus(`已删除项目：${project}`, 'success');
+    setStatus(`Project deleted: ${project}`, 'success');
   } catch (error) {
     setStatus(error.message, 'error');
   }
@@ -1023,7 +953,10 @@ async function openProjectCaptions(project) {
 async function exportProject(project) {
   const loaded = await loadProject(project);
   if (!loaded) return;
-  els.renderOutputInput.value = `${cleanFileName(loaded.name || 'video')}.mp4`;
+  els.renderOutputInput.value = outputNameForSize(
+    loaded.name || 'video',
+    els.renderSizeInput.value,
+  );
   await startJob('render');
 }
 
@@ -1034,7 +967,7 @@ async function validateExtracted() {
       scenesJson: els.scenesOutput.value,
       bodyHtml: els.bodyOutput.value,
     });
-    setStatus(`校验通过：${result.sceneCount} scenes，${result.narrationChars} 字旁白。`, 'success');
+    setStatus(`Validation passed: ${result.sceneCount} scenes, ${result.narrationChars} narration characters.`, 'success');
   } catch (error) {
     setStatus(error.message, 'error');
   }
@@ -1044,25 +977,24 @@ async function saveProject() {
   if (!ensureExtracted()) return;
   const name = els.projectNameInput.value.trim();
   if (!name) {
-    setStatus('请填写项目名称。', 'error');
+    setStatus('Enter a project name.', 'error');
     return;
   }
   try {
-    setStatus('正在保存项目...');
+    setStatus('Saving project...');
     const created = await postJson('/api/projects', {
+      project: importProjectId || undefined,
       name,
       scenesJson: els.scenesOutput.value,
       bodyHtml: els.bodyOutput.value,
-      tts: getStudioSettings(),
+      overwrite: Boolean(importProjectId),
     });
     await postJson('/api/projects/load', { project: created.project.id });
-    applyProjectTtsSettings(created.project?.settings?.tts);
-    appliedProjectSettingsKey = created.project?.id || '';
     resetWorkspaceUi({ name: created.project.name, resetPrompt: false, resetImport: true });
     setStudioRoute('main');
     reloadPreview();
     await refreshAll();
-    setStatus(`已保存并加载：${created.project.name}`, 'success');
+    setStatus(`Saved and loaded: ${created.project.name}`, 'success');
   } catch (error) {
     setStatus(error.message, 'error');
   }
@@ -1071,7 +1003,7 @@ async function saveProject() {
 async function createBlankProject() {
   const name = els.newProjectNameInput.value.trim();
   if (!name) {
-    setStatus('请输入新项目名称', 'error');
+    setStatus('Enter a new project name', 'error');
     els.newProjectNameInput.focus();
     return;
   }
@@ -1079,14 +1011,12 @@ async function createBlankProject() {
   try {
     const data = await postJson('/api/projects/blank', { name });
     appState = data.state;
-    applyProjectTtsSettings(data.project?.settings?.tts || DEFAULT_STUDIO_SETTINGS);
-    appliedProjectSettingsKey = data.project?.id || '';
     resetWorkspaceUi({ name: data.project?.name || name, resetPrompt: true, resetImport: true });
     setProjectDrawerOpen(false);
     setStudioRoute('main');
     reloadPreview();
     await refreshAll();
-    setStatus(`已新建并加载项目：${data.project.name}`, 'success');
+    setStatus(`Created and loaded project: ${data.project.name}`, 'success');
     window.location.href = `/studio/import?project=${encodeURIComponent(data.project.id)}`;
   } catch (error) {
     setStatus(error.message, 'error');
@@ -1095,25 +1025,35 @@ async function createBlankProject() {
   }
 }
 
-function setJobBusy(isBusy) {
+function setJobBusy(isBusy, task = '') {
   [els.checkButton, els.offlineButton, els.ttsButton, els.renderButton].forEach(button => {
     button.disabled = isBusy;
   });
+  const showOverlay = isBusy && ['tts', 'render'].includes(task);
+  if (els.jobOverlay) {
+    els.jobOverlay.hidden = !showOverlay;
+    els.jobOverlay.setAttribute('aria-hidden', String(!showOverlay));
+  }
+  if (showOverlay) {
+    const taskLabel = task === 'tts' ? 'Narration generation' : 'MP4 export';
+    els.jobOverlayTitle.textContent = `${taskLabel} in progress`;
+    els.jobOverlayMessage.textContent = 'The current project is processing. Do not perform other actions.';
+  }
 }
 
 function renderJob(job) {
   currentJobId = job.id;
   const labels = {
-    queued: '排队中',
-    running: '运行中',
-    succeeded: '完成',
-    failed: '失败',
+    queued: 'Queued',
+    running: 'Running',
+    succeeded: 'Complete',
+    failed: 'Failed',
   };
   els.jobStatus.textContent = `${job.task}: ${labels[job.status] || job.status}`;
   els.jobStatus.className = `job-status ${job.status}`;
-  els.jobLog.textContent = job.log?.length ? job.log.join('\n') : '任务已启动，等待日志。';
+  els.jobLog.textContent = job.log?.length ? job.log.join('\n') : 'Task started; waiting for logs.';
   els.jobLog.scrollTop = els.jobLog.scrollHeight;
-  setJobBusy(job.status === 'queued' || job.status === 'running');
+  setJobBusy(job.status === 'queued' || job.status === 'running', job.task);
 }
 
 async function pollJob() {
@@ -1130,9 +1070,9 @@ async function pollJob() {
     await refreshAll();
     if (data.job.status === 'succeeded') {
       if (['tts', 'offline'].includes(data.job.task)) reloadPreview();
-      setStatus(`${data.job.task} 已完成。`, 'success');
+      setStatus(`${data.job.task} completed.`, 'success');
     } else {
-      setStatus(`${data.job.task} 失败，请查看日志。`, 'error');
+      setStatus(`${data.job.task} failed. Check the log.`, 'error');
     }
   } catch (error) {
     setJobBusy(false);
@@ -1142,24 +1082,18 @@ async function pollJob() {
 
 async function startJob(task) {
   const payload = { task };
-  if (task === 'tts') {
-    const settings = getStudioSettings();
-    payload.voice = settings.voice;
-    payload.rate = settings.rate;
-    payload.pitch = settings.pitch;
-    payload.gap = settings.gap;
-  }
   if (task === 'render') {
     payload.size = els.renderSizeInput.value;
     payload.output = els.renderOutputInput.value;
     payload.capture = 'auto';
   }
+  setJobBusy(true, task);
   try {
     window.clearTimeout(pollTimer);
     const data = await postJson('/api/jobs', payload);
     renderJob(data.job);
     pollTimer = window.setTimeout(pollJob, 500);
-    setStatus(`${task} 已开始。`);
+    setStatus(`${task} started.`);
     return data.job;
   } catch (error) {
     setJobBusy(false);
@@ -1176,6 +1110,7 @@ function bindEvents() {
   els.tourButton.addEventListener('click', startTour);
   document.querySelectorAll('[data-studio-route]').forEach(link => {
     link.addEventListener('click', event => {
+      if (new URL(link.href, window.location.origin).search) return;
       event.preventDefault();
       const route = link.dataset.studioRoute || 'main';
       setStudioRoute(route);
@@ -1186,11 +1121,6 @@ function bindEvents() {
     setProjectDrawerOpen(!document.body.classList.contains('projects-open'));
   });
   els.projectDrawerBackdrop.addEventListener('click', () => setProjectDrawerOpen(false));
-  els.settingsButton.addEventListener('click', () => setSettingsOpen(true));
-  els.closeSettingsButton.addEventListener('click', () => setSettingsOpen(false));
-  els.settingsBackdrop.addEventListener('click', () => setSettingsOpen(false));
-  els.saveSettingsButton.addEventListener('click', saveStudioSettings);
-  els.resetSettingsButton.addEventListener('click', () => applyStudioSettings(DEFAULT_STUDIO_SETTINGS));
   els.extractButton?.addEventListener('click', () => {
     setStudioRoute('import');
     applyRouteFocus('import');
@@ -1202,6 +1132,14 @@ function bindEvents() {
     validateExtracted();
   });
   els.saveProjectButton?.addEventListener('click', saveProject);
+  document.querySelectorAll('[data-import-mode]').forEach(button => {
+    button.addEventListener('click', () => setImportMode(button.dataset.importMode));
+  });
+  [els.directScenesInput, els.directBodyInput].filter(Boolean).forEach(input => {
+    input.addEventListener('input', () => {
+      if (importMode === 'direct') extractResponse();
+    });
+  });
   els.projectEditButton?.addEventListener('click', () => {
     const isEditing = document.body.classList.contains('project-meta-editing');
     setProjectEditMode(!isEditing);
@@ -1216,7 +1154,7 @@ function bindEvents() {
   els.openCaptionsButton?.addEventListener('click', async () => {
     const projectId = appState?.activeProject?.id;
     if (!projectId) {
-      setStatus('请先选择一个项目。', 'error');
+      setStatus('Select a project first.', 'error');
       return;
     }
     await openProjectCaptions(projectId);
@@ -1232,6 +1170,12 @@ function bindEvents() {
   els.offlineButton.addEventListener('click', () => startJob('offline'));
   els.ttsButton.addEventListener('click', () => startJob('tts'));
   els.renderButton.addEventListener('click', () => startJob('render'));
+  els.renderSizeInput.addEventListener('change', () => {
+    els.renderOutputInput.value = outputNameForSize(
+      els.renderOutputInput.value,
+      els.renderSizeInput.value,
+    );
+  });
 
   els.projectList.addEventListener('click', event => {
     const card = event.target.closest('[data-project]');
@@ -1240,14 +1184,6 @@ function bindEvents() {
   els.projectSelect?.addEventListener('change', event => {
     const projectId = event.target.value;
     if (projectId) loadProject(projectId);
-  });
-
-  els.outputList.addEventListener('click', event => {
-    const card = event.target.closest('[data-output]');
-    if (!card) return;
-    selectedOutputUrl = card.dataset.output;
-    els.outputPlayer.src = selectedOutputUrl;
-    renderOutputs();
   });
 
   document.querySelectorAll('[data-provider]').forEach(button => {
@@ -1269,7 +1205,6 @@ function bindEvents() {
     if (event.key === 'Escape') {
       setProjectEditMode(false);
       setProjectDrawerOpen(false);
-      setSettingsOpen(false);
     }
   });
 }
@@ -1277,8 +1212,8 @@ function bindEvents() {
 bindEvents();
 setProjectEditMode(false);
 setProjectDrawerOpen(false);
-applyStudioSettings(settingsFromStorage());
 applyRouteFocus();
 if (els.promptOutput) refreshPrompt();
+initImportProjectContext();
 refreshAll();
 renderIcons();

@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Caption Editor</title>
+  <link rel="icon" href="/studio/web/shared/favicon.ico" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.6/dist/driver.css" />
+  <link rel="stylesheet" href="/studio/web/captions/captions.css" />
+  <link rel="stylesheet" href="/studio/web/shared/app-shell.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/driver.js@1.3.6/dist/driver.js.iife.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/lucide@0.513.0/dist/umd/lucide.min.js"></script>
+  <script defer src="/studio/web/captions/captions.js"></script>
+</head>
+<body>
+  <main class="caption-app">
+    <aside class="caption-sidebar app-sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-mark">VF</div>
+        <div><p class="eyebrow">LOCAL VIDEO FACTORY</p><h1>Video Factory</h1></div>
+      </div>
+      <nav class="product-nav" aria-label="Product tools">
+        <p class="nav-label">PRODUCT TOOLS</p>
+        <a href="/studio"><i data-lucide="folder"></i><span>Studio</span></a>
+        <a href="/voices"><i data-lucide="audio-lines"></i><span>Voice Preview</span></a>
+        <a class="active" href="/captions" aria-current="page"><i data-lucide="captions"></i><span>Captions</span></a>
+      </nav>
+      <div class="sidebar-spacer"></div>
+      <section class="engine-card">
+        <div class="engine-row"><span id="engineDot" class="status-dot"></span><div><strong>Engine status</strong><p id="engineStatus">Connecting</p></div></div>
+        <small>TTS · LOCAL · AI ENGINE</small>
+      </section>
+    </aside>
+
+    <header class="caption-topbar">
+      <div class="project-title">
+        <i data-lucide="folder"></i><strong id="captionProjectName">Caption editor</strong><span class="tool-badge">CURRENT PROJECT</span>
+      </div>
+      <label class="caption-project-picker"><span>Project</span><select id="captionProjectSelect"></select></label>
+      <div class="tool-top-actions">
+        <button id="captionGuideButton" style="display: flex; align-items: center; gap:8px" type="button"><i data-lucide="circle-help"></i><span>Guide</span></button>
+        <a class="open-output-button" href="/.local/current/source/" target="_blank" rel="noreferrer"><i data-lucide="folder-open"></i><span>Open source folder</span></a>
+      </div>
+    </header>
+
+    <section class="caption-workspace">
+      <section class="panel scene-panel">
+        <div class="section-heading">
+          <span class="step-number">01</span>
+          <div><h2>Cues and scenes</h2><p>Switch the visual and locate its caption scene</p></div>
+          <div class="heading-tools"><label class="search-field"><i data-lucide="search"></i><input id="sceneSearch" type="search" placeholder="Search scenes" /></label></div>
+        </div>
+        <div class="scene-strip-wrap">
+          <button id="sceneScrollLeft" class="round-button" type="button" aria-label="Scroll left"><i data-lucide="chevron-left"></i></button>
+          <div id="sceneList" class="scene-list" aria-live="polite"></div>
+          <button id="sceneScrollRight" class="round-button" type="button" aria-label="Scroll right"><i data-lucide="chevron-right"></i></button>
+        </div>
+        <div class="master-timeline">
+          <div class="timeline-labels"><span id="currentTimeText">00:00.000</span><span id="durationText">00:00.000</span></div>
+          <div class="timeline-track" id="timelineTrack"><div id="timelineProgress" class="timeline-progress"></div><div id="timelineCues" class="timeline-cues"></div><button id="timelinePlayhead" class="timeline-playhead" type="button" aria-label="Current time"></button></div>
+          <div class="timeline-actions"><button id="timelinePlayButton" class="icon-button" type="button"><i data-lucide="play"></i></button><span><i class="legend-dot cue-dot"></i>Caption cue</span><span><i class="legend-dot current-dot"></i>Current cue</span><div></div><button id="previousSceneButton" type="button"><i data-lucide="arrow-left"></i>Previous scene</button><button id="nextSceneButton" type="button">Next scene<i data-lucide="arrow-right"></i></button></div>
+        </div>
+      </section>
+
+      <section class="panel preview-panel">
+        <div class="section-heading"><span class="step-number">02</span><div><h2>Visual preview</h2><p>Preview captions in the current visual</p></div></div>
+        <div class="preview-frame-wrap">
+          <iframe id="previewFrame" title="Current video visual" src="/themes/default/index.html?render=1&amp;caption-editor=1"></iframe>
+          <span id="sceneBadge" class="scene-badge">Scene --</span>
+          <div id="liveCaption" class="live-caption">Captions are previewed here</div>
+        </div>
+        <div class="preview-controls">
+          <button id="previewPlayButton" type="button"><i data-lucide="play"></i><span>Play</span></button>
+          <button id="previousCueButton" type="button"><i data-lucide="arrow-up"></i><span>Previous cue</span></button>
+          <button id="nextCueButton" type="button"><i data-lucide="arrow-down"></i><span>Next cue</span></button>
+          <button id="locateCueButton" type="button"><i data-lucide="locate-fixed"></i><span>Locate current cue</span></button>
+        </div>
+        <audio id="narrationAudio" preload="metadata" src="/.local/current/assets/narration.mp3"></audio>
+      </section>
+
+      <section class="panel cue-list-panel">
+        <div class="section-heading list-heading">
+          <span class="step-number">03</span><div><h2>Caption list</h2><p>Browse and quickly search all caption cues</p></div>
+          <div class="list-stats"><strong id="cueCount">-- cues</strong><span id="totalDuration">--</span></div>
+        </div>
+        <div class="list-toolbar"><label class="search-field"><i data-lucide="search"></i><input id="cueSearch" type="search" placeholder="Search captions" /></label><button id="filterSceneButton" type="button"><i data-lucide="list-filter"></i><span>Current scene</span></button></div>
+        <div class="cue-table-head"><span>#</span><span>Start</span><span>End</span><span>Caption</span><span>Status</span></div>
+        <div id="cueList" class="cue-list" aria-live="polite"></div>
+        <div class="list-footer"><button id="exportButton" type="button"><i data-lucide="upload"></i><span>Export SRT</span></button><span><strong id="footerCueCount">--</strong> captions total</span></div>
+      </section>
+
+      <section class="panel cue-detail">
+        <div class="section-heading editor-heading"><span class="step-number">04</span><div><h2>Caption editor</h2><p>Edit the current caption text and timing</p></div><button id="jumpListButton" type="button"><i data-lucide="list"></i><span>Go to list</span></button></div>
+        <div class="timing-editor">
+          <label>Start time<span><input id="cueStart" type="number" min="0" step="0.01" /><button id="startEarlierButton" type="button">−0.1s</button><button id="startLaterButton" type="button">+0.1s</button></span></label>
+          <label>End time<span><input id="cueEnd" type="number" min="0" step="0.01" /><button id="endEarlierButton" type="button">−0.1s</button><button id="endLaterButton" type="button">+0.1s</button></span></label>
+          <label>Duration<input id="cueDuration" type="text" readonly /></label>
+        </div>
+        <label class="caption-text-label">Caption text<textarea id="cueText" maxlength="200" spellcheck="false"></textarea><span id="textCount">0 / 200</span></label>
+        <div class="editor-options"><label><span>Auto-wrap</span><input id="autoWrapToggle" type="checkbox" checked /></label><label><span>Keep punctuation</span><input id="punctuationToggle" type="checkbox" checked /></label><label><span>Two-line preview</span><input id="twoLineToggle" type="checkbox" checked /></label></div>
+        <div class="detail-actions"><button id="restoreButton" type="button"><i data-lucide="rotate-ccw"></i><span>Restore generated text</span></button><button id="saveButton" class="primary-button" type="button"><i data-lucide="save"></i><span>Save captions.json</span></button></div>
+      </section>
+
+      <footer class="editor-footer">
+        <div><strong>Help / shortcuts</strong><span><kbd>Space</kbd> Play / pause</span><span><kbd>←</kbd><kbd>→</kbd> Previous / next cue</span><span><kbd>J</kbd><kbd>K</kbd> −0.1s / +0.1s</span><span><kbd>Ctrl</kbd><kbd>S</kbd> Save file</span></div>
+        <div class="modified-info"><strong>Last change</strong><span id="modifiedText">No changes yet</span><em id="saveState">Saved</em></div>
+      </footer>
+    </section>
+
+    <div id="notification" class="notification" role="status" aria-live="polite"></div>
+    <dialog id="captionGuideDialog" class="tool-guide-dialog" aria-labelledby="captionGuideTitle">
+      <div class="guide-dialog-heading"><div><p>CAPTION EDITOR GUIDE</p><h2 id="captionGuideTitle">How to edit captions</h2></div><button type="button" data-close-guide aria-label="Close"><i data-lucide="x"></i></button></div>
+      <ol><li><strong>Generate narration first</strong><span>Run “Generate narration” in Studio before editing captions; it creates the timeline.</span></li><li><strong>Locate a caption</strong><span>Select a cue from a scene or the caption list to locate it in the preview.</span></li><li><strong>Edit and save</strong><span>Edit text or timing, review the preview, then save captions.json. Narration audio is unchanged.</span></li></ol>
+    </dialog>
+  </main>
+</body>
+</html>

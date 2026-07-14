@@ -11,17 +11,20 @@ from pathlib import Path
 
 import edge_tts
 
-from factory import LOCAL_ASSETS
+try:
+    from .factory import LOCAL_ASSETS
+except ImportError:  # Direct script execution: python pipeline/voice_preview.py
+    from factory import LOCAL_ASSETS
 
 PREVIEW_DIR = LOCAL_ASSETS / "voice-preview"
-DEFAULT_TEXT = "这是一段中文配音试听，用来比较声音、语速和整体气质。"
+DEFAULT_TEXT = "This is an English voice preview for comparing voices, rate, and overall delivery."
 DEFAULT_VOICES = [
-    "zh-CN-XiaoxiaoNeural",
-    "zh-CN-XiaoyiNeural",
-    "zh-CN-YunjianNeural",
-    "zh-CN-YunxiNeural",
-    "zh-CN-YunxiaNeural",
-    "zh-CN-YunyangNeural",
+    "en-US-JennyNeural",
+    "en-US-GuyNeural",
+    "en-US-AriaNeural",
+    "en-US-DavisNeural",
+    "en-GB-SoniaNeural",
+    "en-GB-RyanNeural",
 ]
 
 
@@ -29,10 +32,10 @@ def slug(value: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.-]+", "-", value).strip("-")
 
 
-async def chinese_voices() -> list[dict]:
+async def english_voices() -> list[dict]:
     voices = await edge_tts.list_voices()
     return sorted(
-        [voice for voice in voices if voice.get("ShortName", "").startswith("zh-")],
+        [voice for voice in voices if voice.get("ShortName", "").startswith("en-")],
         key=lambda voice: voice.get("ShortName", ""),
     )
 
@@ -45,7 +48,7 @@ def voice_label(voice: dict) -> str:
 
 
 async def list_voices(args: argparse.Namespace) -> None:
-    voices = await chinese_voices()
+    voices = await english_voices()
     if args.json:
         print(json.dumps(voices, ensure_ascii=False, indent=2))
         return
@@ -56,7 +59,7 @@ async def list_voices(args: argparse.Namespace) -> None:
 async def build_preview(args: argparse.Namespace) -> None:
     PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
     print("voice-preview: loading edge-tts voice catalog", flush=True)
-    available = {voice["ShortName"]: voice for voice in await chinese_voices()}
+    available = {voice["ShortName"]: voice for voice in await english_voices()}
     selected = args.voice or DEFAULT_VOICES
     missing = [voice for voice in selected if voice not in available]
     if missing:

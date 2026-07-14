@@ -1,7 +1,8 @@
-﻿# HTML edge-tts Video Factory
+﻿# HTML edge-tts Video Skill Package
 
-This repo is a factory: it loads a video source folder, generates Chinese TTS and caption timing,
-records a stable HTML theme shell, then writes an MP4 into the active project's `output/` folder.
+This repo is a skill package: it loads a video source folder, generates Chinese TTS and caption
+timing, records a stable HTML theme shell, then writes an MP4 into the active project's `output/`
+folder.
 
 AI output is intentionally small:
 
@@ -13,7 +14,7 @@ my-video-source/
   captions.json optional after manual subtitle edits
 ```
 
-The factory owns the runtime:
+The skill package owns the runtime:
 
 ```text
 themes/default/
@@ -69,7 +70,7 @@ python main.py captions --source .local/work/a7f31c2d
 Open:
 
 ```text
-http://127.0.0.1:8765/tools/captions.html
+http://127.0.0.1:8765/captions
 ```
 
 This creates or updates `captions.json`. It changes only on-screen subtitles, not narration audio.
@@ -181,7 +182,7 @@ http://127.0.0.1:8765/themes/default/index.html
 Voice preview URL:
 
 ```text
-http://127.0.0.1:8765/tools/voices.html
+http://127.0.0.1:8765/voices
 ```
 
 ## Commands
@@ -242,7 +243,7 @@ Do not commit generated or local work:
 .local/
 ```
 
-Legacy generated folders are also ignored for older checkouts:
+Legacy compatibility paths are also ignored for older checkouts:
 
 ```text
 .factory/
@@ -251,7 +252,7 @@ assets/
 output/
 ```
 
-Commit reusable factory changes here:
+Commit reusable skill-package changes here:
 
 ```text
 SKILL.md
@@ -262,7 +263,7 @@ main.py
 pipeline/
 templates/starter/
 themes/
-tools/
+studio/
 ```
 
 `main.py` is the single CLI entrypoint.

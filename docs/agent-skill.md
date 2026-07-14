@@ -1,6 +1,6 @@
 ﻿# Agent Workflow
 
-This repository is an HTML video factory. It loads a source folder, generates edge-tts narration and
+This repository is an HTML video skill package. It loads a source folder, generates edge-tts narration and
 WordBoundary caption timing, records a stable theme shell in the browser, and muxes the final MP4.
 
 ## Source Model
@@ -27,7 +27,7 @@ Studio-managed projects wrap that source contract in a project directory:
   body.html
   media/ optional
   captions.json optional
-  generated/ factory-owned audio and timeline cache
+  generated/ skill-owned audio and timeline cache
   output/ rendered videos
 ```
 
@@ -37,12 +37,12 @@ The project ID is immutable and internal. The editable display name and TTS sett
 Do not put preview chrome into video content. Headers, playback buttons, scrubbers, timecodes, and
 transport bars belong only to preview UI and must be hidden in render mode.
 
-Tracked reusable factory source:
+Tracked reusable skill-package source:
 
 - `templates/starter/` starter source folder
 - `themes/default/` stable HTML shell, runtime, and CSS
 - `pipeline/*.py` build scripts
-- `tools/` voice preview UI
+- `studio/` local Studio web application
 - `docs/` skill instructions
 
 Ignored local runtime state:
@@ -55,8 +55,8 @@ Ignored local runtime state:
 - `.local/assets/` generated helper assets such as voice previews
 - `.local/playwright/` browser capture scratch files
 
-Legacy generated folders such as `.factory/`, `work/`, `assets/`, and `output/` are still ignored
-for older checkouts, but new factory output should go under `.local/`.
+Legacy compatibility paths such as `.factory/`, `work/`, `assets/`, and `output/` are still
+ignored for older checkouts, but new skill-package output should go under `.local/`.
 
 ## Source Files
 
@@ -166,7 +166,7 @@ python main.py captions --source <source-folder>
 python main.py render --source <source-folder> --output my-video.mp4
 ```
 
-The caption editor writes `captions.json` to the active factory workspace and to the source folder.
+The caption editor writes `captions.json` to the active skill-package workspace and to the source folder.
 
 For visual-only changes after TTS:
 

@@ -95,19 +95,19 @@ def offline(args: argparse.Namespace) -> None:
 def preview(args: argparse.Namespace) -> None:
     if args.source:
         load_source(Path(args.source), args.theme)
-    run([PYTHON, "pipeline/serve.py"])
+    run([PYTHON, "studio/server.py"])
 
 
 def captions(args: argparse.Namespace) -> None:
     if args.source:
         load_source(Path(args.source), args.theme)
-    run([PYTHON, "pipeline/serve.py"])
+    run([PYTHON, "studio/server.py"])
 
 
 def studio(args: argparse.Namespace) -> None:
     if args.source:
         load_source(Path(args.source), args.theme)
-    run([PYTHON, "pipeline/serve.py"])
+    run([PYTHON, "studio/server.py"])
 
 
 def render(args: argparse.Namespace) -> None:
@@ -171,10 +171,14 @@ def check(args: argparse.Namespace) -> None:
         command.extend(["--source", args.source])
     run(command)
     run(["node", "--check", "themes/default/runtime.js"])
-    run(["node", "--check", "tools/captions.js"])
-    run(["node", "--check", "tools/studio.js"])
-    run(["node", "--check", "tools/voices.js"])
-    python_files = [ROOT / "main.py", *sorted((ROOT / "pipeline").glob("*.py"))]
+    run(["node", "--check", "studio/web/captions/captions.js"])
+    run(["node", "--check", "studio/web/studio/studio.js"])
+    run(["node", "--check", "studio/web/voices/voices.js"])
+    python_files = [
+        ROOT / "main.py",
+        *sorted((ROOT / "pipeline").glob("*.py")),
+        *sorted((ROOT / "studio").glob("*.py")),
+    ]
     run([PYTHON, "-m", "py_compile", *map(str, python_files)])
 
 
@@ -250,7 +254,7 @@ def build_parser() -> argparse.ArgumentParser:
     voice_preview_parser.add_argument("--voice", action="append")
     voice_preview_parser.add_argument(
         "--text",
-        default="这是一段中文配音试听，用来比较声音、语速和整体气质。",
+        default="This is an English voice preview for comparing voices, rate, and overall delivery.",
     )
     voice_preview_parser.add_argument("--rate", default="+12%")
     voice_preview_parser.add_argument("--pitch", default="+0Hz")
@@ -258,7 +262,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     tts_parser = subparsers.add_parser("tts")
     add_source_args(tts_parser)
-    tts_parser.add_argument("--voice", default="zh-CN-XiaoxiaoNeural")
+    tts_parser.add_argument("--voice", default="en-US-JennyNeural")
     tts_parser.add_argument("--rate", default="+12%")
     tts_parser.add_argument("--pitch", default="+0Hz")
     tts_parser.add_argument("--gap", type=float, default=0.28)
