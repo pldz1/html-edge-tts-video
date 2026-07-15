@@ -16,7 +16,7 @@
   <main class="caption-app">
     <aside class="caption-sidebar app-sidebar">
       <div class="sidebar-brand">
-        <div class="brand-mark">VF</div>
+        <img class="brand-mark" src="/studio/web/shared/app.svg" alt="" />
         <div><p class="eyebrow">本地视频工厂</p><h1>视频工厂</h1></div>
       </div>
       <nav class="product-nav" aria-label="产品工具">
@@ -65,9 +65,11 @@
       <section class="panel preview-panel">
         <div class="section-heading"><span class="step-number">02</span><div><h2>画面预览</h2><p>在当前画面中预览字幕</p></div></div>
         <div class="preview-frame-wrap">
-          <iframe id="previewFrame" title="Current video visual" src="about:blank"></iframe>
-          <span id="sceneBadge" class="scene-badge">Scene --</span>
-          <div id="liveCaption" class="live-caption">字幕将在此处预览</div>
+          <div id="previewViewport" class="preview-viewport">
+            <iframe id="previewFrame" title="Current video visual" src="about:blank"></iframe>
+            <span id="sceneBadge" class="scene-badge">Scene --</span>
+            <div id="liveCaption" class="live-caption">字幕将在此处预览</div>
+          </div>
         </div>
         <div class="preview-controls">
           <button id="previewPlayButton" type="button"><i data-lucide="play"></i><span>播放</span></button>
@@ -97,14 +99,10 @@
           <label>时长<input id="cueDuration" type="text" readonly /></label>
         </div>
         <label class="caption-text-label">字幕文字<textarea id="cueText" maxlength="200" spellcheck="false"></textarea><span id="textCount">0 / 200</span></label>
-        <div class="editor-options"><label><span>自动换行</span><input id="autoWrapToggle" type="checkbox" checked /></label><label><span>保留标点</span><input id="punctuationToggle" type="checkbox" checked /></label><label><span>双行预览</span><input id="twoLineToggle" type="checkbox" checked /></label></div>
-        <div class="detail-actions"><button id="restoreButton" type="button"><i data-lucide="rotate-ccw"></i><span>恢复生成的文字</span></button><button id="saveButton" class="primary-button" type="button"><i data-lucide="save"></i><span>保存 captions.json</span></button></div>
+        <div class="editor-options"><label><span>自动换行</span><input id="autoWrapToggle" type="checkbox" checked /></label><span>成片会自动缩放过长字幕，确保文字完整显示</span></div>
+        <div class="detail-actions"><span id="sourceSaveHint" class="source-save-hint">保存后将直接写入项目源文件</span><button id="restoreButton" type="button"><i data-lucide="rotate-ccw"></i><span>恢复生成的文字</span></button><button id="saveButton" class="primary-button" type="button"><i data-lucide="save"></i><span>保存到源文件</span></button></div>
       </section>
 
-      <footer class="editor-footer">
-        <div><strong>帮助 / 快捷键</strong><span><kbd>空格</kbd> 播放 / 暂停</span><span><kbd>←</kbd><kbd>→</kbd> 上一 / 下一片段</span><span><kbd>J</kbd><kbd>K</kbd> −0.1 秒 / +0.1 秒</span><span><kbd>Ctrl</kbd><kbd>S</kbd> 保存文件</span></div>
-        <div class="modified-info"><strong>最近修改</strong><span id="modifiedText">尚无修改</span><em id="saveState">已保存</em></div>
-      </footer>
     </section>
 
     <div id="notification" class="notification" role="status" aria-live="polite"></div>

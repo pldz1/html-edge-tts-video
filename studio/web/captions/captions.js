@@ -9,10 +9,10 @@ const state = {
   sceneQuery: '',
   filterScene: false,
   dirty: false,
-  saved: false,
   duration: 0,
   previewReady: false,
   previewRetries: 0,
+  previewVersion: 0,
   raf: 0,
 };
 
@@ -22,12 +22,12 @@ const els = {
   sceneSearch: $('#sceneSearch'), sceneList: $('#sceneList'), sceneScrollLeft: $('#sceneScrollLeft'), sceneScrollRight: $('#sceneScrollRight'),
   currentTimeText: $('#currentTimeText'), durationText: $('#durationText'), timelineTrack: $('#timelineTrack'), timelineProgress: $('#timelineProgress'), timelineCues: $('#timelineCues'), timelinePlayhead: $('#timelinePlayhead'), timelinePlayButton: $('#timelinePlayButton'),
   previousSceneButton: $('#previousSceneButton'), nextSceneButton: $('#nextSceneButton'),
-  previewFrame: $('#previewFrame'), sceneBadge: $('#sceneBadge'), liveCaption: $('#liveCaption'), previewPlayButton: $('#previewPlayButton'), previousCueButton: $('#previousCueButton'), nextCueButton: $('#nextCueButton'), locateCueButton: $('#locateCueButton'), narrationAudio: $('#narrationAudio'),
+  previewFrameWrap: $('.preview-frame-wrap'), previewFrame: $('#previewFrame'), previewViewport: $('#previewViewport'), sceneBadge: $('#sceneBadge'), liveCaption: $('#liveCaption'), previewPlayButton: $('#previewPlayButton'), previousCueButton: $('#previousCueButton'), nextCueButton: $('#nextCueButton'), locateCueButton: $('#locateCueButton'), narrationAudio: $('#narrationAudio'),
   cueCount: $('#cueCount'), totalDuration: $('#totalDuration'), footerCueCount: $('#footerCueCount'), cueSearch: $('#cueSearch'), filterSceneButton: $('#filterSceneButton'), cueList: $('#cueList'), exportButton: $('#exportButton'),
   cueStart: $('#cueStart'), cueEnd: $('#cueEnd'), cueDuration: $('#cueDuration'), cueText: $('#cueText'), textCount: $('#textCount'),
   startEarlierButton: $('#startEarlierButton'), startLaterButton: $('#startLaterButton'), endEarlierButton: $('#endEarlierButton'), endLaterButton: $('#endLaterButton'),
-  autoWrapToggle: $('#autoWrapToggle'), punctuationToggle: $('#punctuationToggle'), twoLineToggle: $('#twoLineToggle'), restoreButton: $('#restoreButton'), saveButton: $('#saveButton'), jumpListButton: $('#jumpListButton'),
-  modifiedText: $('#modifiedText'), saveState: $('#saveState'), notification: $('#notification'),
+  autoWrapToggle: $('#autoWrapToggle'), restoreButton: $('#restoreButton'), saveButton: $('#saveButton'), jumpListButton: $('#jumpListButton'),
+  sourceSaveHint: $('#sourceSaveHint'), notification: $('#notification'),
   captionGuideButton: $('#captionGuideButton'), captionGuideDialog: $('#captionGuideDialog'),
 };
 
@@ -104,6 +104,15 @@ function setStatus(message, error = false) {
   notify(message, error ? 'error' : '');
 }
 
+function fitPreviewViewport() {
+  if (!els.previewFrameWrap || !els.previewViewport) return;
+  const width = els.previewFrameWrap.clientWidth;
+  const height = els.previewFrameWrap.clientHeight;
+  if (!width || !height) return;
+  const scale = Math.min(width / 1920, height / 1080);
+  els.previewViewport.style.setProperty('--preview-scale', String(scale));
+}
+
 async function apiJson(path, options = {}) {
   const response = await fetch(path, {
     ...options,
@@ -174,11 +183,8 @@ function timingIsValid(cue) {
   return Number.isFinite(cue?.start) && Number.isFinite(cue?.end) && cue.start >= 0 && cue.end > cue.start && cue.end <= state.duration + .05;
 }
 
-function markDirty(message = 'Caption content changed') {
+function markDirty() {
   state.dirty = true;
-  els.saveState.textContent = '未保存';
-  els.saveState.classList.add('dirty');
-  els.modifiedText.textContent = `${new Date().toLocaleTimeString('zh-CN', { hour12: false })} ${message}`;
 }
 
 function highlight(text) {
@@ -268,13 +274,14 @@ function seekPreview(seconds) {
   els.currentTimeText.textContent = formatTime(time);
 }
 
-function preparePreviewFrame() {
+function preparePreviewFrame(version = state.previewVersion) {
+  if (version !== state.previewVersion) return;
   try {
     if (!els.previewFrame.contentWindow?.compositionReady) {
       state.previewReady = false;
       if (state.previewRetries < 50) {
         state.previewRetries += 1;
-        window.setTimeout(preparePreviewFrame, 100);
+        window.setTimeout(() => preparePreviewFrame(version), 100);
       }
       return;
     }
@@ -340,11 +347,10 @@ function updateTimingFromInputs() {
   cue.start = Number.parseFloat(els.cueStart.value);
   cue.end = Number.parseFloat(els.cueEnd.value);
   if (!timingIsValid(cue)) {
-    els.saveState.textContent = '时间无效';
-    els.saveState.classList.add('dirty');
+    notify('时间无效，请确保结束时间晚于开始时间', 'error');
     return;
   }
-  markDirty('Caption timing updated');
+  markDirty();
   renderSelection();
   seekPreview(cue.start);
 }
@@ -354,7 +360,7 @@ function adjustBoundary(which, delta) {
   if (!cue) return;
   if (which === 'start') cue.start = Number(formatNumber(clamp(cue.start + delta, 0, cue.end - .02)));
   else cue.end = Number(formatNumber(clamp(cue.end + delta, cue.start + .02, state.duration)));
-  markDirty('Caption timing adjusted');
+  markDirty();
   renderSelection();
   els.narrationAudio.currentTime = cue.start;
   seekPreview(cue.start);
@@ -366,7 +372,7 @@ function shiftCue(delta) {
   const span = cue.end - cue.start;
   cue.start = Number(formatNumber(clamp(cue.start + delta, 0, state.duration - span)));
   cue.end = Number(formatNumber(cue.start + span));
-  markDirty('Caption timing shifted');
+  markDirty();
   renderSelection();
   els.narrationAudio.currentTime = cue.start;
   seekPreview(cue.start);
@@ -387,23 +393,34 @@ async function loadCaptions() {
   state.duration = Number(payload.duration || 0);
   state.selected = 0;
   state.dirty = false;
-  state.saved = Boolean(payload.saved);
-  if (payload.audioUrl) els.narrationAudio.src = payload.audioUrl;
+  state.previewVersion += 1;
+  const previewVersion = state.previewVersion;
+  if (els.sourceSaveHint) {
+    els.sourceSaveHint.textContent = payload.sourcePath
+      ? `直接写入：${payload.sourcePath}`
+      : '保存后将直接写入项目源文件';
+    els.sourceSaveHint.title = payload.sourcePath || '';
+  }
+  if (payload.audioUrl) {
+    const audioUrl = new URL(payload.audioUrl, window.location.origin);
+    audioUrl.searchParams.set('caption-editor-load', String(previewVersion));
+    els.narrationAudio.pause();
+    els.narrationAudio.src = audioUrl.href;
+    els.narrationAudio.load();
+  }
   if (payload.previewUrl) {
     const previewUrl = new URL(payload.previewUrl, window.location.origin);
     previewUrl.searchParams.set('render', '1');
     previewUrl.searchParams.set('caption-editor', '1');
-    if (els.previewFrame.src !== previewUrl.href) {
-      state.previewReady = false;
-      els.previewFrame.src = previewUrl.href;
-    }
+    previewUrl.searchParams.set('caption-editor-load', String(previewVersion));
+    state.previewReady = false;
+    state.previewRetries = 0;
+    els.previewFrame.src = previewUrl.href;
   }
-  els.saveState.textContent = '已保存';
-  els.saveState.classList.remove('dirty');
   setStatus(payload.saved ? '字幕文件已加载' : '正在使用生成的字幕');
   renderSelection();
   seekPreview(0);
-  if (els.previewFrame.contentDocument?.readyState === 'complete') preparePreviewFrame();
+  if (els.previewFrame.contentDocument?.readyState === 'complete') preparePreviewFrame(previewVersion);
 }
 
 async function saveCaptions() {
@@ -421,18 +438,20 @@ async function saveCaptions() {
   const payload = await response.json();
   state.captions = payload.doc;
   state.dirty = false;
-  els.saveState.textContent = '已保存';
-  els.saveState.classList.remove('dirty');
-  els.modifiedText.textContent = `${new Date().toLocaleTimeString('en-GB', { hour12: false })} saved captions.json`;
+  const sourcePath = payload.sourcePath || payload.saved?.[0] || 'captions.json';
+  if (els.sourceSaveHint) {
+    els.sourceSaveHint.textContent = `直接写入：${sourcePath}`;
+    els.sourceSaveHint.title = sourcePath;
+  }
   setStatus('保存完成');
-  notify(`字幕已保存到 ${payload.saved.length} 个位置`, 'success');
+  notify('字幕已直接保存到项目源文件，并已同步画面预览', 'success');
 }
 
 function restoreGeneratedCue() {
   const generated = state.generated?.cues?.[state.selected];
   if (!generated) return;
   state.captions.cues[state.selected] = { ...generated };
-  markDirty('Generated captions restored');
+  markDirty();
   renderSelection();
 }
 
@@ -496,15 +515,14 @@ function bindEvents() {
   els.endLaterButton.addEventListener('click', () => adjustBoundary('end', .1));
   els.cueText.addEventListener('input', () => {
     const cue = currentCue(); if (!cue) return;
-    cue.text = els.cueText.value; els.textCount.textContent = `${cue.text.length} / 200`; els.liveCaption.textContent = cue.text || '（空字幕）'; markDirty('字幕内容已更新'); renderList();
+    cue.text = els.cueText.value; els.textCount.textContent = `${cue.text.length} / 200`; els.liveCaption.textContent = cue.text || '（空字幕）'; markDirty(); renderList();
   });
-  els.twoLineToggle.addEventListener('change', () => els.liveCaption.classList.toggle('two-lines', els.twoLineToggle.checked));
   els.autoWrapToggle.addEventListener('change', () => els.liveCaption.style.whiteSpace = els.autoWrapToggle.checked ? 'normal' : 'nowrap');
   els.restoreButton.addEventListener('click', restoreGeneratedCue);
   els.saveButton.addEventListener('click', () => saveCaptions().catch(error => { setStatus(error.message, true); notify(error.message, 'error'); }));
   els.exportButton.addEventListener('click', exportSrt);
   els.jumpListButton.addEventListener('click', () => els.cueList.querySelector('.cue-item.active')?.scrollIntoView({ block: 'center' }));
-  els.previewFrame.addEventListener('load', () => { state.previewRetries = 0; preparePreviewFrame(); });
+  els.previewFrame.addEventListener('load', () => { state.previewRetries = 0; preparePreviewFrame(state.previewVersion); });
   els.narrationAudio.addEventListener('play', () => { setPlayIcons(true); cancelAnimationFrame(state.raf); syncPlaybackFrame(); });
   els.narrationAudio.addEventListener('pause', () => { setPlayIcons(false); cancelAnimationFrame(state.raf); seekPreview(els.narrationAudio.currentTime || 0); });
   els.narrationAudio.addEventListener('ended', () => setPlayIcons(false));
@@ -524,6 +542,12 @@ function bindEvents() {
 bindEvents();
 bindGuideDialog();
 renderIcons();
+fitPreviewViewport();
+if (window.ResizeObserver && els.previewFrameWrap) {
+  new ResizeObserver(fitPreviewViewport).observe(els.previewFrameWrap);
+} else {
+  window.addEventListener('resize', fitPreviewViewport);
+}
 loadProjectList()
   .then(loadCaptions)
   .catch(error => {

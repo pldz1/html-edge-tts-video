@@ -109,6 +109,9 @@ input {
   font-weight: 700;
   line-height: 1.32;
   text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
   opacity: 0;
   transform: translateY(7px);
   transition: opacity .16s ease, transform .16s ease;

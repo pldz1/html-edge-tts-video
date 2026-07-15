@@ -16,7 +16,7 @@
   border: 1px solid #dce5f0;
   border-radius: 9px;
   background: #ffffff;
-  box-shadow: 0 2px 8px rgba(80, 111, 155, .04);
+  box-shadow: 0 2px 8px rgba(80, 111, 155, 0.04);
 }
 
 .workflow-title,
@@ -60,12 +60,12 @@
 }
 
 .prompt-workspace {
-  grid-template-columns: minmax(380px, .72fr) minmax(520px, 1fr);
+  grid-template-columns: minmax(380px, 0.72fr) minmax(520px, 1fr);
   grid-template-rows: minmax(0, 1fr);
 }
 
 .import-workspace {
-  grid-template-columns: minmax(400px, .8fr) minmax(520px, 1fr);
+  grid-template-columns: minmax(400px, 0.8fr) minmax(520px, 1fr);
   grid-template-rows: minmax(0, 1fr);
 }
 
@@ -123,6 +123,8 @@
 
 .direct-import-grid label {
   min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .direct-import-grid textarea {
@@ -214,22 +216,69 @@
   padding-bottom: 10px;
 }
 
-.tool-guide-dialog { width: min(460px, calc(100vw - 32px)); padding: 0; border: 1px solid #d9e5f3; border-radius: 14px; box-shadow: 0 22px 60px rgba(29,52,84,.2); color: var(--text); }
-.tool-guide-dialog::backdrop { background: rgba(20,35,59,.34); }
-.guide-dialog-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 20px 20px 14px; border-bottom: 1px solid var(--line); background: #f5f9ff; }
-.guide-dialog-heading p { margin: 0 0 4px; color: #4d78bd; font-size: 10px; font-weight: 760; letter-spacing: .08em; }
-.guide-dialog-heading h2 { margin: 0; font-size: 19px; }
-.guide-dialog-heading button { width: 30px; min-height: 30px; padding: 0; }
-.tool-guide-dialog ol { display: grid; gap: 14px; margin: 0; padding: 20px 20px 20px 42px; }
-.tool-guide-dialog li { padding-left: 4px; color: #58708c; font-size: 13px; line-height: 1.55; }
-.tool-guide-dialog li strong,.tool-guide-dialog li span { display: block; }
-.tool-guide-dialog li strong { margin-bottom: 3px; color: #223d5d; font-size: 14px; }
+.tool-guide-dialog {
+  width: min(460px, calc(100vw - 32px));
+  padding: 0;
+  border: 1px solid #d9e5f3;
+  border-radius: 14px;
+  box-shadow: 0 22px 60px rgba(29, 52, 84, 0.2);
+  color: var(--text);
+}
+.tool-guide-dialog::backdrop {
+  background: rgba(20, 35, 59, 0.34);
+}
+.guide-dialog-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px 20px 14px;
+  border-bottom: 1px solid var(--line);
+  background: #f5f9ff;
+}
+.guide-dialog-heading p {
+  margin: 0 0 4px;
+  color: #4d78bd;
+  font-size: 10px;
+  font-weight: 760;
+  letter-spacing: 0.08em;
+}
+.guide-dialog-heading h2 {
+  margin: 0;
+  font-size: 19px;
+}
+.guide-dialog-heading button {
+  width: 30px;
+  min-height: 30px;
+  padding: 0;
+}
+.tool-guide-dialog ol {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 20px 20px 20px 42px;
+}
+.tool-guide-dialog li {
+  padding-left: 4px;
+  color: #58708c;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.tool-guide-dialog li strong,
+.tool-guide-dialog li span {
+  display: block;
+}
+.tool-guide-dialog li strong {
+  margin-bottom: 3px;
+  color: #223d5d;
+  font-size: 14px;
+}
 
 @media (max-width: 920px) {
   .prompt-workspace,
   .import-workspace {
     grid-template-columns: 1fr;
-    grid-template-rows: minmax(320px, .9fr) minmax(360px, 1fr);
+    grid-template-rows: minmax(320px, 0.9fr) minmax(360px, 1fr);
     overflow-y: auto;
   }
 }

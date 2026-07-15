@@ -41,6 +41,24 @@ def captions_path() -> Path:
     return CURRENT_SOURCE / "captions.json"
 
 
+def source_captions_path() -> Path | None:
+    """Return the authored captions path for the loaded project, when available."""
+    source_root = active_source_root()
+    if not source_root or not source_root.exists() or not source_root.is_dir():
+        return None
+    return source_root / "captions.json"
+
+
+def caption_storage_paths() -> list[Path]:
+    """List caption targets with the authored source first and workspace mirror second."""
+    paths = [path for path in [source_captions_path(), captions_path()] if path is not None]
+    unique: list[Path] = []
+    for path in paths:
+        if not any(path.resolve() == saved.resolve() for saved in unique):
+            unique.append(path)
+    return unique
+
+
 def load_timeline() -> dict:
     path = timeline_path()
     if not path.exists():
@@ -219,8 +237,12 @@ def captions_match_timeline(doc: dict, timeline: dict) -> bool:
 def load_effective_doc(timeline: dict | None = None) -> tuple[dict, bool]:
     ensure_current()
     timeline = timeline or load_timeline()
-    path = captions_path()
-    if not path.exists():
+    # The project source is authoritative. The current workspace is only a
+    # renderer mirror and remains a fallback for legacy workspaces without a
+    # recorded source directory.
+    paths = caption_storage_paths()
+    path = next((candidate for candidate in paths if candidate.exists()), None)
+    if path is None:
         return default_doc(timeline), False
 
     try:
@@ -239,13 +261,20 @@ def save_doc(value: Any, timeline: dict | None = None) -> dict:
     if not captions_match_timeline(doc, timeline):
         raise ValueError("captions do not match current timeline timing")
 
-    write_json(captions_path(), doc)
-    saved = [str(captions_path())]
+    source_path = source_captions_path()
+    if source_path is None:
+        raise ValueError("loaded project source folder is unavailable; reload the project before saving captions")
+    targets = caption_storage_paths()
 
-    source_root = active_source_root()
-    if source_root and source_root.exists() and source_root.is_dir():
-        source_caption_path = source_root / "captions.json"
-        write_json(source_caption_path, doc)
-        saved.append(str(source_caption_path))
+    # Write the authored project file first so a failed source write can never
+    # be reported as a successful save merely because the renderer mirror was
+    # writable. Then keep .local/current in sync for the live preview.
+    for path in targets:
+        write_json(path, doc)
 
-    return {"doc": doc, "saved": saved}
+    return {
+        "doc": doc,
+        "saved": [str(path) for path in targets],
+        "sourcePath": str(source_path),
+        "workspacePath": str(captions_path()),
+    }

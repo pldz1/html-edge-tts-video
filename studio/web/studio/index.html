@@ -30,72 +30,33 @@
         class="studio-header studio-project-header"
         aria-label="当前项目状态"
       >
+        <label class="header-project-picker">
+          <span>选择项目</span>
+          <select
+            id="projectSelect"
+            class="project-select"
+            aria-label="选择项目"
+          >
+            <option value="">暂无项目</option>
+          </select>
+        </label>
+
         <section class="project-identity" aria-label="当前项目">
           <div class="project-title-row">
-            <h1 id="workspaceProjectTitle" title="未选择项目">
-              未选择项目
-            </h1>
+            <h1 id="workspaceProjectTitle" title="未选择项目">未选择项目</h1>
             <button
               id="projectEditButton"
               class="icon-button project-edit-button"
               type="button"
-              title="编辑项目详情"
-              aria-controls="projectDetails"
-              aria-expanded="false"
+              title="重命名项目"
+              aria-controls="renameProjectDialog"
             >
               <i data-lucide="square-pen"></i><span>编辑</span>
             </button>
           </div>
         </section>
 
-        <section class="status-summary" aria-label="项目状态摘要">
-          <article>
-            <span>场景</span>
-            <strong
-              ><span id="workspaceSceneCount">0</span
-              ><small>个</small></strong
-            >
-          </article>
-          <article>
-            <span>旁白</span>
-            <strong
-              ><span id="workspaceNarrationChars">0</span
-              ><small>字符</small></strong
-            >
-          </article>
-          <article>
-            <span>时间轴</span>
-            <strong id="workspaceTimelineState" class="status-badge warning"
-              >未生成</strong
-            >
-          </article>
-          <article>
-            <span>输出</span>
-            <strong
-              ><span id="workspaceOutputCount">0</span
-              ><small>个</small></strong
-            >
-          </article>
-        </section>
-
-        <nav
-          class="header-actions quick-actions-panel"
-          aria-label="项目操作"
-        >
-          <a
-            class="primary-button"
-            href="/studio?dialog=prompt"
-            data-studio-route="prompt"
-            title="使用 AI 创建项目"
-            ><i data-lucide="sparkles"></i><span>创建</span></a
-          >
-          <a
-            id="editCurrentProjectButton"
-            class="quiet-button secondary-action"
-            href="/studio?dialog=import"
-            data-studio-route="import"
-            ><i data-lucide="square-pen"></i><span>源文件</span></a
-          >
+        <nav class="header-actions quick-actions-panel" aria-label="项目操作">
           <button
             id="tourButton"
             class="quiet-button utility-action"
@@ -104,128 +65,62 @@
           >
             <i data-lucide="map"></i><span>指南</span>
           </button>
-          <details class="more-menu">
-            <summary class="quiet-button" title="更多项目操作">
-              <i data-lucide="ellipsis"></i><span>更多</span>
-            </summary>
-            <div class="more-menu-panel">
-              <a
-                id="importCurrentProjectButton"
-                href="/studio?dialog=import"
-                title="导入并替换当前项目"
-                style="
-                  display: flex;
-                  align-items: center;
-                  justify-content: flex-start;
-                  gap: 9px;
-                  height: 36px;
-                  line-height: 1;
-                "
-                ><i data-lucide="file-input"></i><span>替换</span></a
-              >
-              <button
-                id="openCaptionsButton"
-                type="button"
-                title="编辑字幕"
-              >
-                <i data-lucide="captions"></i><span>字幕</span>
-              </button>
-              <button
-                id="openProjectsShortcut"
-                type="button"
-                title="切换项目"
-              >
-                <i data-lucide="folder-open"></i><span>项目</span>
-              </button>
-              <button
-                id="newWorkspaceProjectButton"
-                type="button"
-                title="创建新项目"
-              >
-                <i data-lucide="plus"></i><span>新建项目</span>
-              </button>
-              <button
-                id="deleteCurrentProjectButton"
-                class="danger-menu-action"
-                type="button"
-                title="删除当前项目"
-              >
-                <i data-lucide="trash-2"></i><span>删除项目</span>
-              </button>
-            </div>
-          </details>
-        </nav>
 
-        <section
-          id="projectDetails"
-          class="project-details"
-          aria-label="项目详情"
-          hidden
-        >
-          <div class="project-details-panel">
-            <label
-              >选择项目
-              <select
-                id="projectSelect"
-                class="project-select"
-                aria-label="选择项目"
-              >
-                <option value="">暂无项目</option>
-              </select>
-            </label>
-            <div class="detail-field">
-              <span>项目名称</span>
-              <strong id="projectDetailTitle">未选择项目</strong>
-            </div>
-            <div class="detail-field">
-              <span>项目 ID</span>
-              <strong id="workspaceProjectId">未加载</strong>
-            </div>
-            <div class="detail-field detail-field-wide">
-              <span>本地路径</span>
-              <strong id="currentSourcePath">没有当前源文件</strong>
-            </div>
-            <form id="projectEditForm" class="project-edit-form" hidden>
-              <label
-                >项目名称<input
-                  id="projectTitleInput"
-                  type="text"
-                  autocomplete="off"
-              /></label>
-              <div class="project-edit-actions">
-                <button
-                  id="saveProjectMetaButton"
-                  class="primary-button"
-                  type="button"
-                >
-                  <i data-lucide="save"></i><span>保存</span>
-                </button>
-              </div>
-            </form>
-            <div
-              id="projectSidebar"
-              class="project-create-tools"
-              aria-label="项目创建"
-            >
-              <button id="refreshButton" class="quiet-button" type="button">
-                <i data-lucide="refresh-cw"></i><span>刷新</span>
-              </button>
-              <button id="loadStarterButton" class="quiet-button" type="button">
-                <i data-lucide="sparkles"></i><span>示例</span>
-              </button>
-              <input
-                id="newProjectNameInput"
-                type="text"
-                placeholder="新项目名称"
-                aria-label="新项目名称"
-              />
-              <button id="newProjectButton" class="quiet-button" type="button">
-                <i data-lucide="plus"></i><span>创建</span>
-              </button>
-            </div>
-            <div id="projectList" class="project-list" hidden></div>
-          </div>
-        </section>
+          <button
+            id="loadStarterButton"
+            class="quiet-button utility-action"
+            type="button"
+          >
+            <i data-lucide="sparkles"></i><span>示例</span>
+          </button>
+          <a
+            class="primary-button"
+            href="/studio?dialog=prompt"
+            data-studio-route="prompt"
+            title="使用 AI 创建项目"
+            ><i data-lucide="sparkles"></i><span>AI 创建</span></a
+          >
+
+          <a
+            id="editCurrentProjectButton"
+            class="quiet-button secondary-action"
+            href="/studio?dialog=import"
+            data-studio-route="import"
+            ><i data-lucide="square-pen"></i><span>源文件</span></a
+          >
+          <button
+            id="openCaptionsButton"
+            class="quiet-button utility-action"
+            type="button"
+            title="编辑字幕"
+          >
+            <i data-lucide="captions"></i><span>字幕</span>
+          </button>
+          <button
+            id="refreshButton"
+            class="quiet-button utility-action"
+            type="button"
+          >
+            <i data-lucide="refresh-cw"></i><span>刷新</span>
+          </button>
+          <button
+            id="deleteCurrentProjectButton"
+            class="quiet-button danger-header-action"
+            type="button"
+            title="删除当前项目"
+          >
+            <i data-lucide="trash-2"></i><span>删除</span>
+          </button>
+          <button
+            id="newWorkspaceProjectButton"
+            class="quiet-button secondary-action"
+            type="button"
+            title="创建空白项目"
+          >
+            <i data-lucide="plus"></i><span>新建项目</span>
+          </button>
+        </nav>
+        <div id="projectList" class="project-list" hidden></div>
 
         <div class="header-status-mirror" aria-hidden="true">
           <span id="currentProjectName">未加载</span>
@@ -237,7 +132,6 @@
             id="sidebarToggle"
             class="quiet-button sidebar-toggle"
             type="button"
-            aria-controls="projectSidebar"
             aria-expanded="true"
           >
             <i data-lucide="folder-tree"></i><span>项目</span>
@@ -264,7 +158,7 @@
       <div class="studio-layout">
         <aside class="app-sidebar">
           <div class="sidebar-brand">
-            <div class="brand-mark">VF</div>
+            <img class="brand-mark" src="/studio/web/shared/app.svg" alt="" />
             <div>
               <p class="eyebrow">本地视频工厂</p>
               <h1>视频工厂</h1>
@@ -314,29 +208,89 @@
                 <div>
                   <span class="next-step-label">下一步</span>
                   <strong id="guideTitle">正在读取状态</strong>
-                  <p id="guideBody">
-                    工作室正在连接本地工厂。
-                  </p>
+                  <p id="guideBody">工作室正在连接本地工厂。</p>
                 </div>
               </section>
-              <div class="panel-heading">
-                <div>
+              <div class="panel-heading preview-heading">
+                <div class="preview-heading-title">
                   <p class="section-label">预览</p>
                   <h2>项目预览</h2>
+                  <div class="preview-source-meta" aria-label="当前项目源文件">
+                    <span
+                      >项目 ID <code id="workspaceProjectId">未加载</code></span
+                    >
+                    <span class="preview-source-path"
+                      >路径
+                      <code id="currentSourcePath">没有当前源文件</code></span
+                    >
+                  </div>
                 </div>
+                <section class="status-summary" aria-label="项目状态摘要">
+                  <article>
+                    <span>场景</span>
+                    <strong
+                      ><span id="workspaceSceneCount">0</span
+                      ><small>个</small></strong
+                    >
+                  </article>
+                  <article>
+                    <span>旁白</span>
+                    <strong
+                      ><span id="workspaceNarrationChars">0</span
+                      ><small>字符</small></strong
+                    >
+                  </article>
+                  <article>
+                    <span>时间轴</span>
+                    <strong
+                      id="workspaceTimelineState"
+                      class="status-badge warning"
+                      >未生成</strong
+                    >
+                  </article>
+                  <article>
+                    <span>输出</span>
+                    <strong
+                      ><span id="workspaceOutputCount">0</span
+                      ><small>个</small></strong
+                    >
+                  </article>
+                </section>
+              </div>
+              <div id="previewFrameArea" class="preview-frame-area">
+                <div id="previewFrameWrap" class="preview-frame-wrap">
+                  <div id="previewViewport" class="preview-viewport">
+                    <iframe
+                      id="previewFrame"
+                      title="视频预览"
+                      src="about:blank"
+                    ></iframe>
+                  </div>
+                </div>
+              </div>
+              <div class="preview-transport" aria-label="预览进度">
                 <button
                   id="previewPlayButton"
-                  class="primary-button"
+                  class="preview-play-button"
                   type="button"
                 >
                   <i data-lucide="play"></i><span>播放</span>
                 </button>
+                <output id="previewCurrentTime" for="previewProgress"
+                  >0:00</output
+                >
+                <input
+                  id="previewProgress"
+                  type="range"
+                  min="0"
+                  max="0"
+                  value="0"
+                  step="0.01"
+                  aria-label="拖动视频进度"
+                  disabled
+                />
+                <output id="previewDuration" for="previewProgress">0:00</output>
               </div>
-              <iframe
-                id="previewFrame"
-                title="视频预览"
-                src="about:blank"
-              ></iframe>
             </section>
 
             <section class="panel outputs-panel is-empty">
@@ -409,6 +363,108 @@
         </section>
 
         <dialog
+          id="renameProjectDialog"
+          class="new-project-dialog rename-project-dialog"
+          aria-labelledby="renameProjectDialogTitle"
+        >
+          <form id="projectEditForm">
+            <header class="workflow-dialog-heading">
+              <div>
+                <p class="section-label">项目设置</p>
+                <h2 id="renameProjectDialogTitle">重命名项目</h2>
+              </div>
+              <button
+                class="icon-button"
+                type="button"
+                data-close-rename-project
+                title="关闭"
+              >
+                <i data-lucide="x"></i><span>关闭</span>
+              </button>
+            </header>
+            <div class="new-project-dialog-body">
+              <label>
+                项目名称
+                <input
+                  id="projectTitleInput"
+                  type="text"
+                  autocomplete="off"
+                  required
+                />
+              </label>
+            </div>
+            <footer class="new-project-dialog-actions">
+              <button
+                class="quiet-button"
+                type="button"
+                data-close-rename-project
+              >
+                取消
+              </button>
+              <button
+                id="saveProjectMetaButton"
+                class="primary-button"
+                type="submit"
+              >
+                <i data-lucide="save"></i><span>保存名称</span>
+              </button>
+            </footer>
+          </form>
+        </dialog>
+
+        <dialog
+          id="newProjectDialog"
+          class="new-project-dialog"
+          aria-labelledby="newProjectDialogTitle"
+        >
+          <form id="newProjectForm">
+            <header class="workflow-dialog-heading">
+              <div>
+                <p class="section-label">新建项目</p>
+                <h2 id="newProjectDialogTitle">为项目命名</h2>
+              </div>
+              <button
+                class="icon-button"
+                type="button"
+                data-close-new-project
+                title="关闭"
+              >
+                <i data-lucide="x"></i><span>关闭</span>
+              </button>
+            </header>
+            <div class="new-project-dialog-body">
+              <label>
+                项目名称
+                <input
+                  id="newProjectNameInput"
+                  type="text"
+                  value="新视频项目"
+                  placeholder="输入项目名称"
+                  autocomplete="off"
+                  required
+                />
+              </label>
+              <p>
+                创建后会立即打开源文件编辑界面，可直接修改 scenes.json 和
+                body.html。
+              </p>
+            </div>
+            <footer class="new-project-dialog-actions">
+              <button class="quiet-button" type="button" data-close-new-project>
+                取消
+              </button>
+              <button
+                id="newProjectButton"
+                class="primary-button"
+                type="submit"
+              >
+                <i data-lucide="plus"></i><span>创建并编辑</span>
+              </button>
+            </footer>
+          </form>
+        </dialog>
+
+        <dialog
           id="promptDialog"
           class="studio-workflow-dialog prompt-route-panel"
           aria-label="AI 提示词生成器"
@@ -418,99 +474,103 @@
               <p class="section-label">创建内容</p>
               <h2>生成 AI 提示词</h2>
             </div>
-            <button class="icon-button" type="button" data-close-dialog title="关闭">
+            <button
+              class="icon-button"
+              type="button"
+              data-close-dialog
+              title="关闭"
+            >
               <i data-lucide="x"></i><span>关闭</span>
             </button>
           </header>
           <div class="workflow-dialog-grid">
-          <section class="panel prompt-form-panel">
-            <div class="panel-heading">
-              <div>
-                <p class="section-label">01 · 创建</p>
-                <h2>生成提示词</h2>
+            <section class="panel prompt-form-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="section-label">01 · 创建</p>
+                  <h2>生成提示词</h2>
+                </div>
+                <button
+                  id="copyPromptButton"
+                  class="primary-button"
+                  type="button"
+                >
+                  <i data-lucide="copy"></i><span>复制提示词</span>
+                </button>
               </div>
-              <button
-                id="copyPromptButton"
-                class="primary-button"
-                type="button"
-              >
-                <i data-lucide="copy"></i><span>复制提示词</span>
-              </button>
-            </div>
-            <div class="field-grid">
-              <label
-                >主题<input
-                  id="topicInput"
-                  type="text"
-                placeholder="输入视频主题"
-              /></label>
-              <label
-                >受众<input
-                  id="audienceInput"
-                  type="text"
-                placeholder="输入目标受众"
-              /></label>
-              <label
-                >语气<input
-                  id="toneInput"
-                  type="text"
-                placeholder="输入表达语气"
-              /></label>
-              <label
-                >场景数量<input
-                  id="sceneCountInput"
-                  type="number"
-                  min="3"
-                  max="8"
-                  value="5"
-              /></label>
-              <label
-                >内容语言<select id="languageInput">
-                  <option value="auto">自动检测（中/英）</option>
-                  <option value="zh-CN">中文</option>
-                  <option value="en-US">英语</option>
-                </select></label
-              >
-              <label
-                >提示词目标<select id="promptTargetInput">
-                  <option value="web-ai">网页 AI（复制代码块）</option>
-                  <option value="agent">智能体（直接创建文件）</option>
-                </select></label
-              >
-            </div>
-            <label class="wide-label"
-              >补充要求<textarea
-                id="notesInput"
-                placeholder="可选：品牌、颜色、素材或其他要求"
+              <div class="field-grid">
+                <label
+                  >主题<input
+                    id="topicInput"
+                    type="text"
+                    placeholder="输入视频主题"
+                /></label>
+                <label
+                  >受众<input
+                    id="audienceInput"
+                    type="text"
+                    placeholder="输入目标受众"
+                /></label>
+                <label
+                  >语气<input
+                    id="toneInput"
+                    type="text"
+                    placeholder="输入表达语气"
+                /></label>
+                <label
+                  >场景数量<input
+                    id="sceneCountInput"
+                    type="number"
+                    min="3"
+                    max="8"
+                    value="5"
+                /></label>
+                <label
+                  >内容语言<select id="languageInput">
+                    <option value="auto">自动检测（中/英）</option>
+                    <option value="zh-CN">中文</option>
+                    <option value="en-US">英语</option>
+                  </select></label
+                >
+                <label
+                  >提示词目标<select id="promptTargetInput">
+                    <option value="web-ai">网页 AI（复制代码块）</option>
+                    <option value="agent">智能体（直接创建文件）</option>
+                  </select></label
+                >
+              </div>
+              <label class="wide-label"
+                >补充要求<textarea
+                  id="notesInput"
+                  placeholder="可选：品牌、颜色、素材或其他要求"
+                ></textarea>
+              </label>
+              <p id="promptResolution" class="field-hint">
+                使用浅蓝绿色黑板报风格，并保持 16:9 安全排版。
+              </p>
+              <div class="provider-row">
+                <a
+                  class="quiet-button"
+                  href="/studio?dialog=import"
+                  data-studio-route="import"
+                  ><i data-lucide="arrow-right"></i><span>导入回答</span></a
+                >
+              </div>
+            </section>
+            <section class="panel prompt-result-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="section-label">02 · 复制</p>
+                  <h2>提示词输出</h2>
+                </div>
+              </div>
+              <textarea
+                id="promptOutput"
+                class="workflow-code code-field"
+                spellcheck="false"
+                aria-label="已生成的 AI 提示词"
               ></textarea>
-            </label>
-            <p id="promptResolution" class="field-hint">
-              使用浅蓝绿色黑板报风格，并保持 16:9 安全排版。
-            </p>
-            <div class="provider-row">
-              <a
-                class="quiet-button"
-                href="/studio?dialog=import"
-                data-studio-route="import"
-                ><i data-lucide="arrow-right"></i
-                ><span>导入回答</span></a
-              >
-            </div>
-          </section>
-          <section class="panel prompt-result-panel">
-            <div class="panel-heading">
-              <div>
-                <p class="section-label">02 · 复制</p>
-                <h2>提示词输出</h2>
-              </div>
-            </div>
-            <textarea
-              id="promptOutput"
-              class="workflow-code code-field"
-              spellcheck="false"
-              aria-label="已生成的 AI 提示词"
-            ></textarea>
-          </section>
+            </section>
           </div>
         </dialog>
 
@@ -524,104 +584,109 @@
               <p class="section-label">项目源文件</p>
               <h2>导入或替换内容</h2>
             </div>
-            <button class="icon-button" type="button" data-close-dialog title="关闭">
+            <button
+              class="icon-button"
+              type="button"
+              data-close-dialog
+              title="关闭"
+            >
               <i data-lucide="x"></i><span>关闭</span>
             </button>
           </header>
           <div class="workflow-dialog-grid">
-          <section class="panel import-source-panel">
-            <div class="panel-heading">
-              <div>
-                <p class="section-label">01 · 导入</p>
-                <h2>导入源内容</h2>
+            <section class="panel import-source-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="section-label">01 · 导入</p>
+                  <h2>导入源内容</h2>
+                </div>
+                <button id="extractButton" class="quiet-button" type="button">
+                  <i data-lucide="scan-text"></i><span>提取</span>
+                </button>
               </div>
-              <button id="extractButton" class="quiet-button" type="button">
-                <i data-lucide="scan-text"></i><span>提取</span>
-              </button>
-            </div>
-            <div
-              class="import-mode-tabs"
-              role="tablist"
-              aria-label="导入方式"
-            >
-              <button class="active" type="button" data-import-mode="smart">
-                <i data-lucide="scan-text"></i><span>智能粘贴</span>
-              </button>
-              <button type="button" data-import-mode="direct">
-                <i data-lucide="columns-2"></i><span>分别粘贴</span>
-              </button>
-            </div>
-            <textarea
-              id="aiResponseInput"
-              class="workflow-response"
-              spellcheck="false"
-              placeholder="粘贴包含 scenes.json 和自包含 body.html 的完整 AI 回答。样式和脚本直接写在 body.html 中。"
-            ></textarea>
-            <div id="directImportGrid" class="direct-import-grid" hidden>
-              <label
-                >scenes.json<textarea
-                  id="directScenesInput"
-                  class="code-field"
-                  spellcheck="false"
-                  placeholder="粘贴 scenes.json"
-                ></textarea>
-              </label>
-              <label
-                >body.html（可含 style / script）<textarea
-                  id="directBodyInput"
-                  class="code-field"
-                  spellcheck="false"
-                  placeholder="粘贴 body.html 或 index.html"
-                ></textarea>
-              </label>
-            </div>
-            <div class="save-row workflow-save-row">
-              <label
-                >项目名称<input
-                  id="projectNameInput"
-                  type="text"
-                  value="新视频项目"
-              /></label>
-              <button
-                id="validateExtractedButton"
-                class="quiet-button"
-                type="button"
+              <div
+                class="import-mode-tabs"
+                role="tablist"
+                aria-label="导入方式"
               >
-                <i data-lucide="shield-check"></i><span>验证</span>
-              </button>
-              <button
-                id="saveProjectButton"
-                class="primary-button"
-                type="button"
-              >
-                <i data-lucide="save"></i><span>保存并加载</span>
-              </button>
-            </div>
-          </section>
-          <section class="panel import-preview-panel">
-            <div class="panel-heading">
-              <div>
-                <p class="section-label">02 · 检查</p>
-                <h2>当前源文件</h2>
+                <button class="active" type="button" data-import-mode="smart">
+                  <i data-lucide="scan-text"></i><span>智能粘贴</span>
+                </button>
+                <button type="button" data-import-mode="direct">
+                  <i data-lucide="columns-2"></i><span>分别粘贴</span>
+                </button>
               </div>
-            </div>
-            <div class="extract-grid workflow-extract-grid">
-              <label
-                >scenes.json<textarea
-                  id="scenesOutput"
-                  class="code-field"
-                  spellcheck="false"
-                ></textarea>
-              </label>
-              <label
-                >body.html（样式与脚本均内联）<textarea
-                  id="bodyOutput"
-                  class="code-field"
-                  spellcheck="false"
-                ></textarea>
-              </label>
-            </div>
-          </section>
+              <textarea
+                id="aiResponseInput"
+                class="workflow-response"
+                spellcheck="false"
+                placeholder="粘贴包含 scenes.json 和自包含 body.html 的完整 AI 回答。样式和脚本直接写在 body.html 中。"
+              ></textarea>
+              <div id="directImportGrid" class="direct-import-grid" hidden>
+                <label
+                  >scenes.json<textarea
+                    id="directScenesInput"
+                    class="code-field"
+                    spellcheck="false"
+                    placeholder="粘贴 scenes.json"
+                  ></textarea>
+                </label>
+                <label
+                  >body.html（可含 style / script）<textarea
+                    id="directBodyInput"
+                    class="code-field"
+                    spellcheck="false"
+                    placeholder="粘贴 body.html 或 index.html"
+                  ></textarea>
+                </label>
+              </div>
+              <div class="save-row workflow-save-row">
+                <label
+                  >项目名称<input
+                    id="projectNameInput"
+                    type="text"
+                    value="新视频项目"
+                /></label>
+                <button
+                  id="validateExtractedButton"
+                  class="quiet-button"
+                  type="button"
+                >
+                  <i data-lucide="shield-check"></i><span>验证</span>
+                </button>
+                <button
+                  id="saveProjectButton"
+                  class="primary-button"
+                  type="button"
+                >
+                  <i data-lucide="save"></i><span>保存并加载</span>
+                </button>
+              </div>
+            </section>
+            <section class="panel import-preview-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="section-label">02 · 检查</p>
+                  <h2>当前源文件</h2>
+                </div>
+              </div>
+              <div class="extract-grid workflow-extract-grid">
+                <label
+                  >scenes.json<textarea
+                    id="scenesOutput"
+                    class="code-field"
+                    spellcheck="false"
+                  ></textarea>
+                </label>
+                <label
+                  >body.html（样式与脚本均内联）<textarea
+                    id="bodyOutput"
+                    class="code-field"
+                    spellcheck="false"
+                  ></textarea>
+                </label>
+              </div>
+            </section>
           </div>
         </dialog>
       </div>
@@ -636,9 +701,7 @@
         <div class="job-overlay-card" role="status">
           <i data-lucide="loader-circle" aria-hidden="true"></i>
           <strong id="jobOverlayTitle">任务进行中</strong>
-          <p id="jobOverlayMessage">
-            正在处理，请勿执行其他操作。
-          </p>
+          <p id="jobOverlayMessage">正在处理，请勿执行其他操作。</p>
         </div>
       </section>
     </main>

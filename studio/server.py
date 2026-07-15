@@ -16,22 +16,78 @@ if str(APP_ROOT) not in sys.path:
     sys.path.insert(0, str(APP_ROOT))
 
 from pipeline.captions import default_doc, load_effective_doc, load_timeline, save_doc
-from pipeline.factory import CURRENT_SOURCE, ROOT, shell_path
+from pipeline.factory import CURRENT_SOURCE, ROOT, active_source_root, shell_path
 from studio.api import ApiError, handle_get, handle_post
 
 
 class FactoryHandler(SimpleHTTPRequestHandler):
+    _byte_range: tuple[int, int] | None = None
+
     def log_message(self, message: str, *args: object) -> None:
         if self.path.startswith("/api/"):
             print(f"[http] {self.command} {self.path} - {message % args}", flush=True)
 
     def copyfile(self, source, outputfile) -> None:
         try:
+            if self._byte_range is not None:
+                start, end = self._byte_range
+                source.seek(start)
+                remaining = end - start + 1
+                while remaining > 0:
+                    chunk = source.read(min(64 * 1024, remaining))
+                    if not chunk:
+                        break
+                    outputfile.write(chunk)
+                    remaining -= len(chunk)
+                return
             super().copyfile(source, outputfile)
         except (BrokenPipeError, ConnectionResetError):
             # Browsers commonly cancel asset requests during reloads or navigation.
             # Treat those disconnects as normal and avoid noisy tracebacks on Windows.
             return
+        finally:
+            self._byte_range = None
+
+    def end_headers(self) -> None:
+        self.send_header("Accept-Ranges", "bytes")
+        super().end_headers()
+
+    def send_head(self):
+        range_header = self.headers.get("Range", "")
+        if not range_header.startswith("bytes=") or "," in range_header:
+            return super().send_head()
+
+        file_path = Path(self.translate_path(self.path))
+        if not file_path.is_file():
+            return super().send_head()
+
+        size = file_path.stat().st_size
+        try:
+            start_text, end_text = range_header[6:].split("-", 1)
+            if start_text:
+                start = int(start_text)
+                end = min(int(end_text), size - 1) if end_text else size - 1
+            else:
+                suffix_length = int(end_text)
+                start = max(0, size - suffix_length)
+                end = size - 1
+            if start < 0 or start >= size or end < start:
+                raise ValueError
+        except ValueError:
+            self.send_response(416)
+            self.send_header("Content-Range", f"bytes */{size}")
+            self.end_headers()
+            return None
+
+        source = file_path.open("rb")
+        self._byte_range = (start, end)
+        self.send_response(206)
+        self.send_header("Content-Type", self.guess_type(str(file_path)))
+        self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+        self.send_header("Content-Length", str(end - start + 1))
+        self.send_header("Last-Modified", self.date_time_string(file_path.stat().st_mtime))
+        self.end_headers()
+        return source
 
     def send_json(self, status: int, payload: object) -> None:
         body = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
@@ -109,6 +165,7 @@ class FactoryHandler(SimpleHTTPRequestHandler):
             except SystemExit as exc:
                 self.send_error_json(409, str(exc))
                 return
+            source_root = active_source_root()
             self.send_json(
                 200,
                 {
@@ -119,6 +176,7 @@ class FactoryHandler(SimpleHTTPRequestHandler):
                     "scenes": timeline.get("scenes", []),
                     "previewUrl": shell_path(),
                     "audioUrl": "/.local/current/assets/narration.mp3",
+                    "sourcePath": str(source_root / "captions.json") if source_root else None,
                 },
             )
             return
@@ -152,6 +210,9 @@ class FactoryHandler(SimpleHTTPRequestHandler):
             except (TypeError, ValueError) as exc:
                 self.send_error_json(400, str(exc))
                 return
+            except OSError as exc:
+                self.send_error_json(500, f"cannot write project captions.json: {exc}")
+                return
             except SystemExit as exc:
                 self.send_error_json(409, str(exc))
                 return
@@ -180,8 +241,6 @@ def main() -> None:
     os.chdir(ROOT)
     origin = f"http://{display_host(args.host)}:{args.port}"
     print(f"Studio: {origin}/")
-    print(f"Caption editor: {origin}/captions")
-    print(f"Voice preview: {origin}/voices")
     server = ThreadingHTTPServer((args.host, args.port), FactoryHandler)
     try:
         print(

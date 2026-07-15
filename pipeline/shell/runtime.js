@@ -32,6 +32,7 @@ const state = {
 
 const stage = document.querySelector('#stage');
 const caption = document.querySelector('#caption');
+const captionSafe = document.querySelector('.caption-safe');
 const audio = document.querySelector('#narration');
 const playButton = document.querySelector('#playButton');
 const scrubber = document.querySelector('#scrubber');
@@ -54,9 +55,67 @@ function formatTime(seconds, withMs = false) {
   return `${pad(minutes)}:${pad(wholeSeconds)}${withMs ? `.${pad(millis, 3)}` : ''}`;
 }
 
+function fitCaptionText() {
+  caption.style.removeProperty('font-size');
+  if (!caption.textContent || !captionSafe) return;
+
+  const allowedHeight = Math.max(44, captionSafe.clientHeight * 1.35);
+  const minimumSize = Math.max(10, window.innerHeight * 0.014);
+  let size = Number.parseFloat(getComputedStyle(caption).fontSize) || 17;
+  while (caption.scrollHeight > allowedHeight && size > minimumSize) {
+    size = Math.max(minimumSize, size - 1);
+    caption.style.fontSize = `${size}px`;
+  }
+}
+
+function renderCaption(cue) {
+  const text = cue?.text || '';
+  if (caption.textContent !== text) {
+    caption.textContent = text;
+    fitCaptionText();
+  }
+  caption.classList.toggle('show', Boolean(text));
+}
+
+function captionTextUnits(text) {
+  return [...String(text || '').trim()].reduce((total, char) => {
+    if (/\s/u.test(char)) return total + 0.3;
+    if (/^[\x00-\x7f]$/u.test(char)) return total + 0.55;
+    return total + 1;
+  }, 0);
+}
+
 function splitNarration(text) {
-  const matches = String(text || '').match(/.{1,22}?[\u3002\uff01\uff1f\uff1b\uff0c\u3001\uff1a]|.{1,22}$/g);
-  return matches && matches.length ? matches.map(part => part.trim()).filter(Boolean) : [String(text || '')];
+  const source = String(text || '');
+  const tokens = source.match(/[A-Za-z0-9]+(?:[-'][A-Za-z0-9]+)*|\s+|./gu) || [source];
+  const chunks = [];
+  let current = '';
+
+  tokens.forEach(token => {
+    if (current && captionTextUnits(current + token) > 26) {
+      chunks.push(current.trim());
+      current = '';
+    }
+    current += token;
+    const hardBreak = /[\u3002\uff01\uff1f\uff1b.!?;][\u201d\u2019"'\uff09\u3011\u300b]*\s*$/u.test(current);
+    const softBreak = /[\uff0c\u3001\uff1a,:][\u201d\u2019"'\uff09\u3011\u300b]*\s*$/u.test(current)
+      && captionTextUnits(current) >= 8;
+    if (hardBreak || softBreak) {
+      chunks.push(current.trim());
+      current = '';
+    }
+  });
+  if (current.trim()) chunks.push(current.trim());
+
+  if (chunks.length > 1) {
+    const tail = chunks[chunks.length - 1];
+    const previous = chunks[chunks.length - 2];
+    const previousEndsSentence = /[\u3002\uff01\uff1f\uff1b.!?;][\u201d\u2019"'\uff09\u3011\u300b]*$/u.test(previous);
+    if (!previousEndsSentence && captionTextUnits(tail) <= 7 && captionTextUnits(previous + tail) <= 36) {
+      chunks.splice(-2, 2, `${previous}${tail}`);
+    }
+  }
+  return chunks.length ? chunks : [source];
 }
 
 async function fetchJson(path) {
@@ -426,8 +485,7 @@ function renderAtTime(seconds) {
   const cue = activeCueAt(state.current);
 
   activateScene(scene, progress);
-  caption.textContent = cue?.text || '';
-  caption.classList.toggle('show', Boolean(cue));
+  renderCaption(cue);
   updateChapterRail(index);
   if (sceneTransition) sceneTransition.style.opacity = transitionOpacityAt(state.current).toFixed(4);
 
@@ -448,6 +506,8 @@ function renderAtTime(seconds) {
   if (timecode) timecode.textContent = formatTime(state.current, true);
   if (scrubber) scrubber.value = state.current;
 }
+
+window.addEventListener('resize', fitCaptionText);
 
 function playbackState() {
   return {
