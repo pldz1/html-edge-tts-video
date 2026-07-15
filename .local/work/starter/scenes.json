@@ -2,7 +2,7 @@
   {
     "id": "intro",
     "category": "开场",
-    "narration": "这是一个只由 scenes.json 和 body.html 驱动的演示视频。接下来用四页幻灯片展示它的工作方式。"
+    "narration": "这是一个支持用code agent/ai web生成html然后转video的项目演示视频。接下来用四页幻灯片展示它的工作方式。"
   },
   {
     "id": "source",

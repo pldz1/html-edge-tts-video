@@ -114,6 +114,10 @@ def studio(args: argparse.Namespace) -> None:
 
 def render(args: argparse.Namespace) -> None:
     validate_source(args.source)
+    if (args.width is None) != (args.height is None):
+        raise SystemExit("--width and --height must be supplied together")
+    if args.width is not None and (args.width <= 0 or args.height <= 0):
+        raise SystemExit("--width and --height must be positive")
     command = [
         PYTHON,
         "pipeline/render_video.py",
@@ -138,7 +142,7 @@ def render(args: argparse.Namespace) -> None:
     ]
     if args.source:
         command.extend(["--source", args.source])
-    if args.width and args.height:
+    if args.width is not None:
         command.extend(["--width", str(args.width), "--height", str(args.height)])
     run(command)
 

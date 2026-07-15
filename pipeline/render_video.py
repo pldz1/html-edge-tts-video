@@ -10,6 +10,7 @@ import os
 import subprocess
 import threading
 import time
+from dataclasses import dataclass
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -33,6 +34,48 @@ SIZES = {
     "4k": (3840, 2160),
     "2160p": (3840, 2160),
 }
+
+DESIGN_WIDTH = 1280
+DESIGN_HEIGHT = 720
+
+
+@dataclass(frozen=True)
+class RenderGeometry:
+    """Separate CSS layout coordinates from encoded output pixels."""
+
+    output_width: int
+    output_height: int
+    viewport_width: int
+    viewport_height: int
+    device_scale_factor: float
+
+
+def resolve_render_geometry(width: int, height: int) -> RenderGeometry:
+    """Keep common output sizes on the 1280x720 design canvas.
+
+    A larger browser viewport triggers responsive re-layout instead of producing a
+    sharper version of the same frame.  Prefer the largest integer CSS viewport
+    with the requested aspect ratio that fits inside the design canvas, then use
+    Chromium's device scale factor for the additional output pixels.
+    """
+    if width <= 0 or height <= 0:
+        raise ValueError("Render width and height must be positive")
+
+    common = math.gcd(width, height)
+    aspect_width = width // common
+    aspect_height = height // common
+    multiplier = min(DESIGN_WIDTH // aspect_width, DESIGN_HEIGHT // aspect_height)
+
+    if multiplier > 0:
+        viewport_width = aspect_width * multiplier
+        viewport_height = aspect_height * multiplier
+        scale = common / multiplier
+        if scale >= 1:
+            return RenderGeometry(width, height, viewport_width, viewport_height, scale)
+
+    # Very small or unusual custom dimensions cannot always be represented by an
+    # exact integer viewport. Preserve their prior direct-rendering behavior.
+    return RenderGeometry(width, height, width, height, 1.0)
 
 
 class QuietHandler(SimpleHTTPRequestHandler):
@@ -65,6 +108,10 @@ def parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if not 0 <= args.transition <= 2:
         parser.error("--transition must be between 0 and 2 seconds")
+    if (args.width is None) != (args.height is None):
+        parser.error("--width and --height must be supplied together")
+    if args.width is not None and (args.width <= 0 or args.height <= 0):
+        parser.error("--width and --height must be positive")
     return args
 
 
@@ -108,8 +155,15 @@ def resolved_capture_mode(value: str, width: int, height: int) -> str:
     return "frames" if max(width, height) >= 1080 else "video"
 
 
-def ffmpeg_common_output_args(args: argparse.Namespace, output: Path) -> list[str]:
+def ffmpeg_common_output_args(
+    args: argparse.Namespace,
+    output: Path,
+    width: int,
+    height: int,
+) -> list[str]:
     return [
+        "-vf",
+        f"scale={width}:{height}:flags=lanczos,setsar=1",
         "-c:v",
         "libx264",
         "-preset",
@@ -144,11 +198,13 @@ def render_page_url(transition: float) -> str:
 
 async def load_render_page(
     browser: object,
-    width: int,
-    height: int,
+    geometry: RenderGeometry,
     transition: float,
 ) -> tuple[object, object, float]:
-    context = await browser.new_context(viewport={"width": width, "height": height})
+    context = await browser.new_context(
+        viewport={"width": geometry.viewport_width, "height": geometry.viewport_height},
+        device_scale_factor=geometry.device_scale_factor,
+    )
     page = await context.new_page()
     await page.goto(render_page_url(transition), wait_until="networkidle")
     await wait_for_composition(page)
@@ -166,17 +222,18 @@ async def load_render_page(
 
 async def capture_frames(
     browser: object,
-    width: int,
-    height: int,
+    geometry: RenderGeometry,
     narration: Path,
     output: Path,
     args: argparse.Namespace,
 ) -> None:
-    context, page, duration = await load_render_page(browser, width, height, args.transition)
+    context, page, duration = await load_render_page(browser, geometry, args.transition)
     frame_count = max(1, math.ceil(duration * args.fps))
     print(
         f"Rendering frames: {frame_count} frames at {args.fps} fps "
-        f"({width}x{height}, {args.frame_format})"
+        f"({geometry.output_width}x{geometry.output_height}, {args.frame_format})\n"
+        f"Layout viewport: {geometry.viewport_width}x{geometry.viewport_height} CSS px; "
+        f"pixel scale: {geometry.device_scale_factor:g}x"
     )
 
     process = subprocess.Popen(
@@ -195,7 +252,12 @@ async def capture_frames(
             "0:v:0",
             "-map",
             "1:a:0",
-            *ffmpeg_common_output_args(args, output),
+            *ffmpeg_common_output_args(
+                args,
+                output,
+                geometry.output_width,
+                geometry.output_height,
+            ),
         ],
         cwd=ROOT,
         stdin=subprocess.PIPE,
@@ -225,8 +287,7 @@ async def capture_frames(
 
 async def capture_video(
     browser: object,
-    width: int,
-    height: int,
+    geometry: RenderGeometry,
     narration: Path,
     output: Path,
     args: argparse.Namespace,
@@ -235,9 +296,10 @@ async def capture_video(
     tmp.mkdir(parents=True, exist_ok=True)
 
     context = await browser.new_context(
-        viewport={"width": width, "height": height},
+        viewport={"width": geometry.viewport_width, "height": geometry.viewport_height},
+        device_scale_factor=geometry.device_scale_factor,
         record_video_dir=str(tmp),
-        record_video_size={"width": width, "height": height},
+        record_video_size={"width": geometry.output_width, "height": geometry.output_height},
     )
     recording_started = time.perf_counter()
     page = await context.new_page()
@@ -280,7 +342,12 @@ async def capture_video(
             "0:v:0",
             "-map",
             "1:a:0",
-            *ffmpeg_common_output_args(args, output),
+            *ffmpeg_common_output_args(
+                args,
+                output,
+                geometry.output_width,
+                geometry.output_height,
+            ),
         ],
         check=True,
     )
@@ -291,7 +358,8 @@ async def main() -> None:
     if args.source:
         load_source(Path(args.source))
 
-    width, height = (args.width, args.height) if args.width and args.height else SIZES[args.size]
+    width, height = (args.width, args.height) if args.width is not None else SIZES[args.size]
+    geometry = resolve_render_geometry(width, height)
     narration = CURRENT_ASSETS / "narration.mp3"
     ensure_render_assets_match_source()
 
@@ -305,9 +373,9 @@ async def main() -> None:
         mode = resolved_capture_mode(args.capture, width, height)
         print(f"Capture mode: {mode}")
         if mode == "frames":
-            await capture_frames(browser, width, height, narration, output, args)
+            await capture_frames(browser, geometry, narration, output, args)
         else:
-            await capture_video(browser, width, height, narration, output, args)
+            await capture_video(browser, geometry, narration, output, args)
         await browser.close()
     print(f"Created: {output}")
 
