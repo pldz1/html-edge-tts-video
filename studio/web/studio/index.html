@@ -74,14 +74,6 @@
             <i data-lucide="sparkles"></i><span>示例</span>
           </button>
           <a
-            class="primary-button"
-            href="/studio?dialog=prompt"
-            data-studio-route="prompt"
-            title="使用 AI 创建项目"
-            ><i data-lucide="sparkles"></i><span>AI 创建</span></a
-          >
-
-          <a
             id="editCurrentProjectButton"
             class="quiet-button secondary-action"
             href="/studio?dialog=import"
@@ -113,9 +105,9 @@
           </button>
           <button
             id="newWorkspaceProjectButton"
-            class="quiet-button secondary-action"
+            class="primary-button"
             type="button"
-            title="创建空白项目"
+            title="新建项目"
           >
             <i data-lucide="plus"></i><span>新建项目</span>
           </button>
@@ -440,51 +432,49 @@
           class="new-project-dialog"
           aria-labelledby="newProjectDialogTitle"
         >
-          <form id="newProjectForm">
-            <header class="workflow-dialog-heading">
-              <div>
-                <p class="section-label">新建项目</p>
-                <h2 id="newProjectDialogTitle">为项目命名</h2>
-              </div>
-              <button
-                class="icon-button"
-                type="button"
-                data-close-new-project
-                title="关闭"
-              >
-                <i data-lucide="x"></i><span>关闭</span>
-              </button>
-            </header>
-            <div class="new-project-dialog-body">
-              <label>
-                项目名称
-                <input
-                  id="newProjectNameInput"
-                  type="text"
-                  value="新视频项目"
-                  placeholder="输入项目名称"
-                  autocomplete="off"
-                  required
-                />
-              </label>
-              <p>
-                创建后会立即打开源文件编辑界面，可直接修改 scenes.json 和
-                body.html。
-              </p>
+          <header class="workflow-dialog-heading">
+            <div>
+              <p class="section-label">新建项目</p>
+              <h2 id="newProjectDialogTitle">选择创建方式</h2>
             </div>
-            <footer class="new-project-dialog-actions">
-              <button class="quiet-button" type="button" data-close-new-project>
-                取消
-              </button>
-              <button
-                id="newProjectButton"
-                class="primary-button"
-                type="submit"
-              >
-                <i data-lucide="plus"></i><span>创建并编辑</span>
-              </button>
-            </footer>
-          </form>
+            <button
+              class="icon-button"
+              type="button"
+              data-close-new-project
+              title="关闭"
+            >
+              <i data-lucide="x"></i><span>关闭</span>
+            </button>
+          </header>
+          <div class="new-project-choice-grid">
+            <button
+              class="new-project-choice"
+              type="button"
+              data-new-project-route="prompt"
+            >
+              <span class="new-project-choice-icon"
+                ><i data-lucide="sparkles"></i
+              ></span>
+              <strong>AI 创建</strong>
+              <span>填写主题并生成提示词，再把 AI 生成的完整结果导入。</span>
+              <i data-lucide="arrow-right"></i>
+            </button>
+            <button
+              class="new-project-choice"
+              type="button"
+              data-new-project-route="import"
+            >
+              <span class="new-project-choice-icon"
+                ><i data-lucide="file-input"></i
+              ></span>
+              <strong>从结果导入</strong>
+              <span>已有 scenes.json 和 body.html，直接粘贴、验证并保存。</span>
+              <i data-lucide="arrow-right"></i>
+            </button>
+          </div>
+          <footer class="new-project-dialog-note">
+            保存并加载前不会在 <code>.local/work</code> 创建项目。
+          </footer>
         </dialog>
 
         <dialog

@@ -52,8 +52,12 @@ def compose_prompt(payload: dict[str, Any]) -> dict[str, str]:
 
     delivery = {
         "agent": (
-            "Create or replace scenes.json and body.html directly in the requested source folder. "
-            "Do not return only a plan when the workspace is writable."
+            "Before writing source, create a unique kebab-case project folder at "
+            ".local/work/<project-slug> inside this repository. Create or replace scenes.json and "
+            "body.html only inside that new project folder. Never modify .local/work/starter; it is "
+            "a read-only template, not a working project. Do not return only a plan when the "
+            "workspace is writable. After writing the files, load that exact project folder and "
+            "run python main.py check."
         ),
         "web-ai": (
             "Return exactly two fenced code blocks with filenames: scenes.json in a json fence and "

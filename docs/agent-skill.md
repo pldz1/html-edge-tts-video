@@ -1,17 +1,28 @@
 # Agent Workflow
 
 This package turns two authored files into a narrated presentation-style MP4. Keep the authored
-source separate from the stable shell and generated assets.
+source separate from the stable shell and generated assets. Each video must have its own project
+folder under `.local/work`; `.local/work/starter/` is a read-only tracked template and must never be
+edited as a project.
 
 ## Source contract
 
 ```text
-source/
+.local/work/<project-slug>/
   scenes.json
   body.html
   media/ optional
   captions.json optional after manual subtitle edits
 ```
+
+Choose a unique kebab-case `<project-slug>` before writing any source. Create the project with:
+
+```bash
+python main.py init --target .local/work/<project-slug>
+```
+
+Then edit only the copied files in that new project folder. Never target `.local/work/starter/` and
+never place a video's `scenes.json` or `body.html` directly in `.local/work/`.
 
 `scenes.json` must be a non-empty array. Start with `id: "intro"`. Require:
 
@@ -60,9 +71,9 @@ source. Let the resolved language choose the default edge-tts voice.
 ## Build
 
 ```bash
-python main.py load --source <source-folder>
+python main.py load --source .local/work/<project-slug>
 python main.py check
-python main.py tts
+python main.py tts --source .local/work/<project-slug>
 python main.py studio
 python main.py render --output video.mp4
 ```
@@ -87,3 +98,5 @@ transition system to source files.
 - Render captions as shell DOM.
 - Treat `.local/`, `assets/`, and `output/` as generated state, except for the tracked two-file
   starter at `.local/work/starter/`.
+- Never modify the tracked starter while creating a video. Create and work in a separate
+  `.local/work/<project-slug>/` directory.

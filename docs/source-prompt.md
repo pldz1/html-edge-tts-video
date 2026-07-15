@@ -17,6 +17,11 @@ Keep the implementation compact enough to return in full: reuse CSS classes and 
 If output space is limited, reduce decorative detail rather than omitting scenes, styles, or closing
 tags.
 
+When operating as a code agent in this repository, create a unique kebab-case project directory at
+`.local/work/<project-slug>/` before writing these files. Write the new video's source only inside
+that directory. Never edit `.local/work/starter/`; it is the tracked template, not a working
+project.
+
 - Make `scenes.json` a non-empty array. Start with `id: "intro"`.
 - Give every scene a unique lowercase `id`, a short `category`, and natural `narration`.
 - Put every visible title, label, diagram, chart, and explanatory element in `body.html`.

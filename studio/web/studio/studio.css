@@ -1508,8 +1508,9 @@ select:focus {
 
 .studio-toast {
   position: fixed;
-  z-index: 100;
+  z-index: 1000;
   right: 18px;
+  left: auto;
   top: 16px;
   bottom: auto;
   max-width: min(360px, calc(100vw - 36px));
@@ -1526,6 +1527,12 @@ select:focus {
   pointer-events: none;
   transform: translateY(-8px);
   transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+dialog[open] > .studio-toast {
+  position: absolute;
+  right: 60px;
+  top: 14px;
 }
 
 .studio-toast.is-visible {
@@ -2754,7 +2761,7 @@ select:focus {
 }
 
 .new-project-dialog {
-  width: min(460px, calc(100vw - 32px));
+  width: min(620px, calc(100vw - 32px));
   padding: 0;
   overflow: hidden;
   border: 1px solid #c8d9e4;
@@ -2769,35 +2776,93 @@ select:focus {
   backdrop-filter: blur(4px);
 }
 
-.new-project-dialog form {
+.new-project-choice-grid {
   display: grid;
-}
-
-.new-project-dialog-body {
-  display: grid;
-  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
   padding: 20px;
 }
 
-.new-project-dialog-body input {
-  width: 100%;
-  height: 40px;
+.new-project-choice {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 18px;
+  grid-template-rows: auto auto;
+  gap: 5px 10px;
+  min-width: 0;
+  min-height: 148px;
+  padding: 16px;
+  border: 1px solid #d7e3eb;
+  border-radius: 12px;
+  background: #fbfdff;
+  color: var(--text);
+  text-align: left;
 }
 
-.new-project-dialog-body p {
-  margin: 0;
+.new-project-choice:hover,
+.new-project-choice:focus-visible {
+  border-color: #8db4e8;
+  background: #f3f8ff;
+  box-shadow: 0 8px 20px rgba(38, 91, 153, 0.1);
+}
+
+.new-project-choice-icon {
+  grid-row: 1 / 3;
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 10px;
+  background: #e6f1ff;
+  color: var(--blue-strong);
+}
+
+.new-project-choice-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.new-project-choice strong {
+  align-self: end;
+  font-size: 14px;
+}
+
+.new-project-choice > span:not(.new-project-choice-icon) {
   color: #667b91;
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1.55;
 }
 
-.new-project-dialog-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
+.new-project-choice > svg {
+  grid-column: 3;
+  grid-row: 1 / 3;
+  align-self: center;
+  width: 16px;
+  color: #6a87a8;
+}
+
+.new-project-dialog-note {
   padding: 12px 20px;
   border-top: 1px solid #dce7ee;
   background: #f7fafc;
+  margin: 0;
+  color: #667b91;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.new-project-dialog-note code {
+  color: #315d8d;
+  font-size: inherit;
+}
+
+@media (max-width: 520px) {
+  .new-project-choice-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .new-project-choice {
+    min-height: 112px;
+  }
 }
 
 @media (min-width: 768px) {

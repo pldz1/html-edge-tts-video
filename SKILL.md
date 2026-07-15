@@ -7,15 +7,20 @@ description: Create locally rendered narrated presentation-style videos from sce
 
 Read `docs/agent-skill.md` before changing source or running builds.
 
-Create this source shape:
+Create every video in its own project folder under `.local/work`:
 
 ```text
-source/
+.local/work/<project-slug>/
   scenes.json
   body.html
   media/ optional
   captions.json optional after subtitle edits
 ```
+
+Before authoring, choose a unique kebab-case `<project-slug>` and create that folder. You may seed it
+with `python main.py init --target .local/work/<project-slug>`, then replace the copied source files.
+Never edit `.local/work/starter/`; it is a read-only tracked template, not a working project. Do not
+write video source directly into `.local/work/` without a project subfolder.
 
 Write `body.html` as a complete document from `<!doctype html>` through `</html>`. Let the subject
 determine the visual composition within a bright editorial blackboard/newspaper palette: pale
@@ -43,7 +48,8 @@ python main.py prompt --topic "<topic>" --language auto --target web-ai
 Build and verify:
 
 ```bash
-python main.py tts --source <source-folder>
+python main.py load --source .local/work/<project-slug>
+python main.py tts --source .local/work/<project-slug>
 python main.py check
 python main.py studio
 python main.py render --output video.mp4
@@ -54,4 +60,5 @@ language unless the user requests translation. The stable shell owns narration t
 the compact chapter rail, playback, and deterministic dip-to-background transitions.
 
 Treat `.local/`, `assets/`, and `output/` as generated state, except for the tracked two-file starter
-at `.local/work/starter/`.
+at `.local/work/starter/`. The starter must remain unchanged; all authored videos belong in their own
+`.local/work/<project-slug>/` folder.

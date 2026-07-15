@@ -11,7 +11,7 @@
 Create narrated presentation-style videos from two authored files:
 
 ```text
-my-video/
+.local/work/my-video/
   scenes.json
   body.html
   media/ optional
@@ -32,18 +32,21 @@ The pipeline never uses a system browser or system FFmpeg.
 
 ## Try the starter
 
+The tracked starter is a read-only example. Copy it into a project folder before making changes:
+
 ```bash
-python main.py offline --source .local/work/starter
+python main.py init --target .local/work/my-video
+python main.py offline --source .local/work/my-video
 python main.py check
-python main.py studio --source .local/work/starter
-python main.py render --output starter.mp4
+python main.py studio --source .local/work/my-video
+python main.py render --output my-video.mp4
 ```
 
 Use `tts` instead of `offline` when network TTS is available:
 
 ```bash
-python main.py tts --source .local/work/starter
-python main.py render --output starter.mp4
+python main.py tts --source .local/work/my-video
+python main.py render --output my-video.mp4
 ```
 
 ## Source format
@@ -105,16 +108,17 @@ editorial, and blue-green while allowing the AI to choose a fitting composition 
 ## Normal loop
 
 ```bash
-python main.py tts --source <source-folder>
+python main.py tts --source .local/work/<project-slug>
 python main.py check
-python main.py studio --source <source-folder>
+python main.py studio --source .local/work/<project-slug>
 python main.py render --output video.mp4
 ```
 
 Use `python main.py captions` to edit on-screen subtitle text after TTS. Generated state lives under
 `.local/`; Studio-managed projects keep generated audio and output beside their two source files.
 The only tracked exception is `.local/work/starter/body.html` and `scenes.json`; every other file
-under `.local/` is runtime state.
+under `.local/` is runtime state. Never author a video in `starter`; each video belongs in its own
+`.local/work/<project-slug>/` folder.
 
 Transitions default to a deterministic 0.4-second dip to the shell background. Set
 `--transition 0.3`, or use `--transition 0` to disable them.
@@ -179,8 +183,10 @@ from `PATH`.
 
 ### Studio
 
-Studio creates, imports, deletes, validates, plays, narrates, and renders projects. Prompt creation
-and source import open as dialogs without leaving the workspace. A project manifest
+Studio creates, imports, deletes, validates, plays, narrates, and renders projects. “New project”
+first offers AI creation or result import; neither path creates a folder until “Save and load” is
+used in the import dialog. Prompt creation and source import open as dialogs without leaving the
+workspace. A project manifest
 stores identity, display name, language, and TTS settings. Presentation style and rendering engine
 remain properties of `body.html`. Studio discovers projects under `.local/work/`; the built-in
-`starter` project lives there too and cannot be deleted through Studio.
+`starter` project lives there too and is read-only in Studio.

@@ -13,7 +13,6 @@ import threading
 import time
 import uuid
 from datetime import datetime, timezone
-from html import escape
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -602,6 +601,8 @@ def create_project(payload: dict[str, Any]) -> dict[str, Any]:
     scenes_json = str(payload.get("scenesJson") or "")
     body_html = str(payload.get("bodyHtml") or "")
     overwrite = bool(payload.get("overwrite"))
+    if overwrite and project_id == "starter":
+        raise ApiError(400, "starter is read-only; save the source as a new project")
     validation = validate_source_text(scenes_json, body_html)
 
     if overwrite:
@@ -638,64 +639,6 @@ def create_project(payload: dict[str, Any]) -> dict[str, Any]:
     if overwrite and captions.exists():
         captions.unlink()
     return {"project": source_summary(target), "validation": validation}
-
-
-def create_blank_project(payload: dict[str, Any]) -> dict[str, Any]:
-    display_name = str(payload.get("name") or "").strip() or "New video project"
-    project_id = new_project_id()
-    target = LOCAL_WORK / project_id
-    requested_language = str(payload.get("language") or "auto")
-    resolved_language = detect_language(display_name) if requested_language == "auto" else requested_language
-    chinese = resolved_language == "zh-CN"
-    scenes = [
-        {
-            "id": "intro",
-            "category": "总览" if chinese else "Overview",
-            "narration": f"这是新的视频项目 {display_name}。接下来请描述主题、受众和需要覆盖的重点。" if chinese else f"This is the new video project {display_name}. Next, describe the topic, audience, and key points to cover.",
-        }
-    ]
-    blank_summary = f"从这里规划 {display_name} 的主题、场景和旁白。" if chinese else f"Start planning the topic, scenes, and narration for {display_name} here."
-    safe_display_name = escape(display_name)
-    safe_blank_summary = escape(blank_summary)
-    body_html = f"""<!doctype html>
-<html>
-<head>
-<meta charset=\"utf-8\">
-<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">
-<title>{safe_display_name}</title>
-<style>
-  :root {{ --slide-bg: rgba(239, 249, 245, .92); --slide-ink: #173b3d; --slide-accent: #3c8f91; }}
-  .slide {{ position: absolute; inset: 0; width: 100%; height: 100%; padding: 8vh 7vw 22vh; overflow: hidden; background: var(--slide-bg); color: var(--slide-ink); }}
-  .slide-kicker {{ color: var(--slide-accent); font: 800 clamp(12px, 1.2vw, 18px)/1.2 system-ui; letter-spacing: .18em; }}
-  .slide h1 {{ max-width: 13ch; margin: 3vh 0 2vh; font: 780 clamp(44px, 5.2vw, 88px)/1 system-ui; }}
-  .slide p {{ max-width: 42ch; margin: 0; color: #5f7f7f; font: 450 clamp(18px, 1.6vw, 28px)/1.5 system-ui; }}
-</style>
-</head>
-<body>
-<section class=\"content-scene slide\" data-scene=\"intro\">
-  <div>
-    <div class=\"slide-kicker\">INTRO</div>
-    <h1>{safe_display_name}</h1>
-    <p>{safe_blank_summary}</p>
-  </div>
-</section>
-</body>
-</html>
-"""
-    target.mkdir(parents=True, exist_ok=True)
-    (target / "scenes.json").write_text(json.dumps(scenes, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    (target / "body.html").write_text(body_html, encoding="utf-8")
-    ensure_project_manifest(
-        target,
-        name=display_name,
-        project_id=project_id,
-        language=requested_language,
-    )
-    try:
-        load_source(target)
-    except SystemExit as exc:
-        raise ApiError(422, str(exc)) from exc
-    return {"project": source_summary(target), "state": studio_state()}
 
 
 def load_project(payload: dict[str, Any]) -> dict[str, Any]:
@@ -746,6 +689,8 @@ def update_project_metadata(payload: dict[str, Any]) -> dict[str, Any]:
     name = str(payload.get("name") or "").strip()
     if not value:
         raise ApiError(400, "project id is required")
+    if value == "starter":
+        raise ApiError(400, "starter is read-only")
     if not name:
         raise ApiError(400, "project name is required")
     source_root = safe_project_path(value)
@@ -1136,8 +1081,6 @@ def handle_post(path: str, payload: dict[str, Any]) -> tuple[int, Any] | None:
             raise ApiError(422, str(exc)) from exc
     if path == "/api/projects":
         return 201, create_project(payload)
-    if path == "/api/projects/blank":
-        return 201, create_blank_project(payload)
     if path == "/api/projects/load":
         return 200, load_project(payload)
     if path == "/api/projects/settings":

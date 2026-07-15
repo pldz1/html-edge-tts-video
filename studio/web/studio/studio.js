@@ -33,15 +33,12 @@ const els = {
   promptDialog: $("#promptDialog"),
   importDialog: $("#importDialog"),
   newProjectDialog: $("#newProjectDialog"),
-  newProjectForm: $("#newProjectForm"),
   tourButton: $("#tourButton"),
   sidebarToggle: $("#sidebarToggle"),
   projectDrawerBackdrop: $("#projectDrawerBackdrop"),
   refreshButton: $("#refreshButton"),
   refreshOutputsButton: $("#refreshOutputsButton"),
   loadStarterButton: $("#loadStarterButton"),
-  newProjectNameInput: $("#newProjectNameInput"),
-  newProjectButton: $("#newProjectButton"),
   newWorkspaceProjectButton: $("#newWorkspaceProjectButton"),
   deleteCurrentProjectButton: $("#deleteCurrentProjectButton"),
   editCurrentProjectButton: $("#editCurrentProjectButton"),
@@ -219,6 +216,10 @@ function setProjectEditMode(editing) {
     setStatus("请先选择项目。", "error");
     return;
   }
+  if (active.id === "starter") {
+    setStatus("示例模板为只读，请先新建项目。", "error");
+    return;
+  }
   const activeProject = projects.find((project) => project.active) || null;
   const title =
     active?.name || activeProject?.name || appState?.current?.title || "";
@@ -337,6 +338,8 @@ function setStatus(message, tone = "neutral") {
     toast.setAttribute("role", "status");
     document.body.append(toast);
   }
+  const toastHost = document.querySelector("dialog[open]") || document.body;
+  if (toast.parentElement !== toastHost) toastHost.append(toast);
   window.clearTimeout(toastTimer);
   toast.textContent = message;
   toast.classList.toggle("error", tone === "error");
@@ -572,9 +575,21 @@ function renderHeader() {
     ? "示例"
     : "示例不可用";
   els.editCurrentProjectButton.href = activeId
+    && activeId !== "starter"
     ? `/studio?dialog=import&project=${encodeURIComponent(activeId)}`
     : "/studio?dialog=import";
-  els.editCurrentProjectButton.classList.toggle("is-disabled", !activeId);
+  const sourceEditingDisabled = !activeId || activeId === "starter";
+  els.editCurrentProjectButton.classList.toggle(
+    "is-disabled",
+    sourceEditingDisabled
+  );
+  els.editCurrentProjectButton.setAttribute(
+    "aria-disabled",
+    String(sourceEditingDisabled)
+  );
+  if (els.projectEditButton) {
+    els.projectEditButton.disabled = sourceEditingDisabled;
+  }
   els.openCaptionsButton?.classList.toggle("is-disabled", !activeId);
   if (els.deleteCurrentProjectButton) {
     els.deleteCurrentProjectButton.disabled =
@@ -860,8 +875,9 @@ function openNewProjectDialog() {
   if (!els.newProjectDialog) return;
   if (!els.newProjectDialog.open) els.newProjectDialog.showModal();
   window.setTimeout(() => {
-    els.newProjectNameInput?.focus();
-    els.newProjectNameInput?.select();
+    els.newProjectDialog
+      ?.querySelector("[data-new-project-route]")
+      ?.focus();
   }, 0);
 }
 
@@ -1208,44 +1224,6 @@ async function saveProject() {
   }
 }
 
-async function createBlankProject() {
-  const name = els.newProjectNameInput.value.trim();
-  if (!name) {
-    setStatus("请输入新项目名称。", "error");
-    els.newProjectNameInput.focus();
-    return;
-  }
-  els.newProjectButton.disabled = true;
-  try {
-    const data = await postJson("/api/projects/blank", {
-      name,
-      language: els.languageInput?.value || "auto",
-    });
-    appState = data.state;
-    closeNewProjectDialog();
-    resetWorkspaceUi({
-      name: data.project?.name || name,
-      resetPrompt: true,
-      resetImport: true,
-    });
-    setProjectDrawerOpen(false);
-    setStudioRoute("main");
-    reloadPreview();
-    await refreshAll();
-    setStatus(`已创建并加载项目：${data.project.name}`, "success");
-    setStudioRoute(
-      "import",
-      false,
-      `?project=${encodeURIComponent(data.project.id)}`
-    );
-    await initImportProjectContext();
-  } catch (error) {
-    setStatus(error.message, "error");
-  } finally {
-    els.newProjectButton.disabled = false;
-  }
-}
-
 function setJobBusy(isBusy, task = "") {
   [els.checkButton, els.offlineButton, els.ttsButton, els.renderButton].forEach(
     (button) => {
@@ -1439,6 +1417,10 @@ function bindEvents() {
   document.querySelectorAll("[data-studio-route]").forEach((link) => {
     link.addEventListener("click", async (event) => {
       event.preventDefault();
+      if (link.classList.contains("is-disabled")) {
+        setStatus("请先选择一个可编辑项目。", "error");
+        return;
+      }
       const url = new URL(link.href, window.location.origin);
       const route = link.dataset.studioRoute || "main";
       setStudioRoute(route, false, url.search);
@@ -1452,6 +1434,12 @@ function bindEvents() {
     dialog.addEventListener("cancel", (event) => {
       event.preventDefault();
       setStudioRoute("main");
+    });
+  });
+  document.querySelectorAll("dialog").forEach((dialog) => {
+    dialog.addEventListener("close", () => {
+      const toast = dialog.querySelector("#studioToast");
+      if (toast) document.body.append(toast);
     });
   });
   els.sidebarToggle.addEventListener("click", () => {
@@ -1504,6 +1492,17 @@ function bindEvents() {
   document.querySelectorAll("[data-close-new-project]").forEach((button) => {
     button.addEventListener("click", closeNewProjectDialog);
   });
+  document.querySelectorAll("[data-new-project-route]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const route = button.dataset.newProjectRoute;
+      closeNewProjectDialog();
+      if (route === "prompt") {
+        resetPromptComposer();
+      }
+      resetImportComposer();
+      setStudioRoute(route);
+    });
+  });
   els.newProjectDialog?.addEventListener("cancel", (event) => {
     event.preventDefault();
     closeNewProjectDialog();
@@ -1523,10 +1522,6 @@ function bindEvents() {
   els.refreshButton.addEventListener("click", refreshAll);
   els.refreshOutputsButton.addEventListener("click", refreshAll);
   els.loadStarterButton.addEventListener("click", () => loadProject("starter"));
-  els.newProjectForm?.addEventListener("submit", (event) => {
-    event.preventDefault();
-    createBlankProject();
-  });
   els.checkButton.addEventListener("click", () => startJob("check"));
   els.offlineButton.addEventListener("click", () => startJob("offline"));
   els.ttsButton.addEventListener("click", () => startJob("tts"));
