@@ -358,6 +358,29 @@
                 <i data-lucide="download"></i><span>导出 MP4</span>
               </button>
             </div>
+            <div id="jobProgress" class="render-progress" hidden>
+              <div class="render-progress-heading">
+                <strong id="jobProgressPhase">准备渲染</strong>
+                <span id="jobProgressPercent">0.00%</span>
+              </div>
+              <div
+                id="jobProgressTrack"
+                class="render-progress-track"
+                role="progressbar"
+                aria-label="MP4 导出进度"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                aria-valuenow="0"
+              >
+                <span id="jobProgressBar"></span>
+              </div>
+              <div class="render-progress-metrics">
+                <span id="jobProgressFrames">帧 --/--</span>
+                <span id="jobProgressTime">视频 --:-- / --:--</span>
+                <span id="jobProgressSpeed">速度 --</span>
+                <span id="jobProgressEta">剩余 --:--</span>
+              </div>
+            </div>
             <pre id="jobLog" class="job-log">等待任务。</pre>
           </section>
         </section>
@@ -702,6 +725,16 @@
           <i data-lucide="loader-circle" aria-hidden="true"></i>
           <strong id="jobOverlayTitle">任务进行中</strong>
           <p id="jobOverlayMessage">正在处理，请勿执行其他操作。</p>
+          <div id="jobOverlayProgress" class="job-overlay-progress" hidden>
+            <div class="job-overlay-progress-row">
+              <span id="jobOverlayProgressPhase">准备渲染</span>
+              <strong id="jobOverlayProgressPercent">0.00%</strong>
+            </div>
+            <div class="render-progress-track" aria-hidden="true">
+              <span id="jobOverlayProgressBar"></span>
+            </div>
+            <p id="jobOverlayProgressDetail">正在读取视频时间线。</p>
+          </div>
         </div>
       </section>
     </main>

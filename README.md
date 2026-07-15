@@ -1,5 +1,13 @@
 # HTML edge-tts Video
 
+<img
+  src="./studio/web/shared/app.svg"
+  alt="app logo"
+  style="width: 100%; height: 200px; object-fit: contain;"
+/>
+
+---
+
 Create narrated presentation-style videos from two authored files:
 
 ```text
@@ -54,21 +62,25 @@ The first id must be `intro`. Categories are at most 12 characters. Add a matchi
 project CSS to `body.html`:
 
 ```html
-<!doctype html>
+<!DOCTYPE html>
 <html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Presentation video</title>
-  <style>
-    .slide { position: absolute; inset: 0; padding: 8vh 7vw 22vh; }
-  </style>
-</head>
-<body>
-  <section class="content-scene slide" data-scene="intro">
-    <h1>标题</h1>
-  </section>
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Presentation video</title>
+    <style>
+      .slide {
+        position: absolute;
+        inset: 0;
+        padding: 8vh 7vw 22vh;
+      }
+    </style>
+  </head>
+  <body>
+    <section class="content-scene slide" data-scene="intro">
+      <h1>标题</h1>
+    </section>
+  </body>
 </html>
 ```
 
@@ -153,12 +165,12 @@ timeline shape with estimated durations and silent audio.
 updates chapter progress, and calculates transitions. It exposes:
 
 ```js
-window.compositionReady
-window.getCompositionDuration()
-window.renderAtTime(seconds)
-window.getPlaybackState()
-window.togglePlayback()
-window.startCompositionPlayback()
+window.compositionReady;
+window.getCompositionDuration();
+window.renderAtTime(seconds);
+window.getPlaybackState();
+window.togglePlayback();
+window.startCompositionPlayback();
 ```
 
 `pipeline/render_video.py` captures with Python Playwright's managed Chromium Headless Shell and

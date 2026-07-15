@@ -54,6 +54,7 @@ OUTPUT_EXTENSIONS = {".mp4", ".webm"}
 JOB_LOG_LIMIT = 500
 RENDER_SIZES = {"480p", "720p", "1080p", "2k", "1440p", "4k", "2160p"}
 CAPTURE_MODES = {"auto", "video", "frames"}
+RENDER_PROGRESS_PREFIX = "RENDER_PROGRESS "
 VOICE_PREVIEW_DIR = LOCAL_ASSETS / "voice-preview"
 VOICE_OPTIONS = [
     {"id": "zh-CN-XiaoxiaoNeural", "label": "晓晓", "locale": "zh-CN", "gender": "Female"},
@@ -794,6 +795,7 @@ def active_job() -> dict[str, Any] | None:
 
 
 def job_snapshot(job: dict[str, Any]) -> dict[str, Any]:
+    progress = job.get("progress")
     return {
         "id": job["id"],
         "task": job["task"],
@@ -804,28 +806,78 @@ def job_snapshot(job: dict[str, Any]) -> dict[str, Any]:
         "finishedAt": job.get("finishedAt"),
         "command": job["command"],
         "log": job["log"][-JOB_LOG_LIMIT:],
+        "progress": dict(progress) if isinstance(progress, dict) else None,
     }
+
+
+def parse_render_progress(line: str) -> dict[str, Any] | None:
+    if not line.startswith(RENDER_PROGRESS_PREFIX):
+        return None
+    try:
+        progress = json.loads(line[len(RENDER_PROGRESS_PREFIX) :])
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if not isinstance(progress, dict):
+        return None
+    try:
+        progress["percent"] = min(100.0, max(0.0, float(progress.get("percent", 0))))
+    except (TypeError, ValueError):
+        progress["percent"] = 0.0
+    return progress
+
+
+def progress_console_line(progress: dict[str, Any]) -> str:
+    percent = float(progress.get("percent") or 0)
+    rendered = int(progress.get("renderedFrames") or 0)
+    encoded = int(progress.get("encodedFrames") or 0)
+    total = int(progress.get("totalFrames") or 0)
+    fps = float(progress.get("encodeFps") or 0)
+    speed = float(progress.get("speed") or 0)
+    eta = progress.get("etaSeconds")
+    eta_text = f"{max(0, round(float(eta)))}s" if eta is not None else "--"
+    return (
+        f"{progress.get('phase', 'rendering')} {percent:.2f}% "
+        f"capture={rendered}/{total} encode={encoded}/{total} "
+        f"fps={fps:.1f} speed={speed:.3f}x eta={eta_text}"
+    )
 
 
 def append_job_log(job_id: str, line: str) -> None:
     clean_line = line.rstrip()
+    progress = parse_render_progress(clean_line)
     task = "job"
     with JOBS_LOCK:
         job = JOBS.get(job_id)
         if not job:
             return
         task = str(job.get("task") or task)
-        job["log"].append(clean_line)
-        if len(job["log"]) > JOB_LOG_LIMIT:
-            job["log"] = job["log"][-JOB_LOG_LIMIT:]
+        if progress is not None:
+            job["progress"] = progress
+        else:
+            job["log"].append(clean_line)
+            if len(job["log"]) > JOB_LOG_LIMIT:
+                job["log"] = job["log"][-JOB_LOG_LIMIT:]
     if clean_line:
-        print(f"[job:{job_id} {task}] {clean_line}", flush=True)
+        output = progress_console_line(progress) if progress is not None else clean_line
+        print(f"[job:{job_id} {task}] {output}", flush=True)
 
 
 def set_job_fields(job_id: str, **fields: Any) -> None:
     with JOBS_LOCK:
         if job_id in JOBS:
             JOBS[job_id].update(fields)
+
+
+def finish_render_progress(job_id: str, succeeded: bool) -> None:
+    with JOBS_LOCK:
+        job = JOBS.get(job_id)
+        if not job or job.get("task") != "render":
+            return
+        progress = dict(job.get("progress") or {})
+        progress["phase"] = "completed" if succeeded else "failed"
+        if succeeded:
+            progress.update({"percent": 100.0, "etaSeconds": 0.0})
+        job["progress"] = progress
 
 
 def run_job(job_id: str) -> None:
@@ -856,6 +908,7 @@ def run_job(job_id: str) -> None:
             exitCode=exit_code,
             finishedAt=utc_now(),
         )
+        finish_render_progress(job_id, exit_code == 0)
         if exit_code == 0 and job.get("task") == "render":
             output_name = str(job.get("outputName") or "").strip()
             if output_name:
@@ -871,6 +924,7 @@ def run_job(job_id: str) -> None:
     except Exception as exc:  # noqa: BLE001 - surface background failures to the UI.
         append_job_log(job_id, f"Job failed before completion: {exc}")
         set_job_fields(job_id, status="failed", exitCode=-1, finishedAt=utc_now())
+        finish_render_progress(job_id, False)
 
 
 def clean_output_name(value: str) -> str:
@@ -1010,6 +1064,11 @@ def start_job(payload: dict[str, Any]) -> dict[str, Any]:
         "startedAt": None,
         "finishedAt": None,
         "log": [],
+        "progress": (
+            {"phase": "queued", "percent": 0.0, "etaSeconds": None}
+            if task == "render"
+            else None
+        ),
     }
     with JOBS_LOCK:
         JOBS[job_id] = job

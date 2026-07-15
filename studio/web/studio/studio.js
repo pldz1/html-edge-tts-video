@@ -75,9 +75,23 @@ const els = {
   renderTransitionInput: $("#renderTransitionInput"),
   jobStatus: $("#jobStatus"),
   jobLog: $("#jobLog"),
+  jobProgress: $("#jobProgress"),
+  jobProgressPhase: $("#jobProgressPhase"),
+  jobProgressPercent: $("#jobProgressPercent"),
+  jobProgressTrack: $("#jobProgressTrack"),
+  jobProgressBar: $("#jobProgressBar"),
+  jobProgressFrames: $("#jobProgressFrames"),
+  jobProgressTime: $("#jobProgressTime"),
+  jobProgressSpeed: $("#jobProgressSpeed"),
+  jobProgressEta: $("#jobProgressEta"),
   jobOverlay: $("#jobOverlay"),
   jobOverlayTitle: $("#jobOverlayTitle"),
   jobOverlayMessage: $("#jobOverlayMessage"),
+  jobOverlayProgress: $("#jobOverlayProgress"),
+  jobOverlayProgressPhase: $("#jobOverlayProgressPhase"),
+  jobOverlayProgressPercent: $("#jobOverlayProgressPercent"),
+  jobOverlayProgressBar: $("#jobOverlayProgressBar"),
+  jobOverlayProgressDetail: $("#jobOverlayProgressDetail"),
 };
 
 let appState = null;
@@ -274,6 +288,7 @@ function resetBuildState(name = "") {
   els.jobStatus.textContent = "空闲";
   els.jobStatus.className = "job-status";
   els.jobLog.textContent = "等待任务。";
+  renderJobProgress(null);
   els.renderSizeInput.value = "720p";
   els.renderOutputInput.value = outputNameForSize(
     name || INITIAL_FORM_VALUES.renderOutput,
@@ -1246,6 +1261,86 @@ function setJobBusy(isBusy, task = "") {
     const taskLabel = task === "tts" ? "旁白生成" : "MP4 导出";
     els.jobOverlayTitle.textContent = `${taskLabel}进行中`;
     els.jobOverlayMessage.textContent = "当前项目正在处理，请勿执行其他操作。";
+    if (els.jobOverlayProgress) {
+      els.jobOverlayProgress.hidden = task !== "render";
+    }
+  }
+}
+
+function formatProgressTime(value) {
+  if (value === null || value === undefined || value === "") return "--:--";
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "--:--";
+  const total = Math.max(0, Math.round(numeric));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = String(total % 60).padStart(2, "0");
+  return hours
+    ? `${hours}:${String(minutes).padStart(2, "0")}:${seconds}`
+    : `${String(minutes).padStart(2, "0")}:${seconds}`;
+}
+
+function renderJobProgress(progress) {
+  if (!els.jobProgress) return;
+  const visible = Boolean(progress);
+  els.jobProgress.hidden = !visible;
+  if (!visible) return;
+
+  const phaseLabels = {
+    queued: "等待渲染",
+    rendering: "页面截图与编码",
+    encoding: "视频编码",
+    finalizing: "封装 MP4",
+    completed: "导出完成",
+    failed: "导出失败",
+  };
+  const phase = phaseLabels[progress.phase] || "准备渲染";
+  const percent = Math.min(100, Math.max(0, Number(progress.percent) || 0));
+  const percentText = `${percent.toFixed(2)}%`;
+  const rendered = Math.max(0, Number(progress.renderedFrames) || 0);
+  const encoded = Math.max(0, Number(progress.encodedFrames) || 0);
+  const total = Math.max(0, Number(progress.totalFrames) || 0);
+  const duration = Number(progress.durationSeconds);
+  const encodedTime = Number(progress.encodedSeconds);
+  const renderedTime = Number(progress.renderedSeconds);
+  const currentTime =
+    progress.phase === "rendering" && !(encodedTime > 0)
+      ? renderedTime
+      : encodedTime;
+  const encodeFps = Number(progress.encodeFps) || 0;
+  const captureFps = Number(progress.captureFps) || 0;
+  const speed = Number(progress.speed) || 0;
+  const eta = progress.etaSeconds;
+
+  els.jobProgressPhase.textContent = phase;
+  els.jobProgressPercent.textContent = percentText;
+  els.jobProgressBar.style.width = percentText;
+  els.jobProgressTrack.setAttribute("aria-valuenow", percent.toFixed(2));
+  els.jobProgressFrames.textContent = total
+    ? `截图 ${rendered}/${total} · 编码 ${encoded}/${total}`
+    : "正在计算总帧数";
+  els.jobProgressTime.textContent = `视频 ${formatProgressTime(
+    currentTime
+  )} / ${formatProgressTime(duration)}`;
+  els.jobProgressSpeed.textContent = encodeFps
+    ? `编码 ${encodeFps.toFixed(1)} fps · ${speed.toFixed(3)}x`
+    : captureFps
+      ? `截图 ${captureFps.toFixed(1)} fps`
+      : "速度 --";
+  els.jobProgressEta.textContent = `剩余 ${formatProgressTime(eta)}`;
+
+  if (els.jobOverlayProgress) {
+    els.jobOverlayProgress.hidden = false;
+    els.jobOverlayProgressPhase.textContent = phase;
+    els.jobOverlayProgressPercent.textContent = percentText;
+    els.jobOverlayProgressBar.style.width = percentText;
+    els.jobOverlayProgressDetail.textContent = total
+      ? `已编码 ${encoded}/${total} 帧 · 视频 ${formatProgressTime(
+          currentTime
+        )}/${formatProgressTime(duration)} · 剩余 ${formatProgressTime(eta)}`
+      : "正在读取视频时间线。";
+    els.jobOverlayTitle.textContent = `MP4 导出 ${percentText}`;
+    els.jobOverlayMessage.textContent = "进度来自 Chromium 与 FFmpeg 的实时数据。";
   }
 }
 
@@ -1257,15 +1352,19 @@ function renderJob(job) {
     succeeded: "已完成",
     failed: "失败",
   };
+  const progressText = job.progress
+    ? ` · ${(Number(job.progress.percent) || 0).toFixed(2)}%`
+    : "";
   els.jobStatus.textContent = `${job.task}: ${
     labels[job.status] || job.status
-  }`;
+  }${progressText}`;
   els.jobStatus.className = `job-status ${job.status}`;
   els.jobLog.textContent = job.log?.length
     ? job.log.join("\n")
     : "任务已启动，正在等待日志。";
   els.jobLog.scrollTop = els.jobLog.scrollHeight;
   setJobBusy(job.status === "queued" || job.status === "running", job.task);
+  renderJobProgress(job.progress);
 }
 
 async function pollJob() {
