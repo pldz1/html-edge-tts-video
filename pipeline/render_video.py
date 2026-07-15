@@ -92,12 +92,12 @@ def ensure_render_assets_match_source() -> None:
 
 async def launch_browser(playwright: object) -> object:
     try:
-        print("Using browser: Playwright bundled Chromium")
+        print("Using browser: Playwright Chromium Headless Shell")
         return await playwright.chromium.launch(headless=True)
     except PlaywrightError as exc:
         reason = str(exc).splitlines()[0]
         raise SystemExit(
-            f"Could not launch Playwright bundled Chromium ({reason}).\n"
+            f"Could not launch Playwright Chromium Headless Shell ({reason}).\n"
             "Run: python main.py install\n"
             "This project intentionally does not use system Chrome or Edge."
         ) from exc

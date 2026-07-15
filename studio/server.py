@@ -2,6 +2,7 @@
 """Serve the Studio web app and its local JSON API."""
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import sys
@@ -15,7 +16,7 @@ if str(APP_ROOT) not in sys.path:
     sys.path.insert(0, str(APP_ROOT))
 
 from pipeline.captions import default_doc, load_effective_doc, load_timeline, save_doc
-from pipeline.factory import CURRENT_SOURCE, ROOT, active_theme, theme_url
+from pipeline.factory import CURRENT_SOURCE, ROOT, active_theme, theme_path
 from studio.api import ApiError, handle_get, handle_post
 
 
@@ -116,7 +117,7 @@ class FactoryHandler(SimpleHTTPRequestHandler):
                     "saved": saved,
                     "duration": timeline.get("duration"),
                     "scenes": timeline.get("scenes", []),
-                    "previewUrl": theme_url(active_theme()),
+                    "previewUrl": theme_path(active_theme()),
                     "audioUrl": "/.local/current/assets/narration.mp3",
                 },
             )
@@ -161,15 +162,34 @@ class FactoryHandler(SimpleHTTPRequestHandler):
         self.send_error_json(404, "unknown endpoint")
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Serve the Studio web app and JSON API.")
+    parser.add_argument("--host", default="127.0.0.1", help="Interface or hostname to bind.")
+    parser.add_argument("--port", type=int, default=8765, choices=range(1, 65536), metavar="PORT")
+    return parser.parse_args()
+
+
+def display_host(host: str) -> str:
+    if host in {"0.0.0.0", "::"}:
+        return "127.0.0.1"
+    return f"[{host}]" if ":" in host and not host.startswith("[") else host
+
+
 def main() -> None:
+    args = parse_args()
     os.chdir(ROOT)
-    print(f"Preview: {theme_url(active_theme())}")
-    print("Studio: http://127.0.0.1:8765/")
-    print("Caption editor: http://127.0.0.1:8765/captions")
-    print("Voice preview: http://127.0.0.1:8765/voices")
-    server = ThreadingHTTPServer(("127.0.0.1", 8765), FactoryHandler)
+    origin = f"http://{display_host(args.host)}:{args.port}"
+    print(f"Preview: {origin}{theme_path(active_theme())}")
+    print(f"Studio: {origin}/")
+    print(f"Caption editor: {origin}/captions")
+    print(f"Voice preview: {origin}/voices")
+    server = ThreadingHTTPServer((args.host, args.port), FactoryHandler)
     try:
-        print("[server] Listening for browser and API activity. Press Ctrl+C to stop.", flush=True)
+        print(
+            f"[server] Listening on {args.host}:{args.port} for browser and API activity. "
+            "Press Ctrl+C to stop.",
+            flush=True,
+        )
         server.serve_forever()
     except KeyboardInterrupt:
         print("\n[server] Shutdown requested.", flush=True)

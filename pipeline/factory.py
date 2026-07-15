@@ -311,10 +311,15 @@ def load_scenes() -> list[dict]:
     return json.loads((CURRENT_SOURCE / "scenes.json").read_text(encoding="utf-8"))
 
 
-def theme_url(theme: str | None = None) -> str:
+def theme_path(theme: str | None = None) -> str:
     name = theme or active_theme()
     ensure_theme(name)
-    return f"http://127.0.0.1:8765/themes/{name}/index.html"
+    return f"/themes/{name}/index.html"
+
+
+def theme_url(theme: str | None = None) -> str:
+    """Return the private renderer URL used by the local capture pipeline."""
+    return f"http://127.0.0.1:8765{theme_path(theme)}"
 
 
 def output_path(value: str) -> Path:

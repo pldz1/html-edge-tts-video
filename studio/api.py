@@ -39,7 +39,7 @@ from pipeline.factory import (
     rel,
     resolve_source,
     slug,
-    theme_url,
+    theme_path,
 )
 from pipeline.validate_sources import (
     has_embedded_visual,
@@ -562,7 +562,7 @@ def studio_state() -> dict[str, Any]:
             "studioPrompt": "/studio/create",
             "studioImport": "/studio/import",
             "studioNew": "/studio/new",
-            "preview": theme_url(shell_theme),
+            "preview": theme_path(shell_theme),
             "captions": "/captions",
             "voices": "/voices",
         },

@@ -88,8 +88,9 @@ to overwrite a non-empty target unless `--force` is present.
 `validate_source(source, theme)` builds the validation command for `pipeline/validate_sources.py`.
 Handlers call this before TTS and render paths so bad source files fail early.
 
-`install(_)` installs Python dependencies from `requirements.txt` and the Playwright bundled
-Chromium browser.
+`install(_)` installs Python dependencies from `requirements.txt` and only Playwright's Chromium
+Headless Shell via `playwright install --only-shell chromium`; it does not install or use a headed
+Chromium or system browser.
 
 `tts(args)` validates the source, then calls `pipeline/build_tts.py` with voice, rate, pitch, gap,
 theme, source, and optional `--force`.

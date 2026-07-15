@@ -189,10 +189,20 @@ Voice preview URL:
 http://127.0.0.1:8765/voices
 ```
 
+Studio binds to loopback port `8765` by default. Choose another interface and port when needed:
+
+```bash
+python main.py studio --host 0.0.0.0 --port 9000
+```
+
+For a cloud deployment, prefer keeping `--host 127.0.0.1` and forwarding a TLS-enabled subdomain
+to the selected port with a reverse proxy. Studio has state-changing project and build APIs, so put
+authentication at the proxy rather than exposing the server directly to the internet.
+
 ## Commands
 
 ```bash
-python main.py install        # install Python dependencies, managed FFmpeg, and Playwright Chromium
+python main.py install        # install Python dependencies, managed FFmpeg, and Playwright Chromium Headless Shell
 python main.py init           # copy templates/starter to .local/work/starter
 python main.py load --source <folder>
 python main.py voices         # list supported edge-tts voices
@@ -200,6 +210,7 @@ python main.py voice-preview  # generate local voice samples
 python main.py tts --source <folder>
 python main.py offline --source <folder>
 python main.py preview
+python main.py studio         # add --host and --port for a custom Studio listener
 python main.py captions       # edit on-screen subtitles from timeline cues
 python main.py check
 python main.py render --output my-video.mp4
@@ -211,9 +222,10 @@ To use a mirror for this installation only (without changing global pip or envir
 python main.py install --pip-index-url https://<your-python-mirror>/simple --playwright-download-host https://<your-playwright-mirror>
 ```
 
-Omit either option to use its default official source. Rendering never uses installed Edge or Chrome;
-it launches only the Chromium downloaded by Python Playwright. FFmpeg is supplied by the active Python
-environment through `imageio-ffmpeg`, rather than a system `PATH` executable.
+Omit either option to use its default official source. The install command downloads only Playwright's
+Chromium Headless Shell (`playwright install --only-shell chromium`), not the full headed Chromium.
+Rendering never uses an installed Edge, Chrome, or another system browser. FFmpeg is supplied by the
+active Python environment through `imageio-ffmpeg`, rather than a system `PATH` executable.
 
 Render size examples:
 

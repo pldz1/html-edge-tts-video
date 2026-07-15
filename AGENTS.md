@@ -5,13 +5,14 @@ This repository is a HTML video skill package.
 ## Toolchain policy
 
 All automated browser work, including previews used for capture and video rendering, must use the
-Chromium downloaded by the Python `playwright` package. Do not launch, automate, detect, or fall
-back to a locally installed Edge, Chrome, or other system browser. Do not add browser executable
+Chromium Headless Shell downloaded by the Python `playwright` package with `--only-shell chromium`.
+Do not install or launch headed Chromium, and do not launch, automate, detect, or fall back to a
+locally installed Edge, Chrome, or other system browser. Do not add browser executable
 environment-variable overrides.
 
 All audio/video probing, composition, muxing, and encoding in `pipeline/` must invoke the FFmpeg
 binary provided by the Python environment (`imageio-ffmpeg`), never a system `ffmpeg` or `ffprobe`
-found on `PATH`. Dependencies and the Playwright Chromium browser are installed only through
+found on `PATH`. Dependencies and the Playwright Chromium Headless Shell are installed only through
 `python main.py install`. A temporary package mirror, when needed, must be supplied as an install
 command option and must not be written to user or system package-manager configuration.
 

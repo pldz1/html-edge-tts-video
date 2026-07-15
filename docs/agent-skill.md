@@ -153,6 +153,16 @@ The stable shell is served from:
 http://127.0.0.1:8765/themes/default/index.html
 ```
 
+Studio listens on `127.0.0.1:8765` by default. Its listener can be configured independently:
+
+```bash
+python main.py studio --host 0.0.0.0 --port 9000
+```
+
+Browser-facing Studio links are origin-relative so previews and editors continue to use the public
+subdomain when Studio is accessed through a reverse proxy. Keep the listener on loopback when the
+proxy runs on the same host, and protect internet-facing deployments with TLS and authentication.
+
 Modes:
 
 - Normal URL: standalone preview with controls.
@@ -180,7 +190,9 @@ Keep this contract out of per-video source.
 
 ## Toolchain constraints
 
-- Use Python Playwright's managed Chromium for all automated preview and rendering.
+- Use Python Playwright's managed Chromium Headless Shell for all automated preview and rendering.
+- Install only that browser runtime through `python main.py install`, which runs Playwright with
+  `--only-shell chromium`; do not install or use headed Chromium, system Chrome, or system Edge.
 - Use the FFmpeg binary from `imageio-ffmpeg`, never a system binary from PATH.
 - Install dependencies only through `python main.py install`.
 - Let actual audio and WordBoundary metadata determine the timeline.

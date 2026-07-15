@@ -60,7 +60,8 @@ def install(args: argparse.Namespace) -> None:
     if args.playwright_download_host:
         playwright_env["PLAYWRIGHT_DOWNLOAD_HOST"] = args.playwright_download_host
         print(f"Using one-time Playwright download host: {args.playwright_download_host}")
-    run([PYTHON, "-m", "playwright", "install", "chromium"], env=playwright_env)
+    print("Installing Playwright Chromium Headless Shell (no system or headed browser required).")
+    run([PYTHON, "-m", "playwright", "install", "--only-shell", "chromium"], env=playwright_env)
 
 
 def tts(args: argparse.Namespace) -> None:
@@ -118,7 +119,7 @@ def captions(args: argparse.Namespace) -> None:
 def studio(args: argparse.Namespace) -> None:
     if args.source:
         load_source(Path(args.source), args.theme or active_theme())
-    run([PYTHON, "studio/server.py"])
+    run([PYTHON, "studio/server.py", "--host", args.host, "--port", str(args.port)])
 
 
 def render(args: argparse.Namespace) -> None:
@@ -236,14 +237,21 @@ def build_parser() -> argparse.ArgumentParser:
     load_parser.add_argument("--theme", default=None)
     load_parser.set_defaults(func=load)
 
-    install_parser = subparsers.add_parser("install", help="Install Python dependencies and Playwright Chromium.")
+    install_parser = subparsers.add_parser(
+        "install",
+        help="Install Python dependencies and Playwright Chromium Headless Shell.",
+        description=(
+            "Install requirements.txt (including imageio-ffmpeg) and only Playwright's Chromium "
+            "Headless Shell. No headed Chromium, system Chrome, or system Edge is installed or used."
+        ),
+    )
     install_parser.add_argument(
         "--pip-index-url",
         help="One-time Python package index URL; does not modify pip configuration.",
     )
     install_parser.add_argument(
         "--playwright-download-host",
-        help="One-time host for the Playwright Chromium download; does not persist in the environment.",
+        help="One-time host for the Playwright Chromium Headless Shell download; does not persist in the environment.",
     )
     install_parser.set_defaults(func=install)
 
@@ -261,6 +269,19 @@ def build_parser() -> argparse.ArgumentParser:
 
     studio_parser = subparsers.add_parser("studio")
     add_source_args(studio_parser)
+    studio_parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Interface or hostname to bind (default: 127.0.0.1).",
+    )
+    studio_parser.add_argument(
+        "--port",
+        type=int,
+        default=8765,
+        choices=range(1, 65536),
+        metavar="PORT",
+        help="TCP port to bind (default: 8765).",
+    )
     studio_parser.set_defaults(func=studio)
 
     check_parser = subparsers.add_parser("check")
