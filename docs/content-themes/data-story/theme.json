@@ -1,7 +1,0 @@
-{
-  "id": "data-story",
-  "label": {"zh-CN": "数据叙事", "en-US": "Data Story"},
-  "description": {"zh-CN": "用数字、比例和变化趋势推动故事。", "en-US": "Narrative driven by metrics, proportions, and change."},
-  "defaultEngine": "dom",
-  "engines": ["dom"]
-}

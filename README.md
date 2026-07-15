@@ -1,288 +1,174 @@
-﻿# HTML edge-tts Video Skill Package
+# HTML edge-tts Video
 
-This repo is a skill package: it loads a video source folder, resolves the content language, generates TTS and caption
-timing, records a stable HTML theme shell, then writes an MP4 into the active project's `output/`
-folder.
-
-AI output is intentionally small:
+Create narrated presentation-style videos from two authored files:
 
 ```text
-my-video-source/
+my-video/
   scenes.json
-  body.html (self-contained styles and optional JavaScript)
+  body.html
   media/ optional
-  captions.json optional after manual subtitle edits
 ```
 
-The skill package owns a stable shell:
+`scenes.json` owns scene order, chapter labels, and narration. `body.html` owns every visible title,
+layout, color, diagram, chart, and optional deterministic visual module. The stable shell owns TTS
+timing, captions, playback, chapter progress, scene transitions, and MP4 rendering.
 
-```text
-themes/default/
-  index.html
-  runtime.js
-  theme.css
-```
-
-Content Themes live under `docs/content-themes/` and control prompts, project visuals, and allowed
-renderers. Select one in `/studio/create` or with `python main.py prompt --content-theme <name>`.
-
-The rendered video is clean: preview controls, scrubbers, headers, timecodes, and transport bars are
-hidden in render mode. The bottom chapter rail reads labels from `scenes.json.category`, reads timing
-from the generated `timeline.json`, and renders as one continuous progress rail.
-
-## Start Now
-
-Render the tracked starter:
+## Install
 
 ```bash
-python main.py tts --source templates/starter
+python main.py install
+```
+
+This installs Python dependencies, `imageio-ffmpeg`, and only Playwright's Chromium Headless Shell.
+The pipeline never uses a system browser or system FFmpeg.
+
+## Try the starter
+
+```bash
+python main.py offline --source .local/work/starter
 python main.py check
+python main.py studio --source .local/work/starter
 python main.py render --output starter.mp4
 ```
 
-Studio-managed projects use an immutable 8-character ID and keep their metadata and resources together:
-
-```text
-.local/work/a7f31c2d/
-  manifest.json
-  scenes.json
-  body.html (self-contained styles and optional JavaScript)
-  media/ optional
-  captions.json optional, created by caption editor
-  generated/ narration and timeline cache
-  output/ rendered videos
-```
-
-`manifest.json` owns the editable project name, language, Content Theme, renderer, and TTS settings. The folder ID does not change when
-the project is renamed. Standalone source folders outside `.local/work/` remain supported.
-
-Build it:
+Use `tts` instead of `offline` when network TTS is available:
 
 ```bash
-python main.py tts --source .local/work/a7f31c2d
-python main.py check
-python main.py render --output my-video.mp4
+python main.py tts --source .local/work/starter
+python main.py render --output starter.mp4
 ```
 
-Edit generated captions like a meeting transcript:
-
-```bash
-python main.py captions --source .local/work/a7f31c2d
-```
-
-Open:
-
-```text
-http://127.0.0.1:8765/captions
-```
-
-This creates or updates `captions.json`. It changes only on-screen subtitles, not narration audio.
-
-Use files downloaded from a web AI:
-
-```bash
-python main.py tts --source C:\Users\you\Downloads\my-video-source
-python main.py check
-python main.py render --output my-video.mp4
-```
-
-For a Studio-managed project, the final MP4 appears in:
-
-```text
-.local/work/<project-id>/output/
-```
-
-Standalone external sources continue to use `.local/output/`.
-
-## Source Format
-
-`scenes.json` is the narration, scene order, and chapter rail source:
+## Source format
 
 ```json
 [
   {
     "id": "intro",
     "category": "总览",
-    "title": "视频从哪里开始",
-    "summary": "先说明本视频的切入点和路线。",
-    "narration": "中文旁白。"
+    "narration": "先介绍视频将说明什么。"
   }
 ]
 ```
 
-Rules:
-
-- The first scene must use `id: "intro"` and introduce what the video will cover.
-- Every scene needs `category`, `title`, `summary`, and `narration`.
-- `category` should be a short label in the selected content language, up to 12 characters.
-
-`body.html` is the self-contained visual content. Add one section per scene and keep project CSS in
-`<style>`:
+The first id must be `intro`. Categories are at most 12 characters. Add a matching section and all
+project CSS to `body.html`:
 
 ```html
-<section class="content-scene scene" data-scene="intro">
-  <div class="scene-copy">
-    <div class="eyebrow">INTRO</div>
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Presentation video</title>
+  <style>
+    .slide { position: absolute; inset: 0; padding: 8vh 7vw 22vh; }
+  </style>
+</head>
+<body>
+  <section class="content-scene slide" data-scene="intro">
     <h1>标题</h1>
-    <p class="summary">画面摘要。</p>
-  </div>
-</section>
+  </section>
+</body>
+</html>
 ```
 
-Prefer visual explanation over text-only slides. Put structured HTML/CSS/SVG graphics inside
-`visual-board`: `diagram-flow`, `comparison-grid`, `metric-grid`, `formula-strip`, `concept-map`, or
-small inline SVG diagrams. For Canvas, Three.js, or WebGL, add a `<script type="module">` to
-`body.html` and export the deterministic functions documented in `docs/agent-skill.md`.
+Do not hard-code `active` or `is-active` on a scene. The shell selects exactly one scene from the
+timeline and owns scene visibility. Scope source CSS to `#stage` and scene elements; global `html`
+or `body` rules can interfere with the shell and are not supported.
 
-Do not put app/runtime behavior into `body.html`. Avoid:
+Do not add playback controls, captions, footers, timecodes, chapter rails, or scene transitions.
+Prefer HTML/CSS/SVG. An advanced visual may use one inline module exporting deterministic `mount()`
+and `renderAtTime()` functions; see `docs/agent-skill.md`.
 
-```text
-app.js
-play buttons
-scrubbers
-timecodes
-top bars
-transport bars
-progress-line
-chapter rail markup
+## Generate an AI prompt
+
+```bash
+python main.py prompt --topic "介绍一个新产品" --language zh-CN --target agent
+python main.py prompt --topic "Explain event loops" --language en-US --target web-ai
 ```
 
-Local media can be referenced relative to the source folder:
+The single template is `docs/source-prompt.md`. It keeps the visual language consistently bright,
+editorial, and blue-green while allowing the AI to choose a fitting composition for each subject.
 
-```html
-<img src="media/diagram.png" alt="">
-```
-
-The theme runtime rebases these URLs when it loads `body.html`.
-
-`captions.json` is optional. It is created by the local caption editor after TTS has generated real
-WordBoundary timing. Do not ask a web AI to generate it.
-
-## Normal Loop
-
-When narration changes:
+## Normal loop
 
 ```bash
 python main.py tts --source <source-folder>
 python main.py check
-python main.py render --output my-video.mp4
+python main.py studio --source <source-folder>
+python main.py render --output video.mp4
 ```
 
-When only `body.html` or media changes:
+Use `python main.py captions` to edit on-screen subtitle text after TTS. Generated state lives under
+`.local/`; Studio-managed projects keep generated audio and output beside their two source files.
+The only tracked exception is `.local/work/starter/body.html` and `scenes.json`; every other file
+under `.local/` is runtime state.
 
-```bash
-python main.py load --source <source-folder>
-python main.py check
-python main.py preview
-python main.py render --output my-video.mp4
-```
+Transitions default to a deterministic 0.4-second dip to the shell background. Set
+`--transition 0.3`, or use `--transition 0` to disable them.
 
-Stable shell preview URL:
+## Architecture
 
 ```text
-http://127.0.0.1:8765/themes/default/index.html
+scenes.json + body.html
+  -> load_source()
+  -> .local/current/source/
+  -> edge-tts or offline timeline
+  -> .local/current/assets/
+  -> pipeline/shell/runtime.js
+  -> Playwright Chromium Headless Shell
+  -> imageio-ffmpeg
+  -> MP4
 ```
 
-Voice preview URL:
+The authored source owns content and presentation styling. The stable shell owns captions, chapter
+progress, playback, timing, and transitions. Generated audio and timelines are caches rather than
+source. Studio adds project metadata and editing UI without changing the two-file contract.
 
-```text
-http://127.0.0.1:8765/voices
+### Source loading and validation
+
+`pipeline/factory.py` accepts `scenes.json`, `body.html`, optional `media/`, and optional
+`captions.json`. It copies the normalized source into `.local/current/source/` and records the source
+path, resolved language, and load time.
+
+`pipeline/validate_sources.py` checks scene ids, the `intro` first scene, short categories,
+narration, matching `[data-scene]` sections, embedded CSS, and the absence of transport UI. Source
+may contain at most one inline module script. It must export `mount()` and `renderAtTime()`, avoid an
+independent animation loop, and pin Three.js versions.
+
+Sidecar `body.css`, `visual.js`, nested `content/`, and `index.html` compatibility paths are not
+supported.
+
+### Prompt, timeline, and rendering
+
+`pipeline/prompt_composer.py` fills `docs/source-prompt.md` with the requested content parameters.
+Agents write the two files directly; web AI returns two fenced code blocks. The prompt keeps a
+consistent bright blue-green editorial palette while allowing scene composition to follow the topic.
+
+`pipeline/build_tts.py` synthesizes scenes, captures WordBoundary metadata, inserts scene gaps, and
+concatenates narration using managed FFmpeg. `pipeline/build_offline_preview.py` produces the same
+timeline shape with estimated durations and silent audio.
+
+`pipeline/shell/runtime.js` loads source, activates scenes by absolute time, applies captions,
+updates chapter progress, and calculates transitions. It exposes:
+
+```js
+window.compositionReady
+window.getCompositionDuration()
+window.renderAtTime(seconds)
+window.getPlaybackState()
+window.togglePlayback()
+window.startCompositionPlayback()
 ```
 
-Studio binds to loopback port `8765` by default. Choose another interface and port when needed:
+`pipeline/render_video.py` captures with Python Playwright's managed Chromium Headless Shell and
+muxes with the FFmpeg binary returned by `imageio-ffmpeg`. It never uses a system browser or FFmpeg
+from `PATH`.
 
-```bash
-python main.py studio --host 0.0.0.0 --port 9000
-```
+### Studio
 
-For a cloud deployment, prefer keeping `--host 127.0.0.1` and forwarding a TLS-enabled subdomain
-to the selected port with a reverse proxy. Studio has state-changing project and build APIs, so put
-authentication at the proxy rather than exposing the server directly to the internet.
-
-## Commands
-
-```bash
-python main.py install        # install Python dependencies, managed FFmpeg, and Playwright Chromium Headless Shell
-python main.py init           # copy templates/starter to .local/work/starter
-python main.py load --source <folder>
-python main.py voices         # list supported edge-tts voices
-python main.py voice-preview  # generate local voice samples
-python main.py tts --source <folder>
-python main.py offline --source <folder>
-python main.py preview
-python main.py studio         # add --host and --port for a custom Studio listener
-python main.py captions       # edit on-screen subtitles from timeline cues
-python main.py check
-python main.py render --output my-video.mp4
-```
-
-To use a mirror for this installation only (without changing global pip or environment settings):
-
-```bash
-python main.py install --pip-index-url https://<your-python-mirror>/simple --playwright-download-host https://<your-playwright-mirror>
-```
-
-Omit either option to use its default official source. The install command downloads only Playwright's
-Chromium Headless Shell (`playwright install --only-shell chromium`), not the full headed Chromium.
-Rendering never uses an installed Edge, Chrome, or another system browser. FFmpeg is supplied by the
-active Python environment through `imageio-ffmpeg`, rather than a system `PATH` executable.
-
-Render size examples:
-
-```bash
-python main.py render --size 1080p --output tutorial-1080p.mp4
-python main.py render --width 1080 --height 1920 --output vertical.mp4
-```
-
-Scene transitions default to a deterministic `0.4` second dip-to-black with no black hold. Adjust
-exports with `--transition 0.3`, or disable transitions with `--transition 0`.
-
-## Build Workspace
-
-`main.py tts --source <folder>` copies source files into:
-
-```text
-.local/current/source/
-```
-
-and writes generated audio/timeline into the active cache:
-
-```text
-.local/current/assets/
-```
-
-For a managed project this cache is mirrored to `.local/work/<project-id>/generated/`. These folders
-are ignored build state, not authored source.
-
-## Git Boundary
-
-Do not commit generated or local work:
-
-```text
-.local/
-```
-
-Legacy compatibility paths are also ignored for older checkouts:
-
-```text
-.factory/
-work/
-assets/
-output/
-```
-
-Commit reusable skill-package changes here:
-
-```text
-SKILL.md
-agents/
-DESIGN.md
-docs/
-main.py
-pipeline/
-templates/starter/
-themes/
-studio/
-```
-
-`main.py` is the single CLI entrypoint.
+Studio creates, imports, deletes, validates, plays, narrates, and renders projects. Prompt creation
+and source import open as dialogs without leaving the workspace. A project manifest
+stores identity, display name, language, and TTS settings. Presentation style and rendering engine
+remain properties of `body.html`. Studio discovers projects under `.local/work/`; the built-in
+`starter` project lives there too and cannot be deleted through Studio.

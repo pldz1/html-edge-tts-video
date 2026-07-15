@@ -13,7 +13,14 @@ yarn-error.log*
 pnpm-debug.log*
 
 # Factory workspace, local projects, generated media, and render outputs.
-.local/
+# The two-file Studio starter is the only tracked exception under .local/.
+.local/*
+!.local/work/
+.local/work/*
+!.local/work/starter/
+.local/work/starter/*
+!.local/work/starter/body.html
+!.local/work/starter/scenes.json
 tests/
 
 # OS/editor noise

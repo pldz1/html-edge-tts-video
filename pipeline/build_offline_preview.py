@@ -22,11 +22,10 @@ BREAK_RE = re.compile(r".{1,22}?[\u3002\uff01\uff1f\uff1b\uff0c\u3001\uff1a]|.{1
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source")
-    parser.add_argument("--theme", default="default")
     args = parser.parse_args()
 
     if args.source:
-        load_source(Path(args.source), args.theme)
+        load_source(Path(args.source))
 
     scenes = load_scenes()
     timeline_scenes = []

@@ -118,44 +118,64 @@ a {
   display: contents;
 }
 
-/* Studio, prompt creation, and source import are views of one application.
-   The URL still names the active view so existing bookmarks keep working. */
-.studio-route-panel {
-  grid-column: 2;
-  grid-row: 2;
-  display: none;
-  grid-template-columns: minmax(380px, 0.72fr) minmax(520px, 1fr);
+/* Prompt creation and source import stay inside Studio as modal workflows. */
+.studio-workflow-dialog {
+  width: min(1380px, calc(100vw - 44px));
+  height: min(820px, calc(100vh - 44px));
+  max-width: none;
+  max-height: none;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid #c8d9e4;
+  border-radius: 16px;
+  background: #f6fbfa;
+  color: var(--text);
+  box-shadow: 0 28px 90px rgba(31, 67, 79, 0.24);
+}
+
+.studio-workflow-dialog::backdrop {
+  background: rgba(25, 48, 58, 0.38);
+  backdrop-filter: blur(4px);
+}
+
+.studio-workflow-dialog[open] {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.workflow-dialog-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 64px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #d8e7e5;
+  background: linear-gradient(90deg, #edf8f5, #eef7fb);
+}
+
+.workflow-dialog-heading h2 {
+  margin: 2px 0 0;
+  font-size: 18px;
+}
+
+.workflow-dialog-grid {
+  display: grid;
+  grid-template-columns: minmax(360px, 0.72fr) minmax(500px, 1fr);
   gap: 10px;
   min-width: 0;
   min-height: 0;
-  padding: 12px 16px 16px 12px;
+  padding: 10px;
   overflow: hidden;
 }
 
-body[data-studio-route="prompt"] .prompt-route-panel,
-body[data-studio-route="import"] .import-route-panel {
-  display: grid;
-}
-
-body[data-studio-route="prompt"] .workspace,
-body[data-studio-route="import"] .workspace,
-body[data-studio-route="prompt"] .studio-project-header,
-body[data-studio-route="import"] .studio-project-header {
-  display: none;
-}
-
-body[data-studio-route="prompt"] .studio-app,
-body[data-studio-route="import"] .studio-app {
-  grid-template-rows: minmax(0, 1fr);
-}
-
-body[data-studio-route="prompt"] .studio-route-panel,
-body[data-studio-route="import"] .studio-route-panel {
-  grid-row: 1;
-}
-
 @media (max-width: 920px) {
-  .studio-route-panel {
+  .studio-workflow-dialog {
+    width: calc(100vw - 20px);
+    height: calc(100vh - 20px);
+  }
+
+  .workflow-dialog-grid {
     grid-template-columns: 1fr;
     grid-template-rows: minmax(320px, 0.9fr) minmax(360px, 1fr);
     overflow-y: auto;
@@ -544,7 +564,6 @@ h2 {
   font-size: 10px;
 }
 
-.project-card,
 .output-card {
   width: 100%;
   min-height: auto;
@@ -556,14 +575,55 @@ h2 {
 }
 
 .project-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+}
+
+.project-card-main {
   display: grid;
   gap: 3px;
+  min-width: 0;
+  padding: 8px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
 }
 
 .project-card.active {
   border-color: #d8e6fa;
   background: #edf4ff;
   box-shadow: 0 4px 12px rgba(72, 118, 186, 0.06);
+}
+
+.project-delete-button {
+  width: 28px;
+  min-height: 28px;
+  margin-right: 5px;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  color: #9a6b74;
+  opacity: 0.55;
+}
+
+.project-delete-button:hover,
+.project-delete-button:focus-visible {
+  border-color: #edcbd1;
+  background: #fff1f3;
+  color: #bd4355;
+  opacity: 1;
+}
+
+.project-delete-button svg {
+  width: 15px;
+  height: 15px;
 }
 
 .project-title,
@@ -1480,6 +1540,14 @@ select:focus {
 .studio-toast.success {
   border-color: #ccebd5;
   color: #237541;
+}
+
+.more-menu-panel .danger-menu-action {
+  color: #b63e50;
+}
+
+.more-menu-panel .danger-menu-action:hover:not(:disabled) {
+  background: #fff0f2;
 }
 
 .build-next-step {
@@ -2408,4 +2476,17 @@ select:focus {
 
 .outputs-panel.is-empty .output-list {
   align-content: center;
+}
+
+/* The Studio preview is the only interactive preview and always preserves the render aspect. */
+.preview-panel iframe {
+  flex: 0 0 auto;
+  width: calc(100% - 24px);
+  height: auto;
+  aspect-ratio: 16 / 9;
+  margin: 0 12px 12px;
+  border: 1px solid #a9c8c5;
+  border-radius: 10px;
+  background: #eef8f4;
+  box-shadow: 0 8px 24px rgba(39, 89, 86, .1);
 }

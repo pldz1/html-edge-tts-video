@@ -1,0 +1,22 @@
+[
+  {
+    "id": "intro",
+    "category": "开场",
+    "narration": "这是一个只由 scenes.json 和 body.html 驱动的演示视频。接下来用四页幻灯片展示它的工作方式。"
+  },
+  {
+    "id": "source",
+    "category": "输入",
+    "narration": "scenes.json 负责场景顺序、章节标签和旁白。body.html 负责所有可见的版式、颜色和图形。"
+  },
+  {
+    "id": "pipeline",
+    "category": "生成",
+    "narration": "稳定外壳生成语音、字幕和时间轴，再通过确定性的场景切换把每一页组合成视频。"
+  },
+  {
+    "id": "finish",
+    "category": "完成",
+    "narration": "创作者只需要关注内容和视觉表达，工具链负责预览、转场和最终的 MP4 渲染。"
+  }
+]

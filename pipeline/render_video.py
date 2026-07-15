@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-"""Record the themed HTML composition with Playwright, then mux narration using FFmpeg."""
+"""Record the HTML composition shell with Playwright, then mux narration using FFmpeg."""
 from __future__ import annotations
 
 import argparse
@@ -17,10 +17,10 @@ from playwright.async_api import async_playwright
 from playwright.async_api import Error as PlaywrightError
 
 try:
-    from .factory import CURRENT_ASSETS, LOCAL_PLAYWRIGHT, ROOT, active_theme, load_scenes, load_source, output_path, theme_url
+    from .factory import CURRENT_ASSETS, LOCAL_PLAYWRIGHT, ROOT, load_scenes, load_source, output_path, shell_url
     from .toolchain import ffmpeg_executable
 except ImportError:  # Direct script execution: python pipeline/render_video.py
-    from factory import CURRENT_ASSETS, LOCAL_PLAYWRIGHT, ROOT, active_theme, load_scenes, load_source, output_path, theme_url
+    from factory import CURRENT_ASSETS, LOCAL_PLAYWRIGHT, ROOT, load_scenes, load_source, output_path, shell_url
     from toolchain import ffmpeg_executable
 
 
@@ -51,7 +51,6 @@ def serve() -> None:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source")
-    parser.add_argument("--theme", default=None)
     parser.add_argument("--size", default="720p", choices=sorted(SIZES))
     parser.add_argument("--width", type=int)
     parser.add_argument("--height", type=int)
@@ -139,26 +138,25 @@ async def wait_for_composition(page: object) -> None:
         raise SystemExit(f"Composition failed to initialize: {error}")
 
 
-def render_page_url(theme: str, transition: float) -> str:
-    return f"{theme_url(theme)}?render=1&transition={transition:g}"
+def render_page_url(transition: float) -> str:
+    return f"{shell_url()}?render=1&transition={transition:g}"
 
 
 async def load_render_page(
     browser: object,
-    theme: str,
     width: int,
     height: int,
     transition: float,
 ) -> tuple[object, object, float]:
     context = await browser.new_context(viewport={"width": width, "height": height})
     page = await context.new_page()
-    await page.goto(render_page_url(theme, transition), wait_until="networkidle")
+    await page.goto(render_page_url(transition), wait_until="networkidle")
     await wait_for_composition(page)
     duration = float(
         await page.evaluate(
             """() => {
               const durationFn = window.getCompositionDuration || window.getDemoDuration;
-              if (!durationFn) throw new Error('Theme runtime is missing getCompositionDuration()');
+              if (!durationFn) throw new Error('Shell runtime is missing getCompositionDuration()');
               return durationFn();
             }"""
         )
@@ -168,14 +166,13 @@ async def load_render_page(
 
 async def capture_frames(
     browser: object,
-    theme: str,
     width: int,
     height: int,
     narration: Path,
     output: Path,
     args: argparse.Namespace,
 ) -> None:
-    context, page, duration = await load_render_page(browser, theme, width, height, args.transition)
+    context, page, duration = await load_render_page(browser, width, height, args.transition)
     frame_count = max(1, math.ceil(duration * args.fps))
     print(
         f"Rendering frames: {frame_count} frames at {args.fps} fps "
@@ -228,7 +225,6 @@ async def capture_frames(
 
 async def capture_video(
     browser: object,
-    theme: str,
     width: int,
     height: int,
     narration: Path,
@@ -245,13 +241,13 @@ async def capture_video(
     )
     recording_started = time.perf_counter()
     page = await context.new_page()
-    await page.goto(render_page_url(theme, args.transition), wait_until="networkidle")
+    await page.goto(render_page_url(args.transition), wait_until="networkidle")
     await wait_for_composition(page)
     duration = float(
         await page.evaluate(
             """() => {
               const durationFn = window.getCompositionDuration || window.getDemoDuration;
-              if (!durationFn) throw new Error('Theme runtime is missing getCompositionDuration()');
+              if (!durationFn) throw new Error('Shell runtime is missing getCompositionDuration()');
               return durationFn();
             }"""
         )
@@ -261,7 +257,7 @@ async def capture_video(
     await page.evaluate(
         """() => {
           const startFn = window.startCompositionPlayback || window.startDeterministicPlayback;
-          if (!startFn) throw new Error('Theme runtime is missing startCompositionPlayback()');
+          if (!startFn) throw new Error('Shell runtime is missing startCompositionPlayback()');
           return startFn();
         }"""
     )
@@ -293,9 +289,8 @@ async def capture_video(
 async def main() -> None:
     args = parse_args()
     if args.source:
-        load_source(Path(args.source), args.theme or "default")
+        load_source(Path(args.source))
 
-    theme = args.theme or active_theme()
     width, height = (args.width, args.height) if args.width and args.height else SIZES[args.size]
     narration = CURRENT_ASSETS / "narration.mp3"
     ensure_render_assets_match_source()
@@ -310,9 +305,9 @@ async def main() -> None:
         mode = resolved_capture_mode(args.capture, width, height)
         print(f"Capture mode: {mode}")
         if mode == "frames":
-            await capture_frames(browser, theme, width, height, narration, output, args)
+            await capture_frames(browser, width, height, narration, output, args)
         else:
-            await capture_video(browser, theme, width, height, narration, output, args)
+            await capture_video(browser, width, height, narration, output, args)
         await browser.close()
     print(f"Created: {output}")
 

@@ -22,9 +22,11 @@ const els = {
   guideBadge: $('#guideBadge'),
   projectList: $('#projectList'),
   projectSelect: $('#projectSelect'),
-  themeSelect: $('#themeSelect'),
   outputList: $('#outputList'),
   previewFrame: $('#previewFrame'),
+  previewPlayButton: $('#previewPlayButton'),
+  promptDialog: $('#promptDialog'),
+  importDialog: $('#importDialog'),
   tourButton: $('#tourButton'),
   sidebarToggle: $('#sidebarToggle'),
   projectDrawerBackdrop: $('#projectDrawerBackdrop'),
@@ -35,6 +37,7 @@ const els = {
   newProjectButton: $('#newProjectButton'),
   openProjectsShortcut: $('#openProjectsShortcut'),
   newWorkspaceProjectButton: $('#newWorkspaceProjectButton'),
+  deleteCurrentProjectButton: $('#deleteCurrentProjectButton'),
   editCurrentProjectButton: $('#editCurrentProjectButton'),
   importCurrentProjectButton: $('#importCurrentProjectButton'),
   openCaptionsButton: $('#openCaptionsButton'),
@@ -43,8 +46,6 @@ const els = {
   toneInput: $('#toneInput'),
   sceneCountInput: $('#sceneCountInput'),
   languageInput: $('#languageInput'),
-  contentThemeInput: $('#contentThemeInput'),
-  engineInput: $('#engineInput'),
   promptTargetInput: $('#promptTargetInput'),
   promptResolution: $('#promptResolution'),
   notesInput: $('#notesInput'),
@@ -94,8 +95,6 @@ const INITIAL_FORM_VALUES = Object.freeze({
   tone: els.toneInput?.value || '',
   sceneCount: els.sceneCountInput?.value || '',
   language: els.languageInput?.value || 'auto',
-  contentTheme: els.contentThemeInput?.value || 'editorial',
-  engine: els.engineInput?.value || 'auto',
   promptTarget: els.promptTargetInput?.value || 'web-ai',
   notes: els.notesInput?.value || '',
   projectName: els.projectNameInput?.value || '新视频项目',
@@ -103,6 +102,8 @@ const INITIAL_FORM_VALUES = Object.freeze({
 });
 
 function routeKey() {
+  const dialog = new URLSearchParams(window.location.search).get('dialog');
+  if (dialog === 'prompt' || dialog === 'import') return dialog;
   const path = window.location.pathname.replace(/\/+$/, '');
   if (path.endsWith('/prompt') || path.endsWith('/create')) return 'prompt';
   if (path.endsWith('/import')) return 'import';
@@ -110,17 +111,16 @@ function routeKey() {
   return 'main';
 }
 
-function studioRoutePath(route = 'main') {
-  const routeName = route === 'prompt' ? 'create' : route;
-  const cleanRoute = routeName === 'main' ? '' : `/${routeName}`;
-  return `/studio${cleanRoute}`;
-}
-
-function setStudioRoute(route = 'main', replace = false) {
-  const nextPath = studioRoutePath(route);
-  if (window.location.pathname === nextPath) return;
+function setStudioRoute(route = 'main', replace = false, search = '') {
+  const params = new URLSearchParams(search);
+  if (route === 'prompt' || route === 'import') params.set('dialog', route);
+  else params.delete('dialog');
+  const query = params.toString();
+  const nextUrl = `/studio${query ? `?${query}` : ''}`;
+  const currentUrl = `${window.location.pathname}${window.location.search}`;
   const method = replace ? 'replaceState' : 'pushState';
-  window.history[method]({}, '', nextPath);
+  if (currentUrl !== nextUrl) window.history[method]({}, '', nextUrl);
+  applyRouteFocus(route);
 }
 
 function projectFromUrl() {
@@ -130,8 +130,8 @@ function projectFromUrl() {
 async function initImportProjectContext() {
   if (!els.projectNameInput) return;
   const projectId = projectFromUrl();
-  if (!projectId) return;
   importProjectId = projectId;
+  if (!projectId) return;
   try {
     const data = await api(`/api/projects/source?project=${encodeURIComponent(projectId)}`);
     const scenes = data?.files?.scenesJson || '';
@@ -142,9 +142,6 @@ async function initImportProjectContext() {
     if (els.directScenesInput) els.directScenesInput.value = scenes;
     if (els.directBodyInput) els.directBodyInput.value = body;
     if (els.languageInput) els.languageInput.value = data?.project?.language || 'auto';
-    if (els.contentThemeInput) els.contentThemeInput.value = data?.project?.contentTheme || 'editorial';
-    renderEngineOptions(data?.project?.contentTheme || 'editorial');
-    if (els.engineInput) els.engineInput.value = data?.project?.engine || 'auto';
     setStatus(`正在编辑项目：${data?.project?.name || projectId}`, 'success');
   } catch (error) {
     setStatus(error.message || '无法加载项目源文件。', 'error');
@@ -156,6 +153,15 @@ function applyRouteFocus(route = routeKey()) {
   document.querySelectorAll('[data-studio-route]').forEach(link => {
     link.classList.toggle('active', link.dataset.studioRoute === route);
   });
+  const target = route === 'prompt'
+    ? els.promptDialog
+    : route === 'import'
+      ? els.importDialog
+      : null;
+  [els.promptDialog, els.importDialog].filter(Boolean).forEach(dialog => {
+    if (dialog !== target && dialog.open) dialog.close();
+  });
+  if (target && !target.open) target.showModal();
   if (route === 'new') setProjectDrawerOpen(true);
 }
 
@@ -221,8 +227,6 @@ function resetPromptComposer() {
   els.toneInput.value = INITIAL_FORM_VALUES.tone;
   els.sceneCountInput.value = INITIAL_FORM_VALUES.sceneCount;
   els.languageInput.value = INITIAL_FORM_VALUES.language;
-  els.contentThemeInput.value = INITIAL_FORM_VALUES.contentTheme;
-  els.engineInput.value = INITIAL_FORM_VALUES.engine;
   els.promptTargetInput.value = INITIAL_FORM_VALUES.promptTarget;
   els.notesInput.value = INITIAL_FORM_VALUES.notes;
   refreshPrompt();
@@ -230,6 +234,7 @@ function resetPromptComposer() {
 
 function resetImportComposer(name = INITIAL_FORM_VALUES.projectName) {
   if (!els.aiResponseInput || !els.scenesOutput || !els.bodyOutput || !els.projectNameInput) return;
+  importProjectId = '';
   els.aiResponseInput.value = '';
   els.scenesOutput.value = '';
   els.bodyOutput.value = '';
@@ -353,8 +358,6 @@ function promptPayload() {
     sceneCount: els.sceneCountInput.value.trim(),
     notes: els.notesInput.value.trim(),
     language: els.languageInput.value,
-    contentTheme: els.contentThemeInput.value,
-    engine: els.engineInput.value,
     target: els.promptTargetInput.value,
   };
 
@@ -367,7 +370,7 @@ async function refreshPrompt() {
     if (requestId !== promptRequestId) return;
     els.promptOutput.value = result.prompt;
     if (els.promptResolution) {
-      els.promptResolution.textContent = `已解析：${result.language} · ${result.contentTheme} · ${result.engine} · ${result.target}`;
+      els.promptResolution.textContent = `已解析：${result.language} · ${result.target} · 浅蓝绿色讲义风格`;
     }
   } catch (error) {
     if (requestId !== promptRequestId) return;
@@ -427,30 +430,12 @@ function extractBody(text) {
   return text.slice(firstSection, lastSection + '</section>'.length).trim();
 }
 
-function extractCss(text) {
-  return extractFence(text, 'body.css', 'css');
-}
-
-function extractVisual(text) {
-  return extractFence(text, 'visual.js', 'js') || extractFence(text, 'visual.js', 'javascript');
-}
-
-function mergeLegacyResponse(body, css, visual) {
-  let merged = body.trim();
-  if (css) merged = `<style>\n${css}\n</style>\n${merged}`;
-  if (visual) merged += `\n<script type="module">\n${visual}\n<\/script>`;
-  return merged;
-}
-
 function extractResponse() {
   const text = importMode === 'direct' ? '' : els.aiResponseInput.value;
   const scenes = els.directScenesInput?.value.trim() || extractScenes(text);
   const body = els.directBodyInput?.value.trim() || extractBody(text);
-  const css = extractCss(text);
-  const visual = extractVisual(text);
-  const mergedBody = mergeLegacyResponse(body, css, visual);
   els.scenesOutput.value = scenes;
-  els.bodyOutput.value = mergedBody;
+  els.bodyOutput.value = body;
 
   if (!scenes || !body) {
     setStatus('未同时找到 scenes.json 和 body.html。', 'error');
@@ -464,7 +449,7 @@ function extractResponse() {
     return false;
   }
 
-  setStatus(css || visual ? '源文件已提取，旧版 CSS / JS 已合并进 body.html。' : '两个源文件已提取。', 'success');
+  setStatus('两个源文件已提取。', 'success');
   return true;
 }
 
@@ -515,65 +500,34 @@ function renderHeader() {
   els.guideBadge.textContent = appState?.guide?.stage === 'ready' ? '就绪' : (appState?.guide?.stage || '就绪');
   els.loadStarterButton.disabled = !appState?.hasStarter;
   els.loadStarterButton.querySelector('span').textContent = appState?.hasStarter ? '示例' : '示例不可用';
-  els.editCurrentProjectButton.href = activeId ? `/studio/import?project=${encodeURIComponent(activeId)}` : '/studio/import';
-  els.importCurrentProjectButton.href = activeId ? `/studio/import?project=${encodeURIComponent(activeId)}` : '/studio/import';
+  els.editCurrentProjectButton.href = activeId
+    ? `/studio?dialog=import&project=${encodeURIComponent(activeId)}`
+    : '/studio?dialog=import';
+  els.importCurrentProjectButton.href = activeId
+    ? `/studio?dialog=import&project=${encodeURIComponent(activeId)}`
+    : '/studio?dialog=import';
   els.editCurrentProjectButton.classList.toggle('is-disabled', !activeId);
   els.importCurrentProjectButton.classList.toggle('is-disabled', !activeId);
   els.openCaptionsButton?.classList.toggle('is-disabled', !activeId);
-  renderThemeControls();
+  if (els.deleteCurrentProjectButton) {
+    els.deleteCurrentProjectButton.disabled = !activeId || activeId === 'starter';
+  }
+  renderPreviewControls();
 }
 
-function renderThemeControls() {
-  const themes = appState?.themes || [];
-  const activeTheme = appState?.theme || 'editorial';
-  const previewUrl = appState?.urls?.preview || '/themes/default/index.html';
-  document.querySelectorAll('[data-theme-preview]').forEach(link => {
-    link.href = previewUrl;
-  });
+function renderPreviewControls() {
+  const previewUrl = appState?.urls?.shell || '/pipeline/shell/index.html';
   if (els.previewFrame && (els.previewFrame.src === 'about:blank' || !els.previewFrame.src)) {
     els.previewFrame.src = `${previewUrl}?embed=1`;
   }
-  [els.themeSelect, els.contentThemeInput].filter(Boolean).forEach(select => {
-    const selected = select === els.themeSelect ? activeTheme : (select.value || INITIAL_FORM_VALUES.contentTheme);
-    select.replaceChildren();
-    themes.forEach(theme => {
-      const option = document.createElement('option');
-      option.value = theme.id;
-      const locale = els.languageInput?.value === 'auto'
-        ? (appState?.activeProject?.resolvedLanguage || 'zh-CN')
-        : els.languageInput.value;
-      option.textContent = theme.labels?.[locale] || theme.label;
-      option.title = theme.descriptions?.[locale] || theme.description || '';
-      option.selected = theme.id === selected;
-      select.append(option);
-    });
-  });
-  if (els.themeSelect) els.themeSelect.disabled = !appState?.activeProject || themes.length < 2;
-  renderEngineOptions(els.contentThemeInput?.value || activeTheme);
-}
-
-function renderEngineOptions(themeId) {
-  if (!els.engineInput) return;
-  const theme = (appState?.themes || []).find(item => item.id === themeId);
-  const previous = els.engineInput.value || 'auto';
-  const engines = theme?.engines || ['dom'];
-  els.engineInput.replaceChildren();
-  const automatic = document.createElement('option');
-  automatic.value = 'auto';
-  automatic.textContent = `自动选择（${theme?.defaultEngine || engines[0]}）`;
-  els.engineInput.append(automatic);
-  engines.forEach(engine => {
-    const option = document.createElement('option');
-    option.value = engine;
-    option.textContent = engine === 'three' ? 'Three.js / WebGL' : 'HTML / CSS / SVG';
-    els.engineInput.append(option);
-  });
-  els.engineInput.value = engines.includes(previous) ? previous : 'auto';
 }
 
 function projectCard(project) {
+  const row = document.createElement('article');
+  row.className = `project-card${project.active ? ' active' : ''}`;
+
   const button = document.createElement('button');
-  button.className = `project-card${project.active ? ' active' : ''}`;
+  button.className = 'project-card-main';
   button.type = 'button';
   button.dataset.project = project.id;
 
@@ -586,7 +540,19 @@ function projectCard(project) {
   meta.textContent = `${project.sceneCount} 个场景 · ${project.narrationChars} 个字符 · ${formatDate(project.updatedAt)}`;
   button.title = project.relativePath;
   button.append(title, meta);
-  return button;
+  row.append(button);
+
+  if (project.id !== 'starter') {
+    const remove = document.createElement('button');
+    remove.className = 'project-delete-button';
+    remove.type = 'button';
+    remove.dataset.deleteProject = project.id;
+    remove.title = `删除 ${project.name || project.id}`;
+    remove.setAttribute('aria-label', remove.title);
+    remove.innerHTML = '<i data-lucide="trash-2"></i>';
+    row.append(remove);
+  }
+  return row;
 }
 
 function renderProjects() {
@@ -657,31 +623,51 @@ function renderOutputs() {
 }
 
 function reloadPreview() {
-  const base = appState?.urls?.preview || '/themes/default/index.html';
+  const base = appState?.urls?.shell || '/pipeline/shell/index.html';
   const transition = els.renderTransitionInput?.value || '0.4';
   els.previewFrame.src = `${base}?embed=1&transition=${encodeURIComponent(transition)}&studio=${Date.now()}`;
 }
 
-async function saveTheme(theme) {
-  const project = appState?.activeProject?.id;
-  if (!project || !theme || theme === appState?.theme) return;
-  els.themeSelect.disabled = true;
+function syncPreviewPlayButton(playback = null) {
+  if (!els.previewPlayButton) return;
+  let state = playback;
+  if (!state) {
+    try {
+      state = els.previewFrame?.contentWindow?.getPlaybackState?.();
+    } catch {
+      state = null;
+    }
+  }
+  const playing = Boolean(state?.playing);
+  const label = els.previewPlayButton.querySelector('span');
+  const icon = els.previewPlayButton.querySelector('[data-lucide]');
+  if (label) label.textContent = playing ? '暂停' : '播放';
+  if (icon) icon.setAttribute('data-lucide', playing ? 'pause' : 'play');
+  renderIcons();
+}
+
+function connectPreviewPlayback() {
   try {
-    const profile = (appState?.themes || []).find(item => item.id === theme);
-    const data = await postJson('/api/projects/theme', {
-      project,
-      contentTheme: theme,
-      engine: profile?.defaultEngine || 'dom',
+    const shellWindow = els.previewFrame?.contentWindow;
+    shellWindow?.addEventListener('shell-playback-state', event => {
+      syncPreviewPlayButton(event.detail);
     });
-    appState = data.state;
-    reloadPreview();
-    await refreshAll();
-    setStatus(`主题已切换为 ${theme}。`, 'success');
+    syncPreviewPlayButton(shellWindow?.getPlaybackState?.());
+  } catch {
+    syncPreviewPlayButton();
+  }
+}
+
+async function togglePreviewPlayback() {
+  try {
+    const shellWindow = els.previewFrame?.contentWindow;
+    if (typeof shellWindow?.togglePlayback !== 'function') {
+      throw new Error('预览尚未准备好。');
+    }
+    await shellWindow.togglePlayback();
+    syncPreviewPlayButton(shellWindow.getPlaybackState?.());
   } catch (error) {
-    renderThemeControls();
-    setStatus(error.message, 'error');
-  } finally {
-    els.themeSelect.disabled = false;
+    setStatus(error.message || '无法控制预览播放。', 'error');
   }
 }
 
@@ -946,7 +932,10 @@ async function previewProject(project) {
 
 async function manageProject(project) {
   const loaded = await loadProject(project);
-  if (loaded) window.location.href = `/studio/import?project=${encodeURIComponent(project)}`;
+  if (loaded) {
+    setStudioRoute('import', false, `?project=${encodeURIComponent(project)}`);
+    await initImportProjectContext();
+  }
 }
 
 async function openProjectCaptions(project) {
@@ -992,10 +981,6 @@ async function saveProject() {
       scenesJson: els.scenesOutput.value,
       bodyHtml: els.bodyOutput.value,
       language: els.languageInput.value,
-      contentTheme: els.contentThemeInput.value,
-      engine: els.engineInput.value === 'auto'
-        ? ((appState?.themes || []).find(item => item.id === els.contentThemeInput.value)?.defaultEngine || 'dom')
-        : els.engineInput.value,
       overwrite: Boolean(importProjectId),
     });
     await postJson('/api/projects/load', { project: created.project.id });
@@ -1021,8 +1006,6 @@ async function createBlankProject() {
     const data = await postJson('/api/projects/blank', {
       name,
       language: els.languageInput?.value || 'auto',
-      contentTheme: els.contentThemeInput?.value || 'editorial',
-      engine: els.engineInput?.value || 'auto',
     });
     appState = data.state;
     resetWorkspaceUi({ name: data.project?.name || name, resetPrompt: true, resetImport: true });
@@ -1031,7 +1014,8 @@ async function createBlankProject() {
     reloadPreview();
     await refreshAll();
     setStatus(`已创建并加载项目：${data.project.name}`, 'success');
-    window.location.href = `/studio/import?project=${encodeURIComponent(data.project.id)}`;
+    setStudioRoute('import', false, `?project=${encodeURIComponent(data.project.id)}`);
+    await initImportProjectContext();
   } catch (error) {
     setStatus(error.message, 'error');
   } finally {
@@ -1096,6 +1080,9 @@ async function pollJob() {
 
 async function startJob(task) {
   const payload = { task };
+  if (task === 'tts') {
+    Object.assign(payload, appState?.settings?.tts || {});
+  }
   if (task === 'render') {
     payload.size = els.renderSizeInput.value;
     payload.output = els.renderOutputInput.value;
@@ -1121,23 +1108,27 @@ function bindEvents() {
   [els.topicInput, els.audienceInput, els.toneInput, els.sceneCountInput, els.notesInput].filter(Boolean).forEach(input => {
     input.addEventListener('input', schedulePromptRefresh);
   });
-  [els.languageInput, els.engineInput, els.promptTargetInput].filter(Boolean).forEach(input => {
+  [els.languageInput, els.promptTargetInput].filter(Boolean).forEach(input => {
     input.addEventListener('change', schedulePromptRefresh);
-  });
-  els.languageInput?.addEventListener('change', renderThemeControls);
-  els.contentThemeInput?.addEventListener('change', () => {
-    renderEngineOptions(els.contentThemeInput.value);
-    schedulePromptRefresh();
   });
   els.copyPromptButton?.addEventListener('click', copyPrompt);
   els.tourButton.addEventListener('click', startTour);
   document.querySelectorAll('[data-studio-route]').forEach(link => {
-    link.addEventListener('click', event => {
-      if (new URL(link.href, window.location.origin).search) return;
+    link.addEventListener('click', async event => {
       event.preventDefault();
+      const url = new URL(link.href, window.location.origin);
       const route = link.dataset.studioRoute || 'main';
-      setStudioRoute(route);
-      applyRouteFocus(route);
+      setStudioRoute(route, false, url.search);
+      if (route === 'import') await initImportProjectContext();
+    });
+  });
+  document.querySelectorAll('[data-close-dialog]').forEach(button => {
+    button.addEventListener('click', () => setStudioRoute('main'));
+  });
+  [els.promptDialog, els.importDialog].filter(Boolean).forEach(dialog => {
+    dialog.addEventListener('cancel', event => {
+      event.preventDefault();
+      setStudioRoute('main');
     });
   });
   els.sidebarToggle.addEventListener('click', () => {
@@ -1174,6 +1165,10 @@ function bindEvents() {
   els.newWorkspaceProjectButton?.addEventListener('click', () => {
     els.newProjectNameInput?.focus();
   });
+  els.deleteCurrentProjectButton?.addEventListener('click', () => {
+    const projectId = appState?.activeProject?.id;
+    if (projectId && projectId !== 'starter') deleteProject(projectId);
+  });
   els.openCaptionsButton?.addEventListener('click', async () => {
     const projectId = appState?.activeProject?.id;
     if (!projectId) {
@@ -1184,7 +1179,7 @@ function bindEvents() {
   });
   els.refreshButton.addEventListener('click', refreshAll);
   els.refreshOutputsButton.addEventListener('click', refreshAll);
-  els.loadStarterButton.addEventListener('click', () => loadProject('templates/starter'));
+  els.loadStarterButton.addEventListener('click', () => loadProject('starter'));
   els.newProjectButton.addEventListener('click', createBlankProject);
   els.newProjectNameInput.addEventListener('keydown', event => {
     if (event.key === 'Enter') createBlankProject();
@@ -1200,24 +1195,21 @@ function bindEvents() {
     );
   });
   els.renderTransitionInput?.addEventListener('change', reloadPreview);
+  els.previewPlayButton?.addEventListener('click', togglePreviewPlayback);
+  els.previewFrame?.addEventListener('load', connectPreviewPlayback);
 
   els.projectList.addEventListener('click', event => {
+    const remove = event.target.closest('[data-delete-project]');
+    if (remove) {
+      deleteProject(remove.dataset.deleteProject);
+      return;
+    }
     const card = event.target.closest('[data-project]');
     if (card) loadProject(card.dataset.project);
   });
   els.projectSelect?.addEventListener('change', event => {
     const projectId = event.target.value;
     if (projectId) loadProject(projectId);
-  });
-  els.themeSelect?.addEventListener('change', event => saveTheme(event.target.value));
-
-  document.querySelectorAll('[data-provider]').forEach(button => {
-    button.addEventListener('click', async () => {
-      setStudioRoute('prompt');
-      applyRouteFocus('prompt');
-      await copyPrompt();
-      window.open(button.dataset.provider, '_blank', 'noopener,noreferrer');
-    });
   });
   window.addEventListener('popstate', () => applyRouteFocus());
   document.addEventListener('click', event => {
@@ -1237,7 +1229,7 @@ function bindEvents() {
 bindEvents();
 setProjectEditMode(false);
 setProjectDrawerOpen(false);
-applyRouteFocus();
+setStudioRoute(routeKey(), true, window.location.search);
 if (els.promptOutput) refreshPrompt();
 initImportProjectContext();
 refreshAll();

@@ -1,7 +1,0 @@
-{
-  "id": "cinematic-3d",
-  "label": {"zh-CN": "电影级 3D", "en-US": "Cinematic 3D"},
-  "description": {"zh-CN": "一个空间主视觉配少量文字和确定性动画。", "en-US": "One spatial hero visual with restrained text and deterministic motion."},
-  "defaultEngine": "three",
-  "engines": ["three"]
-}

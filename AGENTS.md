@@ -20,9 +20,9 @@ Use `SKILL.md` as the entrypoint and `docs/agent-skill.md` as the full workflow 
 
 This is a skill package. Per-video source folders contain `scenes.json`, a self-contained
 `body.html`, optional `media/`, and optional editor-created `captions.json`. The skill package loads
-a source folder into `.local/current/` and renders through the stable shell under `themes/default/`.
-Content Themes under `docs/content-themes/` guide source generation and never skin Studio. Do not
-ask users or web AI to generate `app.js`.
+a source folder into `.local/current/` and renders through the stable shell under `pipeline/shell/`.
+Use the single prompt template under `docs/source-prompt.md` and let AI choose presentation styling
+from the subject. Do not ask users or web AI to generate `app.js`.
 
 Source folders put project CSS and optional deterministic JavaScript inside `body.html`. They must
 start with an `intro` scene, include a short `category` per scene, and keep playback controls,
@@ -34,4 +34,5 @@ Before finishing code changes, run:
 python main.py check
 ```
 
-Do not treat generated files under `.local/`, `assets/`, or `output/` as source.
+Only `.local/work/starter/body.html` and `scenes.json` are tracked source under `.local/`. Treat all
+other files under `.local/`, `assets/`, or `output/` as generated state.

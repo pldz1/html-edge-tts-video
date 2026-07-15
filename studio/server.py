@@ -16,7 +16,7 @@ if str(APP_ROOT) not in sys.path:
     sys.path.insert(0, str(APP_ROOT))
 
 from pipeline.captions import default_doc, load_effective_doc, load_timeline, save_doc
-from pipeline.factory import CURRENT_SOURCE, ROOT, active_theme, theme_path
+from pipeline.factory import CURRENT_SOURCE, ROOT, shell_path
 from studio.api import ApiError, handle_get, handle_post
 
 
@@ -39,7 +39,10 @@ class FactoryHandler(SimpleHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError):
+            return
 
     def send_error_json(self, status: int, message: str) -> None:
         self.send_json(status, {"error": message})
@@ -71,9 +74,6 @@ class FactoryHandler(SimpleHTTPRequestHandler):
             "/studio": "/studio/web/studio/index.html",
             "/studio/main": "/studio/web/studio/index.html",
             "/studio/new": "/studio/web/studio/index.html",
-            "/studio/prompt": "/studio/web/studio/index.html",
-            "/studio/create": "/studio/web/studio/index.html",
-            "/studio/import": "/studio/web/studio/index.html",
             "/studio/voice": "/studio/web/voices/index.html",
             "/voices": "/studio/web/voices/index.html",
             "/captions": "/studio/web/captions/index.html",
@@ -86,7 +86,7 @@ class FactoryHandler(SimpleHTTPRequestHandler):
             return
 
         # captions.json is optional until the user saves manual edits. Return
-        # JSON null so the theme can use generated timeline cues without a
+        # JSON null so the shell can use generated timeline cues without a
         # noisy missing-resource error in every preview iframe.
         if path == "/.local/current/source/captions.json" and not (CURRENT_SOURCE / "captions.json").exists():
             self.send_json(200, None)
@@ -117,7 +117,7 @@ class FactoryHandler(SimpleHTTPRequestHandler):
                     "saved": saved,
                     "duration": timeline.get("duration"),
                     "scenes": timeline.get("scenes", []),
-                    "previewUrl": theme_path(active_theme()),
+                    "previewUrl": shell_path(),
                     "audioUrl": "/.local/current/assets/narration.mp3",
                 },
             )
@@ -179,7 +179,6 @@ def main() -> None:
     args = parse_args()
     os.chdir(ROOT)
     origin = f"http://{display_host(args.host)}:{args.port}"
-    print(f"Preview: {origin}{theme_path(active_theme())}")
     print(f"Studio: {origin}/")
     print(f"Caption editor: {origin}/captions")
     print(f"Voice preview: {origin}/voices")

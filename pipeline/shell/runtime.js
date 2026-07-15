@@ -71,27 +71,6 @@ async function fetchText(path) {
   return response.text();
 }
 
-async function fetchOptionalText(path) {
-  const response = await fetch(path, { cache: 'no-store' });
-  if (response.status === 404) return null;
-  if (!response.ok) throw new Error(`${path} returned ${response.status}`);
-  return response.text();
-}
-
-function loadStylesheet(href, id) {
-  const existing = document.querySelector(`#${id}`);
-  if (existing) existing.remove();
-  const link = document.createElement('link');
-  link.id = id;
-  link.rel = 'stylesheet';
-  link.href = href;
-  document.head.append(link);
-  return new Promise(resolve => {
-    link.addEventListener('load', resolve, { once: true });
-    link.addEventListener('error', resolve, { once: true });
-  });
-}
-
 function sourceUrl(value) {
   if (!value || /^(?:[a-z]+:|\/\/|#|\/)/i.test(value)) return value;
   return `${SOURCE_BASE}/${value.replace(/^\.\//, '')}`;
@@ -120,33 +99,17 @@ async function importInlineModule(source) {
 }
 
 async function executeEmbeddedScripts(scripts) {
-  let visualModule = null;
-  for (const original of scripts) {
-    const type = (original.getAttribute('type') || '').trim().toLowerCase();
-    if (type && type !== 'module' && type !== 'text/javascript' && type !== 'application/javascript') continue;
-    const src = original.getAttribute('src');
-    if (type === 'module') {
-      const module = src
-        ? await import(`${sourceUrl(src)}${src.includes('?') ? '&' : '?'}loaded=${Date.now()}`)
-        : await importInlineModule(original.textContent || '');
-      if (typeof module.mount === 'function' && typeof module.renderAtTime === 'function') visualModule = module;
-      continue;
-    }
-
-    const script = document.createElement('script');
-    script.dataset.sourceEmbedded = '';
-    if (src) script.src = sourceUrl(src);
-    else script.textContent = original.textContent || '';
-    const loaded = src
-      ? new Promise((resolve, reject) => {
-          script.addEventListener('load', resolve, { once: true });
-          script.addEventListener('error', () => reject(new Error(`Could not load ${script.src}`)), { once: true });
-        })
-      : Promise.resolve();
-    document.head.append(script);
-    await loaded;
+  if (!scripts.length) return null;
+  if (scripts.length > 1) throw new Error('body.html may include at most one deterministic module script');
+  const script = scripts[0];
+  if ((script.getAttribute('type') || '').trim().toLowerCase() !== 'module' || script.hasAttribute('src')) {
+    throw new Error('body.html scripts must be one inline type="module" visual module');
   }
-  return visualModule || window.videoVisual || window.__videoVisual || null;
+  const module = await importInlineModule(script.textContent || '');
+  if (typeof module.mount !== 'function' || typeof module.renderAtTime !== 'function') {
+    throw new Error('body.html visual code must export mount() and renderAtTime()');
+  }
+  return module;
 }
 
 async function loadBodyDocument(source) {
@@ -433,7 +396,7 @@ function updateChapterRail(activeIndex) {
 
 function activateScene(scene, progress) {
   document.documentElement.style.setProperty('--progress', progress.toFixed(4));
-  document.body.dataset.scene = scene?.id || '';
+  document.body.dataset.activeScene = scene?.id || '';
 
   const sections = [...stage.querySelectorAll('[data-scene]')];
   if (!sections.length) return;
@@ -441,7 +404,12 @@ function activateScene(scene, progress) {
   let active = sections.find(section => section.dataset.scene === scene.id);
   if (!active) active = sections[0];
 
-  sections.forEach(section => section.classList.toggle('is-active', section === active));
+  sections.forEach(section => {
+    const isActive = section === active;
+    section.hidden = !isActive;
+    section.classList.toggle('is-active', isActive);
+    section.classList.toggle('active', isActive);
+  });
 
   const steps = [...active.querySelectorAll('[data-step]')];
   const activeStep = steps.length ? Math.min(steps.length - 1, Math.floor(progress * steps.length)) : -1;
@@ -481,11 +449,24 @@ function renderAtTime(seconds) {
   if (scrubber) scrubber.value = state.current;
 }
 
+function playbackState() {
+  return {
+    playing: state.playing,
+    current: state.current,
+    duration: state.duration,
+  };
+}
+
+function publishPlaybackState() {
+  window.dispatchEvent(new CustomEvent('shell-playback-state', { detail: playbackState() }));
+}
+
 function pause() {
   state.playing = false;
   if (playButton) playButton.textContent = 'Play';
   if (audio && !audio.paused) audio.pause();
   cancelAnimationFrame(state.raf);
+  publishPlaybackState();
 }
 
 function tick(now) {
@@ -509,6 +490,10 @@ function tick(now) {
 }
 
 async function startPlayback() {
+  if (state.current >= state.duration) {
+    state.current = 0;
+    renderAtTime(0);
+  }
   state.playing = true;
   if (playButton) playButton.textContent = 'Pause';
   state.startedAt = performance.now();
@@ -525,13 +510,19 @@ async function startPlayback() {
 
   cancelAnimationFrame(state.raf);
   state.raf = requestAnimationFrame(tick);
+  publishPlaybackState();
+}
+
+function togglePlayback() {
+  if (state.playing) {
+    pause();
+    return Promise.resolve(playbackState());
+  }
+  return startPlayback().then(playbackState);
 }
 
 if (playButton) {
-  playButton.addEventListener('click', () => {
-    if (state.playing) pause();
-    else startPlayback();
-  });
+  playButton.addEventListener('click', togglePlayback);
 }
 
 if (scrubber) {
@@ -548,12 +539,7 @@ if (scrubber) {
 async function init() {
   state.scenes = await fetchJson(`${SOURCE_BASE}/scenes.json`);
   state.projectMeta = await fetchOptionalJson('/.local/current/project.json') || {};
-  const contentTheme = state.projectMeta.content_theme || 'editorial';
-  await loadStylesheet(`/docs/content-themes/${contentTheme}/body.css`, 'content-theme-style');
   const embeddedScripts = await loadBodyDocument(await fetchText(`${SOURCE_BASE}/body.html`));
-  if (await fetchOptionalText(`${SOURCE_BASE}/body.css`) !== null) {
-    await loadStylesheet(`${SOURCE_BASE}/body.css`, 'source-body-style');
-  }
 
   try {
     const timeline = await fetchJson(`${ASSET_BASE}/timeline.json`);
@@ -575,9 +561,6 @@ async function init() {
   setupChapterRail();
 
   state.visualModule = await executeEmbeddedScripts(embeddedScripts);
-  if (!state.visualModule && await fetchOptionalText(`${SOURCE_BASE}/visual.js`) !== null) {
-    state.visualModule = await import(`${SOURCE_BASE}/visual.js?loaded=${Date.now()}`);
-  }
   if (state.visualModule) {
     if (typeof state.visualModule.mount !== 'function' || typeof state.visualModule.renderAtTime !== 'function') {
       throw new Error('body.html visual code must export mount() and renderAtTime()');
@@ -593,6 +576,7 @@ async function init() {
   }
 
   renderAtTime(0);
+  publishPlaybackState();
 
   window.compositionReady = true;
   window.demoReady = true;
@@ -601,6 +585,8 @@ async function init() {
 window.getCompositionDuration = () => state.duration;
 window.getDemoDuration = window.getCompositionDuration;
 window.renderAtTime = renderAtTime;
+window.getPlaybackState = playbackState;
+window.togglePlayback = togglePlayback;
 window.compositionError = null;
 window.startCompositionPlayback = () => {
   state.current = 0;

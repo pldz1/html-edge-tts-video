@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>视频工作室</title>
+    <title>html-video</title>
     <link rel="icon" href="/studio/web/shared/favicon.ico" />
     <link
       rel="stylesheet"
@@ -84,7 +84,7 @@
         >
           <a
             class="primary-button"
-            href="/studio/create"
+            href="/studio?dialog=prompt"
             data-studio-route="prompt"
             title="使用 AI 创建项目"
             ><i data-lucide="sparkles"></i><span>创建</span></a
@@ -92,7 +92,7 @@
           <a
             id="editCurrentProjectButton"
             class="quiet-button secondary-action"
-            href="/studio/import"
+            href="/studio?dialog=import"
             data-studio-route="import"
             ><i data-lucide="square-pen"></i><span>源文件</span></a
           >
@@ -111,7 +111,7 @@
             <div class="more-menu-panel">
               <a
                 id="importCurrentProjectButton"
-                href="/studio/import"
+                href="/studio?dialog=import"
                 title="导入并替换当前项目"
                 style="
                   display: flex;
@@ -144,6 +144,14 @@
               >
                 <i data-lucide="plus"></i><span>新建项目</span>
               </button>
+              <button
+                id="deleteCurrentProjectButton"
+                class="danger-menu-action"
+                type="button"
+                title="删除当前项目"
+              >
+                <i data-lucide="trash-2"></i><span>删除项目</span>
+              </button>
             </div>
           </details>
         </nav>
@@ -163,16 +171,6 @@
                 aria-label="选择项目"
               >
                 <option value="">暂无项目</option>
-              </select>
-            </label>
-            <label
-              >内容主题
-              <select
-                id="themeSelect"
-                class="project-select"
-                aria-label="选择项目主题"
-              >
-                <option value="default">默认</option>
               </select>
             </label>
             <div class="detail-field">
@@ -244,15 +242,6 @@
           >
             <i data-lucide="folder-tree"></i><span>项目</span>
           </button>
-          <a
-            class="quiet-button"
-            data-theme-preview
-            href="/themes/default/index.html"
-            target="_blank"
-            rel="noreferrer"
-          >
-            <i data-lucide="monitor-play"></i><span>预览</span>
-          </a>
           <a
             class="quiet-button"
             href="/captions"
@@ -335,15 +324,13 @@
                   <p class="section-label">预览</p>
                   <h2>项目预览</h2>
                 </div>
-                <a
-                  class="quiet-button"
-                  data-theme-preview
-                  href="/themes/default/index.html"
-                  target="_blank"
-                  rel="noreferrer"
+                <button
+                  id="previewPlayButton"
+                  class="primary-button"
+                  type="button"
                 >
-                  <i data-lucide="maximize-2"></i><span>全屏打开</span>
-                </a>
+                  <i data-lucide="play"></i><span>播放</span>
+                </button>
               </div>
               <iframe
                 id="previewFrame"
@@ -421,10 +408,21 @@
           </section>
         </section>
 
-        <section
-          class="studio-route-panel prompt-route-panel"
+        <dialog
+          id="promptDialog"
+          class="studio-workflow-dialog prompt-route-panel"
           aria-label="AI 提示词生成器"
         >
+          <header class="workflow-dialog-heading">
+            <div>
+              <p class="section-label">创建内容</p>
+              <h2>生成 AI 提示词</h2>
+            </div>
+            <button class="icon-button" type="button" data-close-dialog title="关闭">
+              <i data-lucide="x"></i><span>关闭</span>
+            </button>
+          </header>
+          <div class="workflow-dialog-grid">
           <section class="panel prompt-form-panel">
             <div class="panel-heading">
               <div>
@@ -474,18 +472,6 @@
                 </select></label
               >
               <label
-                >视频视觉风格<select id="contentThemeInput">
-                  <option value="editorial">现代编辑设计</option>
-                </select></label
-              >
-              <label
-                >渲染能力<select id="engineInput">
-                  <option value="auto">自动选择</option>
-                  <option value="dom">HTML / CSS / SVG</option>
-                  <option value="three">Three.js / WebGL</option>
-                </select></label
-              >
-              <label
                 >提示词目标<select id="promptTargetInput">
                   <option value="web-ai">网页 AI（复制代码块）</option>
                   <option value="agent">智能体（直接创建文件）</option>
@@ -499,24 +485,12 @@
               ></textarea>
             </label>
             <p id="promptResolution" class="field-hint">
-              将根据所选主题确定语言与渲染能力。
+              使用浅蓝绿色黑板报风格，并保持 16:9 安全排版。
             </p>
             <div class="provider-row">
-              <button data-provider="https://chat.openai.com/" type="button">
-                ChatGPT
-              </button>
-              <button data-provider="https://claude.ai/new" type="button">
-                Claude
-              </button>
-              <button
-                data-provider="https://gemini.google.com/app"
-                type="button"
-              >
-                Gemini
-              </button>
               <a
                 class="quiet-button"
-                href="/studio/import"
+                href="/studio?dialog=import"
                 data-studio-route="import"
                 ><i data-lucide="arrow-right"></i
                 ><span>导入回答</span></a
@@ -537,12 +511,24 @@
               aria-label="已生成的 AI 提示词"
             ></textarea>
           </section>
-        </section>
+          </div>
+        </dialog>
 
-        <section
-          class="studio-route-panel import-route-panel"
+        <dialog
+          id="importDialog"
+          class="studio-workflow-dialog import-route-panel"
           aria-label="源文件导入"
         >
+          <header class="workflow-dialog-heading">
+            <div>
+              <p class="section-label">项目源文件</p>
+              <h2>导入或替换内容</h2>
+            </div>
+            <button class="icon-button" type="button" data-close-dialog title="关闭">
+              <i data-lucide="x"></i><span>关闭</span>
+            </button>
+          </header>
+          <div class="workflow-dialog-grid">
           <section class="panel import-source-panel">
             <div class="panel-heading">
               <div>
@@ -636,7 +622,8 @@
               </label>
             </div>
           </section>
-        </section>
+          </div>
+        </dialog>
       </div>
 
       <section

@@ -10,7 +10,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from pipeline.factory import CURRENT_SOURCE, LOCAL_WORK, ROOT, STARTER_SOURCE, active_theme, list_themes, load_source
+from pipeline.factory import CURRENT_SOURCE, LOCAL_WORK, ROOT, SHELL, STARTER_SOURCE, load_source
 from pipeline.prompt_composer import compose_prompt, detect_language
 
 
@@ -39,11 +39,11 @@ def copy_source_template(args: argparse.Namespace) -> None:
 
 
 def load(args: argparse.Namespace) -> None:
-    load_source(Path(args.source), args.theme or active_theme())
+    load_source(Path(args.source))
 
 
-def validate_source(source: str | None, theme: str) -> None:
-    command = [PYTHON, "pipeline/validate_sources.py", "--theme", theme]
+def validate_source(source: str | None) -> None:
+    command = [PYTHON, "pipeline/validate_sources.py"]
     if source:
         command.extend(["--source", source])
     run(command)
@@ -65,8 +65,7 @@ def install(args: argparse.Namespace) -> None:
 
 
 def tts(args: argparse.Namespace) -> None:
-    theme = args.theme or active_theme()
-    validate_source(args.source, theme)
+    validate_source(args.source)
     voice = args.voice
     if not voice:
         scenes = json.loads((CURRENT_SOURCE / "scenes.json").read_text(encoding="utf-8"))
@@ -85,8 +84,6 @@ def tts(args: argparse.Namespace) -> None:
         args.pitch,
         "--gap",
         str(args.gap),
-        "--theme",
-        theme,
     ]
     if args.source:
         command.extend(["--source", args.source])
@@ -96,35 +93,27 @@ def tts(args: argparse.Namespace) -> None:
 
 
 def offline(args: argparse.Namespace) -> None:
-    theme = args.theme or active_theme()
-    validate_source(args.source, theme)
-    command = [PYTHON, "pipeline/build_offline_preview.py", "--theme", theme]
+    validate_source(args.source)
+    command = [PYTHON, "pipeline/build_offline_preview.py"]
     if args.source:
         command.extend(["--source", args.source])
     run(command)
 
 
-def preview(args: argparse.Namespace) -> None:
-    if args.source:
-        load_source(Path(args.source), args.theme or active_theme())
-    run([PYTHON, "studio/server.py"])
-
-
 def captions(args: argparse.Namespace) -> None:
     if args.source:
-        load_source(Path(args.source), args.theme or active_theme())
+        load_source(Path(args.source))
     run([PYTHON, "studio/server.py"])
 
 
 def studio(args: argparse.Namespace) -> None:
     if args.source:
-        load_source(Path(args.source), args.theme or active_theme())
+        load_source(Path(args.source))
     run([PYTHON, "studio/server.py", "--host", args.host, "--port", str(args.port)])
 
 
 def render(args: argparse.Namespace) -> None:
-    theme = args.theme or active_theme()
-    validate_source(args.source, theme)
+    validate_source(args.source)
     command = [
         PYTHON,
         "pipeline/render_video.py",
@@ -132,8 +121,6 @@ def render(args: argparse.Namespace) -> None:
         args.size,
         "--output",
         args.output,
-        "--theme",
-        theme,
         "--capture",
         args.capture,
         "--fps",
@@ -188,25 +175,17 @@ def prompt(args: argparse.Namespace) -> None:
         "sceneCount": args.scene_count,
         "notes": args.notes,
         "language": args.language,
-        "contentTheme": args.content_theme,
-        "engine": args.engine,
         "target": args.target,
     })
     print(result["prompt"], end="")
 
 
 def check(args: argparse.Namespace) -> None:
-    command = [PYTHON, "pipeline/validate_sources.py", "--theme", args.theme or active_theme()]
+    command = [PYTHON, "pipeline/validate_sources.py"]
     if args.source:
         command.extend(["--source", args.source])
     run(command)
-    runtime_files = {
-        ROOT / "themes" / str(theme["id"]) / "runtime.js"
-        for theme in list_themes()
-        if not bool(theme["inheritsRuntime"])
-    }
-    for runtime_file in sorted(runtime_files):
-        run(["node", "--check", str(runtime_file)])
+    run(["node", "--check", str(SHELL / "runtime.js")])
     run(["node", "--check", "studio/web/captions/captions.js"])
     run(["node", "--check", "studio/web/studio/studio.js"])
     run(["node", "--check", "studio/web/voices/voices.js"])
@@ -220,7 +199,6 @@ def check(args: argparse.Namespace) -> None:
 
 def add_source_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--source", help="Folder containing scenes.json and body.html.")
-    parser.add_argument("--theme", default=None)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -228,13 +206,12 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     init_parser = subparsers.add_parser("init")
-    init_parser.add_argument("--target", default=str(LOCAL_WORK / "starter"))
+    init_parser.add_argument("--target", default=str(LOCAL_WORK / "new-video"))
     init_parser.add_argument("--force", action="store_true")
     init_parser.set_defaults(func=copy_source_template)
 
     load_parser = subparsers.add_parser("load")
     load_parser.add_argument("--source", required=True, help="Folder containing scenes.json and body.html.")
-    load_parser.add_argument("--theme", default=None)
     load_parser.set_defaults(func=load)
 
     install_parser = subparsers.add_parser(
@@ -258,10 +235,6 @@ def build_parser() -> argparse.ArgumentParser:
     offline_parser = subparsers.add_parser("offline")
     add_source_args(offline_parser)
     offline_parser.set_defaults(func=offline)
-
-    preview_parser = subparsers.add_parser("preview")
-    add_source_args(preview_parser)
-    preview_parser.set_defaults(func=preview)
 
     captions_parser = subparsers.add_parser("captions")
     add_source_args(captions_parser)
@@ -304,7 +277,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--transition",
         type=float,
         default=0.4,
-        help="Dip-to-black duration in seconds, from 0 (off) to 2.",
+        help="Dip-to-background duration in seconds, from 0 (off) to 2.",
     )
     render_parser.set_defaults(func=render)
 
@@ -322,15 +295,13 @@ def build_parser() -> argparse.ArgumentParser:
     voice_preview_parser.add_argument("--pitch", default="+0Hz")
     voice_preview_parser.set_defaults(func=voice_preview)
 
-    prompt_parser = subparsers.add_parser("prompt", help="Compose the shared Agent/Web AI source prompt.")
+    prompt_parser = subparsers.add_parser("prompt", help="Compose the two-file slide-video source prompt.")
     prompt_parser.add_argument("--topic", required=True)
     prompt_parser.add_argument("--audience", default="")
     prompt_parser.add_argument("--tone", default="Clear and concise")
     prompt_parser.add_argument("--scene-count", default="5")
     prompt_parser.add_argument("--notes", default="")
     prompt_parser.add_argument("--language", choices=["auto", "zh-CN", "en-US"], default="auto")
-    prompt_parser.add_argument("--content-theme", default="editorial")
-    prompt_parser.add_argument("--engine", default="auto")
     prompt_parser.add_argument("--target", choices=["agent", "web-ai"], default="agent")
     prompt_parser.set_defaults(func=prompt)
 

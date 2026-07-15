@@ -1,7 +1,4 @@
 interface:
   display_name: "HTML edge-tts Video"
-  short_description: "Generate narrated HTML videos locally"
-  default_prompt: "Use $html-edge-tts-video to build a narrated MP4 in my requested language and visual style from scenes.json and a self-contained body.html."
-
-policy:
-  allow_implicit_invocation: true
+  short_description: "Turn two HTML slide files into narrated MP4s"
+  default_prompt: "Use $html-edge-tts-video to create a presentation-style narrated MP4 from scenes.json and a self-contained body.html."

@@ -74,6 +74,7 @@ def group_words(words: list[dict], scene_id: str, scene_start: float) -> list[di
 async def synth_scene(scene: dict, voice: str, rate: str, pitch: str, force: bool) -> tuple[Path, list[dict]]:
     SCENE_AUDIO.mkdir(parents=True, exist_ok=True)
     audio_path = SCENE_AUDIO / f"{scene['id']}.mp3"
+    temp_audio_path = SCENE_AUDIO / f"{scene['id']}.mp3.part"
     meta_path = SCENE_AUDIO / f"{scene['id']}.words.json"
     stamp_path = SCENE_AUDIO / f"{scene['id']}.build.json"
     boundary = "WordBoundary"
@@ -85,19 +86,36 @@ async def synth_scene(scene: dict, voice: str, rate: str, pitch: str, force: boo
         if stamp.get("hash") == build_hash and stamp.get("boundary") == boundary and words:
             return audio_path, words
 
-    communicate = edge_tts.Communicate(scene["narration"], voice=voice, rate=rate, pitch=pitch, boundary=boundary)
     words: list[dict] = []
-    with audio_path.open("wb") as audio:
-        async for chunk in communicate.stream():
-            if chunk["type"] == "audio":
-                audio.write(chunk["data"])
-            elif chunk["type"] == "WordBoundary":
-                start = chunk["offset"] / TICKS
-                duration = chunk["duration"] / TICKS
-                words.append({"start": start, "end": start + duration, "text": chunk["text"]})
+    temp_audio_path.unlink(missing_ok=True)
+    try:
+        communicate = edge_tts.Communicate(
+            scene["narration"],
+            voice=voice,
+            rate=rate,
+            pitch=pitch,
+            boundary=boundary,
+        )
+        with temp_audio_path.open("wb") as audio:
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
+                    audio.write(chunk["data"])
+                elif chunk["type"] == "WordBoundary":
+                    start = chunk["offset"] / TICKS
+                    duration = chunk["duration"] / TICKS
+                    words.append({"start": start, "end": start + duration, "text": chunk["text"]})
 
-    if not words:
-        raise RuntimeError(f"edge-tts returned no WordBoundary metadata for scene: {scene['id']}")
+        if not temp_audio_path.exists() or temp_audio_path.stat().st_size == 0:
+            raise RuntimeError("edge-tts returned an empty audio stream")
+        if not words:
+            raise RuntimeError("edge-tts returned no WordBoundary metadata")
+        audio_duration(temp_audio_path)
+        temp_audio_path.replace(audio_path)
+    except Exception as exc:  # noqa: BLE001 - add scene and voice context to provider failures.
+        temp_audio_path.unlink(missing_ok=True)
+        raise RuntimeError(
+            f"edge-tts failed for scene {scene['id']!r} with voice {voice!r}: {exc}"
+        ) from exc
 
     meta_path.write_text(json.dumps(words, ensure_ascii=False, indent=2), encoding="utf-8")
     stamp_path.write_text(
@@ -140,7 +158,7 @@ def write_gap_audio(path: Path, duration: float) -> None:
 
 async def main_async(args: argparse.Namespace) -> None:
     if args.source:
-        load_source(Path(args.source), args.theme)
+        load_source(Path(args.source))
 
     scenes = load_scenes()
     validate_scenes(scenes)
@@ -191,7 +209,6 @@ async def main_async(args: argparse.Namespace) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source")
-    parser.add_argument("--theme", default="default")
     parser.add_argument("--voice", default="en-US-JennyNeural")
     parser.add_argument("--rate", default="+12%")
     parser.add_argument("--pitch", default="+0Hz")

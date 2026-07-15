@@ -1,4 +1,0 @@
-:root { --content-accent: #f4c95d; --content-accent-soft: #7ed6df; }
-.metric-grid { display: flex; align-items: end; justify-content: center; gap: clamp(24px, 5vw, 80px); }
-.metric-card { border: 0; background: transparent; box-shadow: none; }
-.metric-value { color: var(--content-accent); }

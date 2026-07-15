@@ -1,0 +1,182 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Two-file presentation video</title>
+<style>
+  :root {
+    --paper: rgba(239, 249, 245, .92);
+    --ink: #173b3d;
+    --muted: #5f7f7f;
+    --accent: #ef7d61;
+    --accent-2: #3c8f91;
+  }
+
+  .deck-slide {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    padding: 8vh 7vw 22vh;
+    background: var(--paper);
+    color: var(--ink);
+    overflow: hidden;
+  }
+
+  .deck-slide::after {
+    content: "";
+    position: absolute;
+    width: 34vw;
+    aspect-ratio: 1;
+    right: -9vw;
+    top: -17vw;
+    border: clamp(20px, 3vw, 54px) solid color-mix(in srgb, var(--accent) 18%, transparent);
+    border-radius: 50%;
+  }
+
+  .kicker {
+    color: var(--accent);
+    font: 800 clamp(12px, 1.2vw, 18px)/1.2 Inter, system-ui, sans-serif;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+  }
+
+  .deck-slide h1 {
+    max-width: 13ch;
+    margin: 2.6vh 0 2vh;
+    font: 790 clamp(44px, 5.2vw, 88px)/1 Inter, system-ui, sans-serif;
+    letter-spacing: -.045em;
+  }
+
+  .lead {
+    max-width: 40ch;
+    margin: 0;
+    color: var(--muted);
+    font: 450 clamp(18px, 1.6vw, 28px)/1.5 Inter, system-ui, sans-serif;
+  }
+
+  .source-layout,
+  .pipeline-layout {
+    grid-template-columns: .8fr 1.2fr;
+    gap: 7vw;
+    align-items: center;
+  }
+
+  .source-layout h1,
+  .pipeline-layout h1 {
+    font-size: clamp(36px, 4vw, 64px);
+  }
+
+  .file-stack {
+    display: grid;
+    gap: 2vh;
+  }
+
+  .file-line {
+    display: grid;
+    grid-template-columns: 52px 1fr;
+    gap: 18px;
+    align-items: center;
+    padding: 2vh 0;
+    border-bottom: 2px solid color-mix(in srgb, var(--ink) 14%, transparent);
+  }
+
+  .file-line strong {
+    color: var(--accent-2);
+    font: 790 clamp(28px, 3.4vw, 54px)/1 Inter, system-ui, sans-serif;
+  }
+
+  .file-line b {
+    display: block;
+    font: 760 clamp(18px, 2vw, 30px)/1.2 Inter, system-ui, sans-serif;
+  }
+
+  .file-line span {
+    color: var(--muted);
+    font: 450 clamp(13px, 1.3vw, 20px)/1.4 Inter, system-ui, sans-serif;
+  }
+
+  .flow {
+    display: flex;
+    align-items: center;
+    gap: 1.4vw;
+    margin-top: 5vh;
+  }
+
+  .flow b {
+    flex: 1;
+    padding: 2.5vh 1vw;
+    border-top: 5px solid var(--accent);
+    font: 740 clamp(17px, 1.8vw, 27px)/1.25 Inter, system-ui, sans-serif;
+  }
+
+  .flow i {
+    color: var(--accent-2);
+    font: 800 clamp(24px, 3vw, 46px)/1 Inter, system-ui, sans-serif;
+  }
+
+  .finish-mark {
+    width: min(26vw, 360px);
+    aspect-ratio: 1;
+    margin-left: auto;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--accent-2);
+    color: white;
+    font: 800 clamp(70px, 10vw, 150px)/1 Inter, system-ui, sans-serif;
+  }
+
+  @media (max-width: 760px) {
+    .source-layout,
+    .pipeline-layout { grid-template-columns: 1fr; gap: 3vh; }
+    .deck-slide { padding-inline: 8vw; }
+    .flow { flex-wrap: wrap; }
+    .flow b { min-width: 38%; }
+    .finish-mark { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<section class="content-scene deck-slide" data-scene="intro">
+  <div>
+    <div class="kicker">TWO FILES · ONE VIDEO</div>
+    <h1>像做幻灯片一样做视频</h1>
+    <p class="lead">内容与视觉保持简单，旁白、字幕、时间轴和转场交给稳定工具链。</p>
+  </div>
+</section>
+
+<section class="content-scene deck-slide source-layout" data-scene="source">
+  <div>
+    <div class="kicker">01 · SOURCE</div>
+    <h1>只写两个文件</h1>
+  </div>
+  <div class="file-stack">
+    <div class="file-line"><strong>01</strong><div><b>scenes.json</b><span>场景顺序、章节与旁白</span></div></div>
+    <div class="file-line"><strong>02</strong><div><b>body.html</b><span>版式、颜色、图形与可选动画</span></div></div>
+  </div>
+</section>
+
+<section class="content-scene deck-slide pipeline-layout" data-scene="pipeline">
+  <div>
+    <div class="kicker">02 · PIPELINE</div>
+    <h1>稳定地生成每一帧</h1>
+    <p class="lead">实际语音决定时长，绝对时间决定画面。</p>
+  </div>
+  <div class="flow">
+    <b>语音</b><i>→</i><b>字幕</b><i>→</i><b>转场</b><i>→</i><b>MP4</b>
+  </div>
+</section>
+
+<section class="content-scene deck-slide source-layout" data-scene="finish">
+  <div>
+    <div class="kicker">03 · RESULT</div>
+    <h1>专注讲清楚一件事</h1>
+    <p class="lead">AI 自行选择合适的演示风格，工具链负责可靠交付。</p>
+  </div>
+  <div class="finish-mark">✓</div>
+</section>
+</body>
+</html>
