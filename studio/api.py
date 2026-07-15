@@ -41,7 +41,14 @@ from pipeline.factory import (
     slug,
     theme_url,
 )
-from pipeline.validate_sources import validate_body, validate_captions, validate_scenes, validate_theme, validate_visual_js
+from pipeline.validate_sources import (
+    has_embedded_visual,
+    validate_body,
+    validate_captions,
+    validate_scenes,
+    validate_theme,
+    validate_visual_js,
+)
 from pipeline.prompt_composer import compose_prompt, detect_language, list_content_themes, load_theme
 
 
@@ -564,6 +571,20 @@ def studio_state() -> dict[str, Any]:
     return state
 
 
+def merge_legacy_source(body_html: str, body_css: str = "", visual_js: str = "") -> str:
+    """Fold the former sidecar files into the two-file source contract."""
+    body = body_html.strip()
+    if body_css.strip():
+        style = f"<style>\n{body_css.strip()}\n</style>"
+        head_end = re.search(r"</head\s*>", body, re.IGNORECASE)
+        body = body[:head_end.start()] + style + "\n" + body[head_end.start():] if head_end else style + "\n" + body
+    if visual_js.strip():
+        script = f'<script type="module">\n{visual_js.strip()}\n</script>'
+        body_end = re.search(r"</body\s*>", body, re.IGNORECASE)
+        body = body[:body_end.start()] + script + "\n" + body[body_end.start():] if body_end else body + "\n" + script
+    return body
+
+
 def validate_source_text(
     scenes_json: str,
     body_html: str,
@@ -582,7 +603,8 @@ def validate_source_text(
         css_path = temp / "body.css"
         visual_path = temp / "visual.js"
         scenes_path.write_text(scenes_json, encoding="utf-8")
-        body_path.write_text(body_html, encoding="utf-8")
+        merged_body = merge_legacy_source(body_html, body_css, visual_js)
+        body_path.write_text(merged_body, encoding="utf-8")
         if body_css.strip():
             css_path.write_text(body_css, encoding="utf-8")
         if visual_js.strip():
@@ -599,8 +621,8 @@ def validate_source_text(
         "sceneCount": len(scenes),
         "narrationChars": sum(len(scene["narration"]) for scene in scenes),
         "resolvedLanguage": detect_language(" ".join(str(scene.get("narration") or "") for scene in scenes)),
-        "hasBodyCss": bool(body_css.strip()),
-        "hasVisualJs": bool(visual_js.strip()),
+        "hasEmbeddedStyle": "<style" in merged_body.lower(),
+        "hasEmbeddedVisual": has_embedded_visual(merged_body),
     }
 
 
@@ -631,7 +653,8 @@ def create_project(payload: dict[str, Any]) -> dict[str, Any]:
     body_css = str(payload.get("bodyCss") or "")
     visual_js = str(payload.get("visualJs") or "")
     overwrite = bool(payload.get("overwrite"))
-    validation = validate_source_text(scenes_json, body_html, body_css, visual_js, active_theme())
+    body_html = merge_legacy_source(body_html, body_css, visual_js)
+    validation = validate_source_text(scenes_json, body_html, theme=active_theme())
 
     if overwrite:
         if not project_id:
@@ -649,11 +672,9 @@ def create_project(payload: dict[str, Any]) -> dict[str, Any]:
     target.mkdir(parents=True, exist_ok=True)
     (target / "scenes.json").write_text(scenes_json.strip() + "\n", encoding="utf-8")
     (target / "body.html").write_text(body_html.strip() + "\n", encoding="utf-8")
-    for filename, value in [("body.css", body_css), ("visual.js", visual_js)]:
+    for filename in ["body.css", "visual.js"]:
         path = target / filename
-        if value.strip():
-            path.write_text(value.strip() + "\n", encoding="utf-8")
-        elif overwrite and path.exists():
+        if path.exists():
             path.unlink()
     existing = existing_manifest if overwrite else {}
     content_theme = str(payload.get("contentTheme") or existing.get("contentTheme") or "editorial")
@@ -664,8 +685,8 @@ def create_project(payload: dict[str, Any]) -> dict[str, Any]:
         engine = str(profile.get("defaultEngine") or "dom")
     if engine not in profile.get("engines", []):
         raise ApiError(422, f"content theme {content_theme!r} does not support engine {engine!r}")
-    if engine == "three" and not visual_js.strip():
-        raise ApiError(422, "Three.js / WebGL projects must include visual.js")
+    if engine == "three" and not has_embedded_visual(body_html):
+        raise ApiError(422, "Three.js / WebGL projects must include mount() and renderAtTime() in body.html")
     ensure_project_manifest(
         target,
         name=name,
@@ -729,7 +750,8 @@ def create_blank_project(payload: dict[str, Any]) -> dict[str, Any]:
     (target / "scenes.json").write_text(json.dumps(scenes, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     (target / "body.html").write_text(body_html, encoding="utf-8")
     if engine == "three":
-        (target / "visual.js").write_text("""import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
+        body_html += """<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
 
 let host;
 let renderer;
@@ -784,7 +806,9 @@ export function destroy() {
   renderer?.domElement?.remove();
   host = renderer = scene = camera = group = null;
 }
-""", encoding="utf-8")
+</script>
+"""
+        (target / "body.html").write_text(body_html, encoding="utf-8")
     ensure_project_manifest(
         target,
         name=display_name,
@@ -829,9 +853,11 @@ def project_source(query: dict[str, list[str]]) -> dict[str, Any]:
         "project": source_summary(source_root),
         "files": {
             "scenesJson": resolved["scenes"].read_text(encoding="utf-8"),
-            "bodyHtml": resolved["body"].read_text(encoding="utf-8"),
-            "bodyCss": resolved["body_css"].read_text(encoding="utf-8") if resolved["body_css"] else "",
-            "visualJs": resolved["visual_js"].read_text(encoding="utf-8") if resolved["visual_js"] else "",
+            "bodyHtml": merge_legacy_source(
+                resolved["body"].read_text(encoding="utf-8"),
+                resolved["body_css"].read_text(encoding="utf-8") if resolved["body_css"] else "",
+                resolved["visual_js"].read_text(encoding="utf-8") if resolved["visual_js"] else "",
+            ),
         },
     }
 
@@ -866,10 +892,15 @@ def save_project_theme(payload: dict[str, Any]) -> dict[str, Any]:
         raise ApiError(422, f"content theme {theme!r} does not support engine {engine!r}")
     try:
         resolved = resolve_source(source_root)
-        if engine == "three" and not resolved["visual_js"]:
+        body_html = merge_legacy_source(
+            resolved["body"].read_text(encoding="utf-8"),
+            resolved["body_css"].read_text(encoding="utf-8") if resolved["body_css"] else "",
+            resolved["visual_js"].read_text(encoding="utf-8") if resolved["visual_js"] else "",
+        )
+        if engine == "three" and not has_embedded_visual(body_html):
             raise ApiError(
                 422,
-                "Three.js / WebGL themes require visual.js; add a deterministic visual module before switching themes",
+                "Three.js / WebGL themes require mount() and renderAtTime() in body.html",
             )
         if resolved["visual_js"]:
             validate_visual_js(resolved["visual_js"])

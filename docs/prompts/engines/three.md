@@ -1,8 +1,7 @@
 ## Rendering engine: Three.js / WebGL
 
-Create `visual.js` as an ES module. `body.html` should contain the Canvas host and accessible fallback
-text; keep module code out of `body.html`. A pinned Three.js CDN import is allowed, for example an
-exact `three@0.x.y` URL.
+Put the Canvas host, accessible fallback text, styles, and one `<script type="module">` in
+`body.html`. A pinned Three.js CDN import is allowed, for example an exact `three@0.x.y` URL.
 
 Export:
 

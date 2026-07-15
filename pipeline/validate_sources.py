@@ -15,10 +15,6 @@ except ImportError:  # Direct script execution: python pipeline/validate_sources
 
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 FORBIDDEN_BODY_MARKERS = {
-    "<html": "body.html must be an HTML fragment, not a full document",
-    "<head": "body.html must not include document head markup",
-    "<body": "body.html must be an HTML fragment, not a full document",
-    "<script": "body.html must not include JavaScript; the theme owns runtime behavior",
     "topbar": "body.html must not include template chrome such as headers",
     "transport": "body.html must not include playback controls",
     "playbutton": "body.html must not include playback controls",
@@ -27,6 +23,46 @@ FORBIDDEN_BODY_MARKERS = {
     "chapterrail": "body.html must not include the chapter rail; it is generated from scenes.json",
     "chapter-rail": "body.html must not include the chapter rail; it is generated from scenes.json",
 }
+
+
+def embedded_script_source(body: str) -> str:
+    """Return inline script contents for deterministic-source checks."""
+    return "\n".join(
+        match.group(1)
+        for match in re.finditer(r"<script\b[^>]*>([\s\S]*?)</script\s*>", body, re.IGNORECASE)
+    )
+
+
+def validate_visual_source(source: str, label: str = "embedded JavaScript") -> None:
+    if not source.strip():
+        return
+    if "requestAnimationFrame" in source:
+        fail(f"{label} must use renderAtTime() instead of an independent requestAnimationFrame loop")
+    for url in re.findall(r"https?://[^'\"\s<]+", source):
+        if "three" in url.lower() and not re.search(r"three@\d+\.\d+\.\d+", url):
+            fail(f"Three.js CDN imports in {label} must pin an exact three@x.y.z version")
+
+
+def validate_embedded_visual_contract(source: str) -> None:
+    mentions_visual = re.search(r"\b(?:mount|renderAtTime)\b", source)
+    if not mentions_visual:
+        return
+    exported = all(
+        re.search(rf"export\s+(?:async\s+)?function\s+{name}\b", source)
+        for name in ["mount", "renderAtTime"]
+    )
+    registered = bool(
+        re.search(r"window\.(?:__videoVisual|videoVisual)\s*=", source)
+        and re.search(r"\bmount\b", source)
+        and re.search(r"\brenderAtTime\b", source)
+    )
+    if not exported and not registered:
+        fail("scripted visuals in body.html must export mount() and renderAtTime()")
+
+
+def has_embedded_visual(body: str) -> bool:
+    scripts = embedded_script_source(body)
+    return bool(re.search(r"\bmount\b", scripts) and re.search(r"\brenderAtTime\b", scripts))
 
 
 def fail(message: str) -> None:
@@ -81,6 +117,9 @@ def validate_body(body_file: Path, scenes: list[dict]) -> None:
     for marker, message in FORBIDDEN_BODY_MARKERS.items():
         if marker in body_lower:
             fail(message)
+    scripts = embedded_script_source(body)
+    validate_visual_source(scripts)
+    validate_embedded_visual_contract(scripts)
 
     missing = [scene["id"] for scene in scenes if f'data-scene="{scene["id"]}"' not in body and f"data-scene='{scene['id']}'" not in body]
     if missing:
@@ -102,11 +141,7 @@ def validate_visual_js(visual_file: Path) -> None:
     for export_name in ["mount", "renderAtTime"]:
         if not re.search(rf"export\s+(?:async\s+)?function\s+{export_name}\b", source):
             fail(f"visual.js must export {export_name}()")
-    if "requestAnimationFrame" in source:
-        fail("visual.js must use renderAtTime() instead of an independent requestAnimationFrame loop")
-    for url in re.findall(r"https?://[^'\"\s]+", source):
-        if "three" in url.lower() and not re.search(r"three@\d+\.\d+\.\d+", url):
-            fail("Three.js CDN imports in visual.js must pin an exact three@x.y.z version")
+    validate_visual_source(source, "visual.js")
 
 
 def validate_captions(captions_file: Path) -> None:

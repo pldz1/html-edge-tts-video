@@ -26,12 +26,11 @@ Additional requirements:
 Create these files:
 
 - `scenes.json`: ordered narration and scene metadata.
-- `body.html`: an HTML fragment with one `[data-scene]` section per scene.
-- `body.css`: project-specific visual design. Do not rely on generic dashboard cards.
-- `visual.js`: optional and only needed for Canvas, Three.js, WebGL, or other scripted visuals.
+- `body.html`: self-contained markup and project styling, with one `[data-scene]` section per scene.
+  Put CSS in `<style>` and optional deterministic JavaScript in `<script type="module">`.
 - `media/`: optional local assets.
 
-Do not create `app.js`, captions, audio, timeline files, playback controls, headers, footers,
+Do not create separate CSS or JavaScript files, `app.js`, captions, audio, timeline files, playback controls, headers, footers,
 scrubbers, timecodes, transport controls, or a chapter rail.
 
 ## Content rules

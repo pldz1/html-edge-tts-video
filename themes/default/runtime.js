@@ -92,6 +92,82 @@ function loadStylesheet(href, id) {
   });
 }
 
+function sourceUrl(value) {
+  if (!value || /^(?:[a-z]+:|\/\/|#|\/)/i.test(value)) return value;
+  return `${SOURCE_BASE}/${value.replace(/^\.\//, '')}`;
+}
+
+function clearEmbeddedAssets() {
+  document.querySelectorAll('[data-source-embedded]').forEach(element => element.remove());
+}
+
+function rebaseEmbeddedCss(source) {
+  return String(source || '').replace(/url\(\s*(['"]?)([^'"\)]+)\1\s*\)/gi, (match, quote, value) => {
+    const trimmed = value.trim();
+    if (isExternalUrl(trimmed) || trimmed.startsWith('data:')) return match;
+    return `url("${sourceUrl(trimmed)}")`;
+  });
+}
+
+async function importInlineModule(source) {
+  const blob = new Blob([source], { type: 'text/javascript' });
+  const url = URL.createObjectURL(blob);
+  try {
+    return await import(url);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+async function executeEmbeddedScripts(scripts) {
+  let visualModule = null;
+  for (const original of scripts) {
+    const type = (original.getAttribute('type') || '').trim().toLowerCase();
+    if (type && type !== 'module' && type !== 'text/javascript' && type !== 'application/javascript') continue;
+    const src = original.getAttribute('src');
+    if (type === 'module') {
+      const module = src
+        ? await import(`${sourceUrl(src)}${src.includes('?') ? '&' : '?'}loaded=${Date.now()}`)
+        : await importInlineModule(original.textContent || '');
+      if (typeof module.mount === 'function' && typeof module.renderAtTime === 'function') visualModule = module;
+      continue;
+    }
+
+    const script = document.createElement('script');
+    script.dataset.sourceEmbedded = '';
+    if (src) script.src = sourceUrl(src);
+    else script.textContent = original.textContent || '';
+    const loaded = src
+      ? new Promise((resolve, reject) => {
+          script.addEventListener('load', resolve, { once: true });
+          script.addEventListener('error', () => reject(new Error(`Could not load ${script.src}`)), { once: true });
+        })
+      : Promise.resolve();
+    document.head.append(script);
+    await loaded;
+  }
+  return visualModule || window.videoVisual || window.__videoVisual || null;
+}
+
+async function loadBodyDocument(source) {
+  clearEmbeddedAssets();
+  const parsed = new DOMParser().parseFromString(source, 'text/html');
+  const styles = [...parsed.querySelectorAll('style, link[rel~="stylesheet"]')];
+  const scripts = [...parsed.querySelectorAll('script')];
+  styles.forEach(original => {
+    const element = document.importNode(original, true);
+    element.dataset.sourceEmbedded = '';
+    if (element.tagName === 'LINK') element.href = sourceUrl(element.getAttribute('href'));
+    else element.textContent = rebaseEmbeddedCss(element.textContent);
+    document.head.append(element);
+    original.remove();
+  });
+  scripts.forEach(script => script.remove());
+  stage.innerHTML = parsed.body.innerHTML;
+  rebaseMediaUrls(stage);
+  return scripts;
+}
+
 async function fetchOptionalJson(path) {
   const response = await fetch(path, { cache: 'no-store' });
   if (response.status === 404) return null;
@@ -474,8 +550,7 @@ async function init() {
   state.projectMeta = await fetchOptionalJson('/.local/current/project.json') || {};
   const contentTheme = state.projectMeta.content_theme || 'editorial';
   await loadStylesheet(`/docs/content-themes/${contentTheme}/body.css`, 'content-theme-style');
-  stage.innerHTML = await fetchText(`${SOURCE_BASE}/body.html`);
-  rebaseMediaUrls(stage);
+  const embeddedScripts = await loadBodyDocument(await fetchText(`${SOURCE_BASE}/body.html`));
   if (await fetchOptionalText(`${SOURCE_BASE}/body.css`) !== null) {
     await loadStylesheet(`${SOURCE_BASE}/body.css`, 'source-body-style');
   }
@@ -499,10 +574,13 @@ async function init() {
   if (durationLabel) durationLabel.textContent = formatTime(state.duration);
   setupChapterRail();
 
-  if (await fetchOptionalText(`${SOURCE_BASE}/visual.js`) !== null) {
+  state.visualModule = await executeEmbeddedScripts(embeddedScripts);
+  if (!state.visualModule && await fetchOptionalText(`${SOURCE_BASE}/visual.js`) !== null) {
     state.visualModule = await import(`${SOURCE_BASE}/visual.js?loaded=${Date.now()}`);
+  }
+  if (state.visualModule) {
     if (typeof state.visualModule.mount !== 'function' || typeof state.visualModule.renderAtTime !== 'function') {
-      throw new Error('visual.js must export mount() and renderAtTime()');
+      throw new Error('body.html visual code must export mount() and renderAtTime()');
     }
     await state.visualModule.mount({
       root: stage,

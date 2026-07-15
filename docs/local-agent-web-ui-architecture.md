@@ -40,9 +40,7 @@ Python factory server
 .local/work/<8-char-project-id>/
   manifest.json
   scenes.json
-  body.html
-  body.css
-  visual.js optional
+  body.html (self-contained styles and optional JavaScript)
   media/
   generated/
   output/<video>.mp4
@@ -93,7 +91,7 @@ The studio should provide:
 - Project/source folder selector.
 - Canonical Prompt Composer with language, Content Theme, renderer, and target selectors.
 - Buttons that open ChatGPT, Claude, Gemini, or another AI chat in a new tab.
-- Paste/import boxes for `scenes.json`, `body.html`, `body.css`, and optional `visual.js`.
+- Paste/import boxes for `scenes.json` and a self-contained `body.html`.
 - Source validation before writing files.
 - TTS/build buttons with progress output.
 - Preview, caption editor, and render buttons.
@@ -115,19 +113,17 @@ This is easier and more reliable than rewriting the engine as a desktop frontend
 
 ## Prompt Builder Flow
 
-The Web UI asks a web AI for source files only. Active graphics may use the constrained
-`visual.js` module; playback/runtime code remains owned by the stable shell:
+The Web UI asks a web AI for source files only. Active graphics may use a constrained module script
+inside `body.html`; playback/runtime code remains owned by the stable shell:
 
 ```text
 Return only:
 1. scenes.json
-2. body.html
-3. body.css
-4. optional visual.js for deterministic Canvas, Three.js, or WebGL
-5. optional media plan
+2. self-contained body.html with styles and optional deterministic Canvas, Three.js, or WebGL
+3. optional media plan
 
-Do not generate app.js, playback controls, chapter rails, progress bars, or subtitles. visual.js
-must export mount() and renderAtTime() and must not start requestAnimationFrame.
+Do not generate app.js, playback controls, chapter rails, progress bars, or subtitles. Scripted
+visuals must export mount() and renderAtTime() and must not start requestAnimationFrame.
 ```
 
 Suggested flow:

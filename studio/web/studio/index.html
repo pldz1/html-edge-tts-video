@@ -569,7 +569,7 @@
               id="aiResponseInput"
               class="workflow-response"
               spellcheck="false"
-              placeholder="粘贴包含 scenes.json、body.html、body.css 及可选 visual.js 的完整 AI 回答。"
+              placeholder="粘贴包含 scenes.json 和自包含 body.html 的完整 AI 回答。样式和脚本直接写在 body.html 中。"
             ></textarea>
             <div id="directImportGrid" class="direct-import-grid" hidden>
               <label
@@ -581,27 +581,11 @@
                 ></textarea>
               </label>
               <label
-                >body.html / index.html<textarea
+                >body.html（可含 style / script）<textarea
                   id="directBodyInput"
                   class="code-field"
                   spellcheck="false"
                   placeholder="粘贴 body.html 或 index.html"
-                ></textarea>
-              </label>
-              <label
-                >body.css<textarea
-                  id="directCssInput"
-                  class="code-field"
-                  spellcheck="false"
-                  placeholder="粘贴 body.css"
-                ></textarea>
-              </label>
-              <label
-                >visual.js（可选）<textarea
-                  id="directVisualInput"
-                  class="code-field"
-                  spellcheck="false"
-                  placeholder="粘贴用于 Three.js、Canvas 或 WebGL 的 visual.js"
                 ></textarea>
               </label>
             </div>
@@ -644,22 +628,8 @@
                 ></textarea>
               </label>
               <label
-                >body.html<textarea
+                >body.html（样式与脚本均内联）<textarea
                   id="bodyOutput"
-                  class="code-field"
-                  spellcheck="false"
-                ></textarea>
-              </label>
-              <label
-                >body.css<textarea
-                  id="cssOutput"
-                  class="code-field"
-                  spellcheck="false"
-                ></textarea>
-              </label>
-              <label
-                >visual.js<textarea
-                  id="visualOutput"
                   class="code-field"
                   spellcheck="false"
                 ></textarea>

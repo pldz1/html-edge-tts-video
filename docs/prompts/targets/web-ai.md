@@ -1,4 +1,4 @@
 ## Delivery for a web AI
 
-Return every source file in a separate fenced code block with a clear filename. Use `json`, `html`,
-`css`, and `js` fences. Do not omit `body.css`; omit `visual.js` only for non-scripted compositions.
+Return exactly two fenced code blocks with clear filenames: `scenes.json` in a `json` fence and
+`body.html` in an `html` fence. Keep all project CSS and optional JavaScript inside `body.html`.

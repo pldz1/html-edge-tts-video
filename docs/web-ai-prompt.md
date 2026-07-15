@@ -35,15 +35,14 @@ python main.py prompt \
   --target web-ai
 ```
 
-The Web AI returns separate fenced blocks for:
+The Web AI returns exactly two fenced blocks for:
 
 ```text
 scenes.json
 body.html
-body.css
-visual.js optional
-media/ optional
 ```
+
+Optional media can be referenced or supplied separately; it is not another pasted source field.
 
 Import those files in Studio. Never ask a Web AI to create `app.js`, captions, audio, playback UI,
 the shell, or the chapter rail.

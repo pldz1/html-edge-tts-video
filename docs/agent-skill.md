@@ -9,7 +9,7 @@ Keep these layers separate:
 
 - Studio UI: choose language, Content Theme, renderer, and Prompt target; import and build projects.
 - Content Theme: guide AI composition and provide baseline content CSS under `docs/content-themes/`.
-- Per-video source: own scene content, body markup, project CSS, active visuals, and media.
+- Per-video source: own scene metadata and a self-contained HTML composition, plus optional media.
 - Stable shell: own captions, footer, timeline, preview controls, and render functions under
   `themes/default/`.
 
@@ -21,9 +21,7 @@ web AI.
 ```text
 source/
   scenes.json
-  body.html
-  body.css recommended
-  visual.js optional
+  body.html (styles and optional deterministic JavaScript included)
   media/ optional
   captions.json optional after manual subtitle edits
 ```
@@ -59,12 +57,11 @@ Store `language` and `resolvedLanguage` in the project manifest. Do not silently
 source. Use the resolved language to choose the default edge-tts voice; a saved voice remains an
 explicit project override.
 
-### body.html and body.css
+### body.html
 
-Use `body.html` as an HTML fragment with one `[data-scene="id"]` section per scene. Do not include a
-document head/body, scripts, inline event handlers, playback controls, captions, footer, or chapter
-rail. Put project-specific composition, typography, responsive rules, and visual styling in
-`body.css`.
+Use one self-contained `body.html` with a `[data-scene="id"]` section per scene. A fragment or a full
+HTML document is accepted. Put project-specific composition, typography, responsive rules, and
+visual styling in `<style>`. Keep playback controls, captions, footer, and chapter rail out of it.
 
 Build one dominant composition per scene. Use whitespace, scale, typography, connections, SVG,
 media, and spatial grouping. Avoid generic dashboards and deeply nested bordered cards. Validation
@@ -73,9 +70,10 @@ warns when card-like component counts exceed the scene complexity budget.
 Keep important content in the top 80%. The shell owns the 80%–90% caption band and the bottom 10%
 footer allocation; its visible chapter rail uses only a compact portion of that allocation.
 
-### visual.js
+### Scripted visuals in body.html
 
-Use `visual.js` only for Canvas, Three.js, WebGL, or other active visuals. Export:
+For Canvas, Three.js, WebGL, or other active visuals, add one `<script type="module">` to
+`body.html` and export:
 
 ```js
 export async function mount(context) {}
@@ -113,8 +111,8 @@ body.css
 ```
 
 `theme.json` declares localized labels, allowed engines, and the default engine. `prompt.md` defines
-composition grammar and anti-patterns. `body.css` supplies a baseline that loads before per-video
-`body.css`.
+composition grammar and anti-patterns. Its `body.css` supplies a baseline that loads before the
+self-contained source document's `<style>`.
 
 Generate prompts from the shared composer:
 

@@ -53,8 +53,6 @@ const els = {
   aiResponseInput: $('#aiResponseInput'),
   directScenesInput: $('#directScenesInput'),
   directBodyInput: $('#directBodyInput'),
-  directCssInput: $('#directCssInput'),
-  directVisualInput: $('#directVisualInput'),
   directImportGrid: $('#directImportGrid'),
   extractButton: $('#extractButton'),
   projectNameInput: $('#projectNameInput'),
@@ -62,8 +60,6 @@ const els = {
   saveProjectButton: $('#saveProjectButton'),
   scenesOutput: $('#scenesOutput'),
   bodyOutput: $('#bodyOutput'),
-  cssOutput: $('#cssOutput'),
-  visualOutput: $('#visualOutput'),
   checkButton: $('#checkButton'),
   offlineButton: $('#offlineButton'),
   ttsButton: $('#ttsButton'),
@@ -140,17 +136,11 @@ async function initImportProjectContext() {
     const data = await api(`/api/projects/source?project=${encodeURIComponent(projectId)}`);
     const scenes = data?.files?.scenesJson || '';
     const body = data?.files?.bodyHtml || '';
-    const css = data?.files?.bodyCss || '';
-    const visual = data?.files?.visualJs || '';
     els.projectNameInput.value = data?.project?.name || '';
     els.scenesOutput.value = scenes;
     els.bodyOutput.value = body;
-    els.cssOutput.value = css;
-    els.visualOutput.value = visual;
     if (els.directScenesInput) els.directScenesInput.value = scenes;
     if (els.directBodyInput) els.directBodyInput.value = body;
-    if (els.directCssInput) els.directCssInput.value = css;
-    if (els.directVisualInput) els.directVisualInput.value = visual;
     if (els.languageInput) els.languageInput.value = data?.project?.language || 'auto';
     if (els.contentThemeInput) els.contentThemeInput.value = data?.project?.contentTheme || 'editorial';
     renderEngineOptions(data?.project?.contentTheme || 'editorial');
@@ -243,12 +233,8 @@ function resetImportComposer(name = INITIAL_FORM_VALUES.projectName) {
   els.aiResponseInput.value = '';
   els.scenesOutput.value = '';
   els.bodyOutput.value = '';
-  els.cssOutput.value = '';
-  els.visualOutput.value = '';
   if (els.directScenesInput) els.directScenesInput.value = '';
   if (els.directBodyInput) els.directBodyInput.value = '';
-  if (els.directCssInput) els.directCssInput.value = '';
-  if (els.directVisualInput) els.directVisualInput.value = '';
   els.projectNameInput.value = name || INITIAL_FORM_VALUES.projectName;
 }
 
@@ -433,6 +419,8 @@ function extractScenes(text) {
 function extractBody(text) {
   const fenced = extractFence(text, 'body.html', 'html');
   if (fenced) return fenced;
+  const documentStart = text.search(/<!doctype\s+html|<html\b/i);
+  if (documentStart !== -1) return text.slice(documentStart).trim();
   const firstSection = text.indexOf('<section');
   const lastSection = text.lastIndexOf('</section>');
   if (firstSection === -1 || lastSection === -1) return '';
@@ -447,16 +435,22 @@ function extractVisual(text) {
   return extractFence(text, 'visual.js', 'js') || extractFence(text, 'visual.js', 'javascript');
 }
 
+function mergeLegacyResponse(body, css, visual) {
+  let merged = body.trim();
+  if (css) merged = `<style>\n${css}\n</style>\n${merged}`;
+  if (visual) merged += `\n<script type="module">\n${visual}\n<\/script>`;
+  return merged;
+}
+
 function extractResponse() {
-  const text = els.aiResponseInput.value;
+  const text = importMode === 'direct' ? '' : els.aiResponseInput.value;
   const scenes = els.directScenesInput?.value.trim() || extractScenes(text);
   const body = els.directBodyInput?.value.trim() || extractBody(text);
-  const css = els.directCssInput?.value.trim() || extractCss(text);
-  const visual = els.directVisualInput?.value.trim() || extractVisual(text);
+  const css = extractCss(text);
+  const visual = extractVisual(text);
+  const mergedBody = mergeLegacyResponse(body, css, visual);
   els.scenesOutput.value = scenes;
-  els.bodyOutput.value = body;
-  els.cssOutput.value = css;
-  els.visualOutput.value = visual;
+  els.bodyOutput.value = mergedBody;
 
   if (!scenes || !body) {
     setStatus('未同时找到 scenes.json 和 body.html。', 'error');
@@ -470,7 +464,7 @@ function extractResponse() {
     return false;
   }
 
-  setStatus(`源文件已提取${css ? '（含 body.css）' : ''}${visual ? '（含 visual.js）' : ''}。`, 'success');
+  setStatus(css || visual ? '源文件已提取，旧版 CSS / JS 已合并进 body.html。' : '两个源文件已提取。', 'success');
   return true;
 }
 
@@ -976,8 +970,6 @@ async function validateExtracted() {
     const result = await postJson('/api/source/validate', {
       scenesJson: els.scenesOutput.value,
       bodyHtml: els.bodyOutput.value,
-      bodyCss: els.cssOutput.value,
-      visualJs: els.visualOutput.value,
     });
     setStatus(`验证通过：${result.sceneCount} 个场景，${result.narrationChars} 个旁白字符。`, 'success');
   } catch (error) {
@@ -999,8 +991,6 @@ async function saveProject() {
       name,
       scenesJson: els.scenesOutput.value,
       bodyHtml: els.bodyOutput.value,
-      bodyCss: els.cssOutput.value,
-      visualJs: els.visualOutput.value,
       language: els.languageInput.value,
       contentTheme: els.contentThemeInput.value,
       engine: els.engineInput.value === 'auto'
@@ -1168,7 +1158,7 @@ function bindEvents() {
   document.querySelectorAll('[data-import-mode]').forEach(button => {
     button.addEventListener('click', () => setImportMode(button.dataset.importMode));
   });
-  [els.directScenesInput, els.directBodyInput, els.directCssInput, els.directVisualInput].filter(Boolean).forEach(input => {
+  [els.directScenesInput, els.directBodyInput].filter(Boolean).forEach(input => {
     input.addEventListener('input', () => {
       if (importMode === 'direct') extractResponse();
     });

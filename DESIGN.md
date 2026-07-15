@@ -11,8 +11,8 @@ The skill package has four durable concepts:
 - Project folder: `.local/work/<8-char-id>/`, containing `manifest.json`, source files, generated
   resources, and project outputs. The immutable ID is storage identity; `manifest.json.name` is the
   editable user-facing name.
-- Source files: `scenes.json`, `body.html`, recommended `body.css`, optional deterministic
-  `visual.js`, optional `media/`, and optional `captions.json`.
+- Source files: `scenes.json`, a self-contained `body.html`, optional `media/`, and optional
+  `captions.json`.
 - Current workspace: `.local/current/`, the normalized active source plus generated assets.
 - Stable shell: `themes/default/`, the HTML/CSS/JS player that owns captions, footer, and rendering.
 - Content Themes: `docs/content-themes/`, prompt and CSS profiles that direct source visuals without
@@ -45,18 +45,15 @@ project source files
 - `summary`: visual summary.
 - `narration`: spoken text in the selected or inferred content language, used by edge-tts.
 
-`body.html` is an HTML fragment. It must contain a section matching every scene id:
+`body.html` is a self-contained HTML fragment or document. It must contain a section matching every scene id:
 
 ```html
 <section class="content-scene scene" data-scene="intro">...</section>
 ```
 
-It must not contain runtime JavaScript, playback controls, chapter rail markup, progress bars,
-timecodes, or full document tags.
-
-`body.css` is optional project-specific visual styling loaded after the selected Content Theme.
-`visual.js` is optional for Canvas, Three.js, or WebGL and must export deterministic `mount()` and
-`renderAtTime()` functions. It must not own playback or start an animation loop.
+It may contain project CSS in `<style>` and deterministic Canvas, Three.js, or WebGL code in
+`<script type="module">`. Scripted visuals must export `mount()` and `renderAtTime()`. It must not
+contain playback controls, chapter rail markup, progress bars, timecodes, or an animation loop.
 
 `timeline.json` is generated from real or offline-estimated narration timing:
 
@@ -172,9 +169,9 @@ keeps absolute paths intact, and maps legacy `output/foo.mp4` to `.local/output/
 prevents duplicates, requires narration and category, limits category length, and requires the first
 scene id to be `intro`.
 
-`validate_body(body_file, scenes)` reads `body.html`, rejects forbidden markers such as `<script>`,
-transport UI, chapter rail markup, and full document tags, then verifies every scene id has a
-matching `data-scene` section.
+`validate_body(body_file, scenes)` reads `body.html`, rejects transport UI and chapter rail markup,
+checks embedded JavaScript determinism, then verifies every scene id has a matching `data-scene`
+section.
 
 `validate_captions(captions_file)` performs lightweight structural checks on optional
 `captions.json`. Deeper timeline matching happens in `pipeline/captions.py`.
@@ -182,8 +179,8 @@ matching `data-scene` section.
 `validate_theme(theme)` checks theme existence and verifies that `runtime.js` contains the required
 render contract names.
 
-`validate_visual_js()` requires deterministic `mount()` and `renderAtTime()` exports, rejects an
-independent requestAnimationFrame loop, and requires exact versions for Three.js CDN imports.
+`validate_visual_js()` retains the same checks for legacy sidecar projects; new projects keep the
+module in `body.html`.
 
 `main()` optionally loads a provided source, validates scenes, body, visual module, captions, and shell, then
 prints scene and narration counts.
@@ -407,9 +404,9 @@ sets duration, builds chapters, renders the first frame, and exposes readiness f
 - `refreshPrompt()` calls the canonical Python Prompt Composer with the selected language, Content
   Theme, renderer, and target.
 - `copyPrompt()` writes the generated prompt to the clipboard.
-- The extractors pull `scenes.json`, `body.html`, `body.css`, and optional `visual.js` from a pasted
-  AI response.
-- `extractResponse()` validates and displays all extracted source files before import.
+- The extractors pull `scenes.json` and self-contained `body.html` from a pasted AI response. They
+  fold legacy `body.css` and `visual.js` fences into `body.html` automatically.
+- `extractResponse()` validates and displays both extracted source files before import.
 
 `tools/voices.js` renders voice previews:
 

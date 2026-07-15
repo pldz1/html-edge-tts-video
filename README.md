@@ -9,9 +9,7 @@ AI output is intentionally small:
 ```text
 my-video-source/
   scenes.json
-  body.html
-  body.css recommended
-  visual.js optional
+  body.html (self-contained styles and optional JavaScript)
   media/ optional
   captions.json optional after manual subtitle edits
 ```
@@ -48,9 +46,7 @@ Studio-managed projects use an immutable 8-character ID and keep their metadata 
 .local/work/a7f31c2d/
   manifest.json
   scenes.json
-  body.html
-  body.css recommended
-  visual.js optional
+  body.html (self-contained styles and optional JavaScript)
   media/ optional
   captions.json optional, created by caption editor
   generated/ narration and timeline cache
@@ -120,7 +116,8 @@ Rules:
 - Every scene needs `category`, `title`, `summary`, and `narration`.
 - `category` should be a short label in the selected content language, up to 12 characters.
 
-`body.html` is the visual content. Add one section per scene:
+`body.html` is the self-contained visual content. Add one section per scene and keep project CSS in
+`<style>`:
 
 ```html
 <section class="content-scene scene" data-scene="intro">
@@ -134,13 +131,12 @@ Rules:
 
 Prefer visual explanation over text-only slides. Put structured HTML/CSS/SVG graphics inside
 `visual-board`: `diagram-flow`, `comparison-grid`, `metric-grid`, `formula-strip`, `concept-map`, or
-small inline SVG diagrams. For Canvas, Three.js, or WebGL, keep scripts out of `body.html` and use
-the deterministic `visual.js` module contract documented in `docs/agent-skill.md`.
+small inline SVG diagrams. For Canvas, Three.js, or WebGL, add a `<script type="module">` to
+`body.html` and export the deterministic functions documented in `docs/agent-skill.md`.
 
 Do not put app/runtime behavior into `body.html`. Avoid:
 
 ```text
-<script>
 app.js
 play buttons
 scrubbers

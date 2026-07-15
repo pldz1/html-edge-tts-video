@@ -36,17 +36,15 @@ Per-video source folder:
 
 ```text
 scenes.json
-body.html
-body.css recommended
-visual.js optional for Canvas, Three.js, or WebGL
+body.html with inline styles and optional deterministic JavaScript
 media/ optional
 captions.json optional after manual subtitle edits
 ```
 
 `scenes.json` starts with `id: "intro"` and every scene includes a short `category` for the generated
 bottom chapter rail. The rail is rendered as one continuous timeline from generated TTS timing, not
-as one resetting progress bar per scene. `body.html` contains visual DOM, `body.css` owns project
-design, and optional deterministic `visual.js` owns active visuals. Do not include app playback,
+as one resetting progress bar per scene. `body.html` owns visual DOM, project design, and optional
+deterministic active visuals. Do not include app playback,
 timecodes, headers, transport bars, or per-scene progress bars.
 Keep source visuals in the top 80% of the frame; the shell reserves 80%–90% for captions and the
 bottom 10% for the footer while keeping the actual rail compact.
@@ -86,5 +84,5 @@ For text-only web AI, use:
 docs/web-ai-prompt.md
 ```
 
-The web AI should produce `scenes.json`, `body.html`, `body.css`, optional `visual.js`, and optional
-`media/` according to the generated prompt.
+The web AI should produce `scenes.json`, a self-contained `body.html`, and optional `media/`
+according to the generated prompt.
