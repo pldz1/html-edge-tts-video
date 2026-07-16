@@ -9,14 +9,13 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from .factory import STARTER_SOURCE, active_source_root, ensure_current, load_scenes, project_paths
+    from .factory import STARTER_SOURCE, active_source_root, load_scenes, project_paths
 except ImportError:  # Direct script execution: python pipeline/captions.py
-    from factory import STARTER_SOURCE, active_source_root, ensure_current, load_scenes, project_paths
+    from factory import STARTER_SOURCE, active_source_root, load_scenes, project_paths
 
 
 KIND = "html-edge-tts-captions"
 VERSION = 1
-LEGACY_TIME_EPSILON = 0.05
 TIME_EPSILON = 0.002
 
 
@@ -39,24 +38,6 @@ def timeline_path() -> Path:
 
 def captions_path() -> Path:
     return project_paths().captions
-
-
-def source_captions_path() -> Path | None:
-    """Return the authored captions path for the loaded project, when available."""
-    source_root = active_source_root()
-    if not source_root.exists() or not source_root.is_dir():
-        return None
-    return source_root / "captions.json"
-
-
-def caption_storage_paths() -> list[Path]:
-    """List the direct authored caption target."""
-    paths = [path for path in [source_captions_path(), captions_path()] if path is not None]
-    unique: list[Path] = []
-    for path in paths:
-        if not any(path.resolve() == saved.resolve() for saved in unique):
-            unique.append(path)
-    return unique
 
 
 def load_timeline() -> dict:
@@ -148,7 +129,7 @@ def cue_timing_is_valid(cue: dict, duration: float) -> bool:
         return False
     if not math.isfinite(start) or not math.isfinite(end):
         return False
-    return start >= 0 and end > start and end <= duration + LEGACY_TIME_EPSILON
+    return start >= 0 and end > start and end <= duration + TIME_EPSILON
 
 
 def cue_identity_matches(current: dict, generated: dict) -> bool:
@@ -183,29 +164,6 @@ def signature_matches_current(doc: dict, timeline: dict) -> bool:
     return True
 
 
-def legacy_captions_match_timeline(doc: dict, timeline: dict) -> bool:
-    cues = doc.get("cues")
-    timeline_cues = timeline.get("cues")
-    if not isinstance(cues, list) or not isinstance(timeline_cues, list):
-        return False
-    if len(cues) != len(timeline_cues):
-        return False
-
-    for index, cue in enumerate(cues):
-        generated = normalize_cue(timeline_cues[index], index)
-        try:
-            current = normalize_cue(cue, index)
-        except (TypeError, ValueError):
-            return False
-        if not cue_identity_matches(current, generated):
-            return False
-        if abs(current["start"] - generated["start"]) > LEGACY_TIME_EPSILON:
-            return False
-        if abs(current["end"] - generated["end"]) > LEGACY_TIME_EPSILON:
-            return False
-    return True
-
-
 def captions_match_timeline(doc: dict, timeline: dict) -> bool:
     cues = doc.get("cues")
     timeline_cues = timeline.get("cues")
@@ -215,10 +173,7 @@ def captions_match_timeline(doc: dict, timeline: dict) -> bool:
     if len(cues) != len(timeline_cues):
         return False
 
-    has_signature = isinstance(doc.get("timeline_signature"), list)
-    if has_signature and not signature_matches_current(doc, timeline):
-        return False
-    if not has_signature and not legacy_captions_match_timeline(doc, timeline):
+    if not signature_matches_current(doc, timeline):
         return False
 
     for index, cue in enumerate(cues):
@@ -235,11 +190,9 @@ def captions_match_timeline(doc: dict, timeline: dict) -> bool:
 
 
 def load_effective_doc(timeline: dict | None = None) -> tuple[dict, bool]:
-    ensure_current()
     timeline = timeline or load_timeline()
-    paths = caption_storage_paths()
-    path = next((candidate for candidate in paths if candidate.exists()), None)
-    if path is None:
+    path = captions_path()
+    if not path.exists():
         return default_doc(timeline), False
 
     try:
@@ -252,7 +205,6 @@ def load_effective_doc(timeline: dict | None = None) -> tuple[dict, bool]:
 
 
 def save_doc(value: Any, timeline: dict | None = None) -> dict:
-    ensure_current()
     if active_source_root().resolve() == STARTER_SOURCE.resolve():
         raise ValueError("starter is read-only; activate an editable project before saving captions")
     timeline = timeline or load_timeline()
@@ -260,17 +212,11 @@ def save_doc(value: Any, timeline: dict | None = None) -> dict:
     if not captions_match_timeline(doc, timeline):
         raise ValueError("captions do not match current timeline timing")
 
-    source_path = source_captions_path()
-    if source_path is None:
-        raise ValueError("loaded project source folder is unavailable; reload the project before saving captions")
-    targets = caption_storage_paths()
-
-    for path in targets:
-        write_json(path, doc)
+    path = captions_path()
+    write_json(path, doc)
 
     return {
         "doc": doc,
-        "saved": [str(path) for path in targets],
-        "sourcePath": str(source_path),
-        "workspacePath": str(captions_path()),
+        "saved": [str(path)],
+        "sourcePath": str(path),
     }

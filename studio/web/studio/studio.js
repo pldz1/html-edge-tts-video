@@ -49,7 +49,6 @@ const els = {
   sceneCountInput: $("#sceneCountInput"),
   languageInput: $("#languageInput"),
   aspectRatioInput: $("#aspectRatioInput"),
-  promptTargetInput: $("#promptTargetInput"),
   promptResolution: $("#promptResolution"),
   notesInput: $("#notesInput"),
   promptOutput: $("#promptOutput"),
@@ -117,7 +116,6 @@ const INITIAL_FORM_VALUES = Object.freeze({
   sceneCount: els.sceneCountInput?.value || "",
   language: els.languageInput?.value || "auto",
   aspectRatio: els.aspectRatioInput?.value || "16:9",
-  promptTarget: els.promptTargetInput?.value || "web-ai",
   notes: els.notesInput?.value || "",
   projectName: els.projectNameInput?.value || "新视频项目",
   renderOutput: els.renderOutputInput?.value || "studio-render.mp4",
@@ -270,7 +268,6 @@ function resetPromptComposer() {
   els.languageInput.value = INITIAL_FORM_VALUES.language;
   if (els.aspectRatioInput)
     els.aspectRatioInput.value = INITIAL_FORM_VALUES.aspectRatio;
-  els.promptTargetInput.value = INITIAL_FORM_VALUES.promptTarget;
   els.notesInput.value = INITIAL_FORM_VALUES.notes;
   refreshPrompt();
 }
@@ -486,7 +483,6 @@ function promptPayload() {
     notes: els.notesInput.value.trim(),
     language: els.languageInput.value,
     aspectRatio: normalizeAspectRatio(els.aspectRatioInput?.value),
-    target: els.promptTargetInput.value,
   };
 }
 
@@ -498,7 +494,7 @@ async function refreshPrompt() {
     els.promptOutput.value = result.prompt;
     if (els.promptResolution) {
       const orientation = result.aspectRatio === "9:16" ? "竖屏" : "横屏";
-      els.promptResolution.textContent = `已解析：${result.language} · ${result.target} · ${result.aspectRatio} ${orientation}`;
+      els.promptResolution.textContent = `已解析：${result.language} · ${result.aspectRatio} ${orientation}`;
     }
   } catch (error) {
     if (requestId !== promptRequestId) return;
@@ -1488,7 +1484,7 @@ function bindEvents() {
     .forEach((input) => {
       input.addEventListener("input", schedulePromptRefresh);
     });
-  [els.languageInput, els.aspectRatioInput, els.promptTargetInput]
+  [els.languageInput, els.aspectRatioInput]
     .filter(Boolean)
     .forEach((input) => {
       input.addEventListener("change", schedulePromptRefresh);

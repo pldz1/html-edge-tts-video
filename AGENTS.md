@@ -20,16 +20,21 @@ browser executable override.
 All audio/video probing, composition, muxing, and encoding in `pipeline/` must invoke the FFmpeg
 binary provided by the Python environment (`imageio-ffmpeg`), never a system `ffmpeg` or `ffprobe`
 found on `PATH`. Dependencies and the Playwright Chromium Headless Shell are installed only through
-`python main.py install`. A temporary package mirror, when needed, must be supplied as an install
-command option and must not be written to user or system package-manager configuration.
+`python main.py install`. A temporary package mirror, when needed, must be supplied as an install command option and must not be written to user or system package-manager configuration.
 
 Use `SKILL.md` as the entrypoint and `docs/agent-skill.md` as the full workflow and constraints.
 
 This is a skill package. Per-video source folders contain `scenes.json`, a self-contained
-`body.html`, optional `media/`, optional editor-created `captions.json`, an untracked Studio
-`manifest.json`, and project-local `generated/` and `output/` directories. Pipeline commands and the
-stable shell under `pipeline/shell/` read the selected project directly. Do not recreate a
-`.local/current/` mirror or copy project source into a global runtime workspace.
+`body.html`, optional `media/`, and optional editor-created `captions.json`. Each project also has an
+untracked Studio `manifest.json`, and the pipeline creates project-local `generated/` and `output/`
+directories. Pipeline commands and the stable shell under `pipeline/shell/` read the selected
+project directly. Do not copy project source or generated files into a global runtime workspace.
+
+For a final narrated video, run `python main.py tts --source <project>` before `render`. The
+`offline` command intentionally creates silent audio and is only for layout preview; never use its
+assets as the final narration. Give `render --output` a filename such as `video.mp4`; paths are
+rejected because renders always belong in the selected project's `output/` directory.
+
 Use the single prompt template under `docs/source-prompt.md` and let AI choose presentation styling
 from the subject. Do not ask users or web AI to generate `app.js`.
 
@@ -48,5 +53,5 @@ python main.py check
 ```
 
 Only `.local/work/starter/body.html` and `scenes.json` are tracked source under `.local/`. The
-starter manifest is generated locally with `active: true` on first use and is not tracked. Treat all
-other files under `.local/`, `assets/`, or `output/` as generated state.
+starter manifest is generated locally with `active: true` on first use and is not tracked. Treat
+other files under `.local/` as runtime state.

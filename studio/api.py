@@ -20,8 +20,6 @@ from urllib.parse import quote
 from pipeline.factory import (
     DEFAULT_ASPECT_RATIO,
     LOCAL,
-    LOCAL_ASSETS,
-    LOCAL_OUTPUT,
     LOCAL_WORK,
     PROJECT_MANIFEST_FILE,
     PROJECT_OUTPUT_DIR,
@@ -32,7 +30,6 @@ from pipeline.factory import (
     atomic_write_json,
     atomic_write_text,
     is_local_project,
-    migrate_legacy_current,
     normalize_aspect_ratio,
     project_paths,
     reconcile_active_project,
@@ -80,8 +77,6 @@ DEFAULT_VOICE_BY_LANGUAGE = {
     "zh-CN": "zh-CN-XiaoxiaoNeural",
     "en-US": "en-US-JennyNeural",
 }
-PROJECT_SETTINGS_FILE = ".studio.json"
-OUTPUT_INDEX_FILE = LOCAL_OUTPUT / ".studio-outputs.json"
 
 
 class ApiError(Exception):
@@ -110,25 +105,6 @@ def read_json_file(path: Path) -> Any | None:
         return None
 
 
-def read_output_index() -> dict[str, dict[str, Any]]:
-    data = read_json_file(OUTPUT_INDEX_FILE)
-    if not isinstance(data, dict):
-        return {}
-    return {
-        name: entry
-        for name, entry in data.items()
-        if isinstance(name, str) and isinstance(entry, dict)
-    }
-
-
-def write_output_index(index: dict[str, dict[str, Any]]) -> None:
-    LOCAL_OUTPUT.mkdir(parents=True, exist_ok=True)
-    OUTPUT_INDEX_FILE.write_text(
-        json.dumps(index, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-
-
 def output_record(path: Path) -> dict[str, Any]:
     relative_path = rel(path)
     return {
@@ -140,37 +116,6 @@ def output_record(path: Path) -> dict[str, Any]:
         "modifiedAt": file_time(path),
         "extension": path.suffix.lower().lstrip("."),
     }
-
-
-def register_output(path: Path, project_slug: str | None, project_path: str | None) -> None:
-    index = read_output_index()
-    index[path.name] = {
-        "projectSlug": project_slug or "",
-        "projectPath": project_path or "",
-        "updatedAt": utc_now(),
-    }
-    write_output_index(index)
-
-
-def output_belongs_to_project(path: Path, project_slug: str | None, project_path: str | None) -> bool:
-    if not project_slug and not project_path:
-        return False
-
-    index = read_output_index()
-    entry = index.get(path.name)
-    if entry:
-        entry_slug = str(entry.get("projectSlug") or "").strip()
-        entry_path = str(entry.get("projectPath") or "").strip()
-        if project_path and entry_path:
-            return entry_path == project_path
-        if project_slug and entry_slug:
-            return entry_slug == project_slug
-        return False
-
-    # Backward-compatible fallback for older exports that used the project slug as filename.
-    stem = path.stem.lower()
-    slug_prefix = (project_slug or "").strip().lower()
-    return bool(slug_prefix and (stem == slug_prefix or stem.startswith(f"{slug_prefix}-")))
 
 
 def project_display_name(value: str) -> str:
@@ -231,8 +176,6 @@ def ensure_project_manifest(
     manifest_path = source_root / PROJECT_MANIFEST_FILE
     existing = read_json_file(manifest_path)
     data = existing if isinstance(existing, dict) else {}
-    legacy_settings = read_json_file(source_root / PROJECT_SETTINGS_FILE)
-    legacy_settings = legacy_settings if isinstance(legacy_settings, dict) else {}
     current_id = str(project_id or data.get("id") or "").strip().lower()
     if source_root.resolve() == STARTER_SOURCE.resolve():
         current_id = "starter"
@@ -284,20 +227,16 @@ def ensure_project_manifest(
         "createdAt": str(data.get("createdAt") or now),
         "updatedAt": str(data.get("updatedAt") or now),
         "activatedAt": data.get("activatedAt") or (now if bool(data.get("active", starter and not data)) else None),
-        "tts": normalize_tts_settings(data.get("tts") or legacy_settings.get("tts"), resolved_language),
+        "tts": normalize_tts_settings(data.get("tts"), resolved_language),
     }
     if is_local_project(source_root):
         source_root.mkdir(parents=True, exist_ok=True)
         if manifest != existing:
             atomic_write_json(manifest_path, manifest)
-        legacy_path = source_root / PROJECT_SETTINGS_FILE
-        if legacy_path.exists():
-            legacy_path.unlink()
     return manifest
 
 
-def migrate_local_projects() -> None:
-    migrate_legacy_current()
+def ensure_local_projects() -> None:
     LOCAL_WORK.mkdir(parents=True, exist_ok=True)
     for child in list(LOCAL_WORK.iterdir()):
         if child.name.startswith(".") or not child.is_dir() or not (child / "scenes.json").exists() or not (child / "body.html").exists():
@@ -330,7 +269,7 @@ def active_source_settings() -> dict[str, Any]:
 
 
 def safe_project_path(value: str) -> Path:
-    migrate_local_projects()
+    ensure_local_projects()
     project_id = str(value or "").strip().lower()
     if project_id == "starter":
         return STARTER_SOURCE.resolve()
@@ -380,7 +319,7 @@ def source_summary(source_root: Path) -> dict[str, Any]:
 
 
 def list_projects() -> list[dict[str, Any]]:
-    migrate_local_projects()
+    ensure_local_projects()
     projects = []
     for child in sorted(LOCAL_WORK.iterdir(), key=lambda item: item.name.lower()):
         if child.name.startswith(".") or not child.is_dir():
@@ -392,7 +331,7 @@ def list_projects() -> list[dict[str, Any]]:
     return projects
 
 
-def list_outputs(limit: int | None = None, project_slug: str | None = None, project_path: str | None = None) -> list[dict[str, Any]]:
+def list_outputs(limit: int | None = None, project_path: str | None = None) -> list[dict[str, Any]]:
     files: list[Path] = []
     if project_path:
         project_outputs = Path(project_path) / PROJECT_OUTPUT_DIR
@@ -401,18 +340,6 @@ def list_outputs(limit: int | None = None, project_slug: str | None = None, proj
                 item for item in project_outputs.iterdir()
                 if item.is_file() and item.suffix.lower() in OUTPUT_EXTENSIONS
             )
-    legacy_files = (
-        [
-            item
-            for item in LOCAL_OUTPUT.iterdir()
-            if item.is_file() and item.suffix.lower() in OUTPUT_EXTENSIONS
-        ]
-        if LOCAL_OUTPUT.exists()
-        else []
-    )
-    if project_slug or project_path:
-        legacy_files = [item for item in legacy_files if output_belongs_to_project(item, project_slug, project_path)]
-    files.extend(legacy_files)
     files.sort(key=lambda item: item.stat().st_mtime, reverse=True)
     if limit:
         files = files[:limit]
@@ -539,9 +466,8 @@ def guide_state(state: dict[str, Any]) -> dict[str, str]:
 
 
 def studio_state() -> dict[str, Any]:
-    migrate_local_projects()
+    ensure_local_projects()
     active_project = active_project_meta()
-    output_project_id = active_project["id"] if active_project else None
     output_path = active_project["path"] if active_project else None
     state: dict[str, Any] = {
         "activeProject": active_project,
@@ -550,7 +476,7 @@ def studio_state() -> dict[str, Any]:
         "settings": active_source_settings(),
         "timeline": timeline_summary(),
         "projectCount": len(list_projects()),
-        "outputs": list_outputs(limit=5, project_slug=output_project_id, project_path=output_path),
+        "outputs": list_outputs(limit=5, project_path=output_path),
         "urls": {
             "studio": "/studio",
             "shell": shell_relative_url(active_source_root()),
@@ -875,17 +801,6 @@ def run_job(job_id: str) -> None:
             finishedAt=utc_now(),
         )
         finish_render_progress(job_id, exit_code == 0)
-        if exit_code == 0 and job.get("task") == "render":
-            output_name = str(job.get("outputName") or "").strip()
-            if output_name:
-                project_path = str(job.get("projectPath") or "").strip()
-                output_file = (Path(project_path) / PROJECT_OUTPUT_DIR / output_name) if project_path else LOCAL_OUTPUT / output_name
-                if output_file.exists() and not project_path:
-                    register_output(
-                        output_file,
-                        str(job.get("projectId") or "").strip() or None,
-                        project_path or None,
-                    )
         print(f"[job:{job_id} {job['task']}] {'completed' if exit_code == 0 else 'failed'} (exit {exit_code})", flush=True)
     except Exception as exc:  # noqa: BLE001 - surface background failures to the UI.
         append_job_log(job_id, f"Job failed before completion: {exc}")
@@ -1066,25 +981,10 @@ def get_job(query: dict[str, list[str]]) -> dict[str, Any]:
 
 
 def voice_preview_state() -> dict[str, Any]:
-    legacy = LOCAL_ASSETS / "voice-preview"
-    if legacy.exists() and not VOICE_PREVIEW_DIR.exists():
-        legacy.rename(VOICE_PREVIEW_DIR)
     VOICE_PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
     manifest = read_json_file(VOICE_PREVIEW_DIR / "manifest.json")
     if not isinstance(manifest, dict):
         manifest = {"samples": [], "history": []}
-    changed = False
-    for key in ["samples", "history"]:
-        entries = manifest.get(key)
-        if not isinstance(entries, list):
-            continue
-        for entry in entries:
-            if isinstance(entry, dict) and isinstance(entry.get("audio"), str):
-                migrated = entry["audio"].replace("/.local/assets/voice-preview/", "/.local/voice-preview/")
-                changed = changed or migrated != entry["audio"]
-                entry["audio"] = migrated
-    if changed:
-        atomic_write_json(VOICE_PREVIEW_DIR / "manifest.json", manifest)
     history = manifest.get("history")
     if not isinstance(history, list):
         history = manifest.get("samples") if isinstance(manifest.get("samples"), list) else []
@@ -1106,10 +1006,7 @@ def handle_get(path: str, query: dict[str, list[str]]) -> tuple[int, Any] | None
     if path == "/api/outputs":
         active_project = active_project_meta()
         return 200, {
-            "outputs": list_outputs(
-                project_slug=active_project["id"] if active_project else None,
-                project_path=active_project["path"] if active_project else None,
-            )
+            "outputs": list_outputs(project_path=active_project["path"] if active_project else None)
         }
     if path == "/api/voice-preview":
         return 200, voice_preview_state()
@@ -1126,7 +1023,7 @@ def handle_post(path: str, payload: dict[str, Any]) -> tuple[int, Any] | None:
             raise ApiError(422, str(exc)) from exc
     if path == "/api/projects":
         return 201, create_project(payload)
-    if path in {"/api/projects/activate", "/api/projects/load"}:
+    if path == "/api/projects/activate":
         return 200, activate_project(payload)
     if path == "/api/projects/settings":
         return 200, save_project_settings(payload)

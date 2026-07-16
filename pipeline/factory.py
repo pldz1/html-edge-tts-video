@@ -6,7 +6,6 @@ import json
 import hashlib
 import os
 import re
-import shutil
 import time
 import threading
 import uuid
@@ -19,8 +18,6 @@ from urllib.parse import quote
 ROOT = Path(__file__).resolve().parents[1]
 LOCAL = ROOT / ".local"
 LOCAL_WORK = LOCAL / "work"
-LOCAL_OUTPUT = LOCAL / "output"  # Legacy output location; new renders are project-local.
-LOCAL_ASSETS = LOCAL / "assets"  # Legacy generated state used only during migration.
 LOCAL_PLAYWRIGHT = LOCAL / "playwright"
 PLAYWRIGHT_BROWSERS = LOCAL_PLAYWRIGHT / "browsers"
 PLAYWRIGHT_RECORDINGS = LOCAL_PLAYWRIGHT / "recordings"
@@ -37,10 +34,6 @@ STARTER_SOURCE = LOCAL_WORK / "starter"
 SHELL = Path(__file__).resolve().parent / "shell"
 SHELL_PATH = "/pipeline/shell/index.html"
 
-# Kept only so an older workspace can be migrated once. Runtime code must not use these paths.
-LEGACY_CURRENT = LOCAL / "current"
-LEGACY_CURRENT_ASSETS = LEGACY_CURRENT / "assets"
-LEGACY_CURRENT_META = LEGACY_CURRENT / "project.json"
 ACTIVE_PROJECT_LOCK = threading.RLock()
 
 
@@ -261,20 +254,7 @@ def reconcile_active_project(*, repair: bool = True) -> Path:
 
 def resolve_source_root(source: Path) -> Path:
     raw = source.expanduser()
-    candidates = [raw if raw.is_absolute() else (ROOT / raw)]
-
-    if not raw.is_absolute():
-        parts = raw.parts
-        if parts and parts[0] == "work":
-            candidates.append(LOCAL_WORK.joinpath(*parts[1:]))
-        elif parts and parts[0] != ".local":
-            candidates.append(LOCAL_WORK / raw)
-
-    for candidate in candidates:
-        resolved = candidate.resolve()
-        if resolved.exists() and resolved.is_dir():
-            return resolved
-    return candidates[0].resolve()
+    return (raw if raw.is_absolute() else ROOT / raw).resolve()
 
 
 def resolve_source(source: Path) -> dict[str, Path | None]:
@@ -327,7 +307,7 @@ def ensure_shell() -> Path:
 
 
 def load_source(source: Path, *, language: str | None = None) -> None:
-    """Compatibility command: validate and select a source without copying it."""
+    """Validate and select a project without copying it."""
     del language
     resolved = resolve_source(source)
     root = resolved["root"]
@@ -336,12 +316,7 @@ def load_source(source: Path, *, language: str | None = None) -> None:
     if is_local_project(root):
         activate_source(root)
     print(f"Selected source: {root}")
-    print("Runtime mode: direct project paths (no .local/current mirror)")
-
-
-def ensure_current(source: Path | None = None) -> None:
-    """Legacy name retained for callers; now validates the direct project source."""
-    project_paths(source)
+    print("Runtime mode: direct project paths")
 
 
 def load_scenes(source: Path | None = None) -> list[dict]:
@@ -376,29 +351,6 @@ def shell_relative_url(source: Path | None = None) -> str:
 
 def output_path(value: str, source: Path | None = None) -> Path:
     path = Path(value).expanduser()
-    if path.is_absolute():
-        return path
-    parts = path.parts
-    if parts and parts[0] == ".local":
-        return ROOT / path
-    if parts and parts[0] == "output":
-        return LOCAL_OUTPUT.joinpath(*parts[1:])
+    if path.is_absolute() or path.drive or len(path.parts) != 1 or path.name in {"", ".", ".."}:
+        raise SystemExit("--output must be a filename; renders are always written to the project's output directory")
     return project_paths(source).output / path
-
-
-def migrate_legacy_current() -> Path | None:
-    """Move the last mirrored assets back once, then remove .local/current."""
-    if not LEGACY_CURRENT.exists():
-        return None
-    meta = read_json(LEGACY_CURRENT_META)
-    source_value = meta.get("source") if isinstance(meta, dict) else None
-    source = Path(source_value).resolve() if isinstance(source_value, str) and source_value else None
-    if source and source.exists() and source.is_dir():
-        target = project_generated_dir(source)
-        if LEGACY_CURRENT_ASSETS.exists():
-            target.mkdir(parents=True, exist_ok=True)
-            shutil.copytree(LEGACY_CURRENT_ASSETS, target, dirs_exist_ok=True)
-        if is_local_project(source):
-            activate_source(source)
-    shutil.rmtree(LEGACY_CURRENT)
-    return source

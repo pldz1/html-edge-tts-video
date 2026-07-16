@@ -9,10 +9,10 @@ edited as a project.
 
 ```text
 .local/work/<project-slug>/
-  scenes.json
-  body.html
-  media/ optional
-  captions.json optional after manual subtitle edits
+  scenes.json      // Required
+  body.html        // Required
+  media/           // Optional
+  captions.json    // Optional. Created only when subtitle text is edited.
 ```
 
 Choose a unique kebab-case `<project-slug>` and orientation before writing any source. The manifest
@@ -78,18 +78,25 @@ source. Let the resolved language choose the default edge-tts voice.
 
 ## Build
 
+For a final narrated video, use this order:
+
 ```bash
 python main.py check --source .local/work/<project-slug>
 python main.py tts --source .local/work/<project-slug>
-python main.py studio --source .local/work/<project-slug>
-python main.py render --source .local/work/<project-slug> --output video.mp4
+python main.py render --source .local/work/<project-slug> --size 720p --output <project-slug>.mp4
 ```
 
-Use `python main.py offline --source <source-folder>` for a silent estimated timeline. Use
-`python main.py prompt --topic "<topic>" --target agent --aspect-ratio 16:9` to compose the single canonical source
-prompt from `docs/source-prompt.md`.
+The `tts` command creates real narration and WordBoundary timing. The `offline` command creates an
+estimated timeline with deliberately silent audio and is only for layout preview; do not render its
+assets as a final narrated video. Use `studio` when an interactive preview or caption edit is
+useful. A relative output name resolves inside the selected project, for example the command above
+creates `.local/work/<project-slug>/output/<project-slug>.mp4`. Pass a filename, not a path; renders
+cannot be directed outside the project output directory.
 
-The shell URL `http://127.0.0.1:8765/pipeline/shell/index.html` is an internal Studio/rendering
+Use `python main.py prompt --topic "<topic>" --aspect-ratio 16:9` only when the user wants a prompt
+to paste into a browser-based AI. Code agents should follow this document directly instead.
+
+The shell URL `http://<host_url>:<port>/pipeline/shell/index.html` is an internal Studio/rendering
 surface. Studio owns interactive playback; `?render=1` enables deterministic rendering.
 
 The shell owns the scene transition. It defaults to 0.4 seconds and derives opacity from absolute
@@ -105,9 +112,7 @@ transition system to source files.
 - Use only the FFmpeg binary bundled by `imageio-ffmpeg`.
 - Let actual audio and WordBoundary metadata determine the final timeline.
 - Render captions as shell DOM.
-- Treat `.local/`, `assets/`, and `output/` as generated state, except for the tracked two-file
-  starter at `.local/work/starter/`.
 - Never modify the tracked starter while creating a video. Create and work in a separate
   `.local/work/<project-slug>/` directory.
 - Pipeline commands read the project directly and store timeline/audio under its `generated/`
-  directory. Do not create or depend on `.local/current/`.
+  directory and renders under its `output/` directory.

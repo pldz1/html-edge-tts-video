@@ -11,10 +11,10 @@ Create every video in its own project folder under `.local/work`:
 
 ```text
 .local/work/<project-slug>/
-  scenes.json
-  body.html
-  media/ optional
-  captions.json optional after subtitle edits
+  scenes.json      // Required
+  body.html        // Required
+  media/           // Optional
+  captions.json    // Optional. Created only when subtitle text is edited.
 ```
 
 Before authoring, choose a unique kebab-case `<project-slug>` and an immutable aspect ratio. Create
@@ -41,27 +41,29 @@ Start `scenes.json` with `id: "intro"`. Give every scene a unique lowercase `id`
 `body.html`. In portrait projects, categories must use 2-3 CJK characters or one short English word
 of at most 8 letters; the shell keeps the chapter rail to one horizontal row.
 
-Generate the canonical source prompt when helpful:
+Generate the canonical Web AI source prompt only when the user wants to create source with an
+external browser-based AI:
 
 ```bash
-python main.py prompt --topic "<topic>" --language auto --target agent
-python main.py prompt --topic "<topic>" --language auto --target web-ai --aspect-ratio 9:16
+python main.py prompt --topic "<topic>" --language auto --aspect-ratio 9:16
 ```
 
-Build and verify:
+Build and verify a final narrated video:
 
 ```bash
 python main.py check --source .local/work/<project-slug>
 python main.py tts --source .local/work/<project-slug>
-python main.py studio --source .local/work/<project-slug>
-python main.py render --source .local/work/<project-slug> --output video.mp4
+python main.py render --source .local/work/<project-slug> --size 720p --output <project-slug>.mp4
 ```
+
+Use `studio` only when an interactive preview or caption edit is useful. Use `offline` only for a
+silent layout preview; never substitute its silent narration for `tts` when producing a final
+video. A relative `--output` filename is written to
+`.local/work/<project-slug>/output/<filename>`. Pass a filename, not a path.
 
 Infer `zh-CN` or `en-US` when the user does not specify a language. Preserve imported source
 language unless the user requests translation. The stable shell owns narration timing, captions,
 the compact chapter rail, playback, and deterministic dip-to-background transitions.
 
-Treat `.local/`, `assets/`, and `output/` as generated state, except for the tracked two-file starter
-at `.local/work/starter/`. Project creation adds an untracked `manifest.json`, and Studio writes
-generated media beside each project; it does not create a global current workspace. The starter must remain unchanged; all
-authored videos belong in their own `.local/work/<project-slug>/` folder.
+Keep authored source in `.local/work/<project-slug>/`; keep generated narration and rendered MP4s
+in that project's `generated/` and `output/` directories.

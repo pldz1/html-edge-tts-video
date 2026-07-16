@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compose the canonical two-file source-generation prompt."""
+"""Compose the canonical Web AI two-file source-generation prompt."""
 from __future__ import annotations
 
 import argparse
@@ -33,15 +33,14 @@ def detect_language(text: str, fallback: str = "zh-CN") -> str:
 
 
 def compose_prompt(payload: dict[str, Any]) -> dict[str, str]:
+    if "target" in payload:
+        raise ValueError("target is not supported; prompts are always generated for Web AI")
     requested_language = str(payload.get("language") or "auto")
     inference_text = " ".join(str(payload.get(key) or "") for key in ["topic", "audience", "notes"])
     language = detect_language(inference_text) if requested_language == "auto" else requested_language
     if language not in LANGUAGE_LABELS:
         raise ValueError("language must be auto, zh-CN, or en-US")
 
-    target = str(payload.get("target") or "web-ai")
-    if target not in {"agent", "web-ai"}:
-        raise ValueError(f"unsupported prompt target: {target}")
     aspect_ratio = normalize_aspect_ratio(payload.get("aspectRatio"))
     aspect_instruction = {
         "16:9": (
@@ -69,39 +68,21 @@ def compose_prompt(payload: dict[str, Any]) -> dict[str, str]:
     for marker, value in replacements.items():
         prompt = prompt.replace(marker, value)
 
-    delivery = {
-        "agent": (
-            "Before writing source, create a unique kebab-case project folder at "
-            f".local/work/<project-slug> inside this repository with `python main.py init --target "
-            f".local/work/<project-slug> --aspect-ratio {aspect_ratio}`. Create or replace scenes.json and "
-            "body.html only inside that new project folder. Never modify .local/work/starter; it is "
-            "a read-only template, not a working project. Do not return only a plan when the "
-            "workspace is writable. After writing the files, run `python main.py check --source "
-            ".local/work/<project-slug>`."
-        ),
-        "web-ai": (
-            "Return exactly two fenced code blocks with filenames: scenes.json in a json fence and "
-            "body.html in an html fence. The body.html fence must contain the complete document from "
-            "<!doctype html> through </html>, with no omitted sections, truncation, or ellipses."
-        ),
-    }[target]
     return {
-        "prompt": f"{prompt.strip()}\n\n## Delivery\n\n{delivery}\n",
+        "prompt": f"{prompt.strip()}\n",
         "language": language,
-        "target": target,
         "aspectRatio": aspect_ratio,
     }
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Compose a two-file HTML slide-video source prompt.")
+    parser = argparse.ArgumentParser(description="Compose a Web AI two-file HTML slide-video source prompt.")
     parser.add_argument("--topic", required=True)
     parser.add_argument("--audience", default="")
     parser.add_argument("--tone", default="Clear and concise")
     parser.add_argument("--scene-count", default="5")
     parser.add_argument("--notes", default="")
     parser.add_argument("--language", choices=["auto", "zh-CN", "en-US"], default="auto")
-    parser.add_argument("--target", choices=["agent", "web-ai"], default="agent")
     parser.add_argument("--aspect-ratio", choices=ASPECT_RATIOS, default=DEFAULT_ASPECT_RATIO)
     args = parser.parse_args()
     result = compose_prompt({
@@ -111,7 +92,6 @@ def main() -> None:
         "sceneCount": args.scene_count,
         "notes": args.notes,
         "language": args.language,
-        "target": args.target,
         "aspectRatio": args.aspect_ratio,
     })
     print(result["prompt"], end="")

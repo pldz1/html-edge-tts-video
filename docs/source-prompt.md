@@ -10,18 +10,13 @@ Additional requirements: {{NOTES}}
 
 ## Output contract
 
-Create only `scenes.json` and `body.html`. An optional `media/` folder may hold local assets.
+Author only `scenes.json` and `body.html`. An optional `media/` folder may hold local assets.
 `body.html` must be one complete HTML document: it must begin with `<!doctype html>`, contain
 `<html>`, `<head>`, and `<body>`, and end with `</body></html>`. Never return an HTML fragment,
 truncate the document, or use ellipses/placeholders for omitted markup or CSS.
 Keep the implementation compact enough to return in full: reuse CSS classes and shared components.
 If output space is limited, reduce decorative detail rather than omitting scenes, styles, or closing
 tags.
-
-When operating as a code agent in this repository, create a unique kebab-case project directory at
-`.local/work/<project-slug>/` before writing these files. Write the new video's source only inside
-that directory. Never edit `.local/work/starter/`; it is the tracked template, not a working
-project.
 
 - Make `scenes.json` a non-empty array. Start with `id: "intro"`.
 - Give every scene a unique lowercase `id`, a short `category`, and natural `narration`. Keep a
@@ -40,31 +35,34 @@ Use this complete `body.html` structure as the integration pattern. Expand it wi
 for every scene instead of omitting repeated sections:
 
 ```html
-<!doctype html>
+<!DOCTYPE html>
 <html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Presentation video</title>
-  <style>
-    #stage { background: transparent; color: #173b3d; }
-    .content-scene {
-      position: absolute;
-      inset: 0;
-      padding: 7vh 7vw 22vh;
-      overflow: hidden;
-    }
-  </style>
-</head>
-<body>
-  <section class="content-scene" data-scene="intro">
-    <h1>Opening title</h1>
-  </section>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Presentation video</title>
+    <style>
+      #stage {
+        background: transparent;
+        color: #173b3d;
+      }
+      .content-scene {
+        position: absolute;
+        inset: 0;
+        padding: 7vh 7vw 22vh;
+        overflow: hidden;
+      }
+    </style>
+  </head>
+  <body>
+    <section class="content-scene" data-scene="intro">
+      <h1>Opening title</h1>
+    </section>
 
-  <section class="content-scene" data-scene="next-scene">
-    <h2>Next idea</h2>
-  </section>
-</body>
+    <section class="content-scene" data-scene="next-scene">
+      <h2>Next idea</h2>
+    </section>
+  </body>
 </html>
 ```
 
@@ -110,13 +108,18 @@ three-column layouts, use Grid with `minmax(0, 1fr)` and give children `min-widt
 each card a `vw` width. Keep gaps inside the grid's available width. For example:
 
 ```css
-.scene-title { font-size: clamp(36px, 4vw, 64px); line-height: 1.08; }
+.scene-title {
+  font-size: clamp(36px, 4vw, 64px);
+  line-height: 1.08;
+}
 .three-column {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: clamp(16px, 2vw, 32px);
 }
-.three-column > * { min-width: 0; }
+.three-column > * {
+  min-width: 0;
+}
 ```
 
 Keep important content in the top 80% of the frame. The stable video shell owns captions, the compact
@@ -133,20 +136,20 @@ When a module is needed, insert this interface immediately before the document's
 
 ```html
 <script type="module">
-let host;
+  let host;
 
-export async function mount({ root }) {
-  host = root.querySelector('[data-scene="intro"]');
-}
+  export async function mount({ root }) {
+    host = root.querySelector('[data-scene="intro"]');
+  }
 
-export function renderAtTime(seconds, { sceneProgress }) {
-  if (!host) return;
-  host.style.setProperty('--scene-progress', String(sceneProgress));
-}
+  export function renderAtTime(seconds, { sceneProgress }) {
+    if (!host) return;
+    host.style.setProperty("--scene-progress", String(sceneProgress));
+  }
 
-export function destroy() {
-  host = null;
-}
+  export function destroy() {
+    host = null;
+  }
 </script>
 ```
 
@@ -156,3 +159,9 @@ does not target `html` or `body`; important content stays above the reserved bot
 respect the size limits; every multi-column layout fits inside its scene without horizontal
 overflow or clipped children; and an optional script is one inline module exporting both `mount()`
 and `renderAtTime()`.
+
+## Delivery
+
+Return exactly two fenced code blocks with filenames: `scenes.json` in a `json` fence and
+`body.html` in an `html` fence. The `body.html` fence must contain the complete document from
+`<!doctype html>` through `</html>`, with no omitted sections, truncation, or ellipses.

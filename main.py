@@ -75,10 +75,6 @@ def copy_source_template(args: argparse.Namespace) -> None:
     print(f"python main.py tts --source {target}")
 
 
-def load(args: argparse.Namespace) -> None:
-    load_source(Path(args.source))
-
-
 def validate_source(source: str | None) -> None:
     command = [PYTHON, "pipeline/validate_sources.py"]
     if source:
@@ -218,7 +214,6 @@ def prompt(args: argparse.Namespace) -> None:
         "sceneCount": args.scene_count,
         "notes": args.notes,
         "language": args.language,
-        "target": args.target,
         "aspectRatio": args.aspect_ratio,
     })
     print(result["prompt"], end="")
@@ -371,10 +366,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     init_parser.set_defaults(func=copy_source_template)
 
-    load_parser = subparsers.add_parser("load")
-    load_parser.add_argument("--source", required=True, help="Folder containing scenes.json and body.html.")
-    load_parser.set_defaults(func=load)
-
     install_parser = subparsers.add_parser(
         "install",
         help="Install Python dependencies and Playwright Chromium Headless Shell.",
@@ -463,14 +454,13 @@ def build_parser() -> argparse.ArgumentParser:
     voice_preview_parser.add_argument("--pitch", default="+0Hz")
     voice_preview_parser.set_defaults(func=voice_preview)
 
-    prompt_parser = subparsers.add_parser("prompt", help="Compose the two-file slide-video source prompt.")
+    prompt_parser = subparsers.add_parser("prompt", help="Compose the Web AI two-file slide-video source prompt.")
     prompt_parser.add_argument("--topic", required=True)
     prompt_parser.add_argument("--audience", default="")
     prompt_parser.add_argument("--tone", default="Clear and concise")
     prompt_parser.add_argument("--scene-count", default="5")
     prompt_parser.add_argument("--notes", default="")
     prompt_parser.add_argument("--language", choices=["auto", "zh-CN", "en-US"], default="auto")
-    prompt_parser.add_argument("--target", choices=["agent", "web-ai"], default="agent")
     prompt_parser.add_argument("--aspect-ratio", choices=ASPECT_RATIOS, default=DEFAULT_ASPECT_RATIO)
     prompt_parser.set_defaults(func=prompt)
 

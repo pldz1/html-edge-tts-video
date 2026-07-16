@@ -90,7 +90,7 @@ def validate_scenes(
     aspect_ratio: str = DEFAULT_ASPECT_RATIO,
 ) -> list[dict]:
     if not scenes_file.exists():
-        fail("missing scenes.json; run python main.py load --source <folder>")
+        fail("missing scenes.json; initialize a project and pass its folder with --source")
 
     try:
         scenes = json.loads(scenes_file.read_text(encoding="utf-8"))

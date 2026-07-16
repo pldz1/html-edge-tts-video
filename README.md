@@ -38,16 +38,13 @@ The Headless Shell and every Playwright recording, profile, screenshot, trace, a
 stay under `.local/playwright/`. The pipeline never uses a system browser, Playwright's user-level
 browser cache, or system FFmpeg.
 
-## Try the starter
+## Try the starter source
 
 The tracked starter is a read-only example. Copy it into a project folder before making changes:
 
 ```bash
 python main.py init --target .local/work/my-video
-python main.py offline --source .local/work/my-video
 python main.py check --source .local/work/my-video
-python main.py studio --source .local/work/my-video
-python main.py render --source .local/work/my-video --output my-video.mp4
 ```
 
 For a portrait project, choose the orientation at creation time:
@@ -56,12 +53,21 @@ For a portrait project, choose the orientation at creation time:
 python main.py init --target .local/work/my-portrait-video --aspect-ratio 9:16
 ```
 
-Use `tts` instead of `offline` when network TTS is available:
+Use `offline` only when you want a silent estimated timeline for layout preview:
+
+```bash
+python main.py offline --source .local/work/my-video
+```
+
+For a narrated final MP4, generate TTS first and keep the source explicit when rendering:
 
 ```bash
 python main.py tts --source .local/work/my-video
-python main.py render --output my-video.mp4
+python main.py render --source .local/work/my-video --size 720p --output my-video.mp4
 ```
+
+The rendered file is `.local/work/my-video/output/my-video.mp4`. `--output` accepts a filename, not
+a path; renders always stay inside the selected project's `output/` directory.
 
 ## Source format
 
@@ -114,12 +120,14 @@ and `renderAtTime()` functions; see `docs/agent-skill.md`.
 ## Generate an AI prompt
 
 ```bash
-python main.py prompt --topic "介绍一个新产品" --language zh-CN --target agent
-python main.py prompt --topic "Explain event loops" --language en-US --target web-ai
+python main.py prompt --topic "介绍一个新产品" --language zh-CN
+python main.py prompt --topic "Explain event loops" --language en-US
 ```
 
 The single template is `docs/source-prompt.md`. It keeps the visual language consistently bright,
 editorial, and blue-green while allowing the AI to choose a fitting composition for each subject.
+Studio and the prompt CLI generate one Web AI delivery form for copying into a browser-based AI.
+Code agents follow `SKILL.md` and `docs/agent-skill.md` directly instead of generating a prompt.
 
 ## Normal loop
 
@@ -169,8 +177,7 @@ narration, matching `[data-scene]` sections, embedded CSS, and the absence of tr
 may contain at most one inline module script. It must export `mount()` and `renderAtTime()`, avoid an
 independent animation loop, and pin Three.js versions.
 
-Sidecar `body.css`, `visual.js`, nested `content/`, and `index.html` compatibility paths are not
-supported.
+Sidecar `body.css`, `visual.js`, nested `content/`, and `index.html` paths are not supported.
 
 ### Prompt, timeline, and rendering
 
@@ -211,15 +218,12 @@ A project manifest stores identity, display name, the single Studio `active` sel
 import, defaults to 16:9, and disables that choice when an existing project is edited. Resolution
 presets automatically swap width and height for portrait renders. The starter manifest is generated
 locally with `active: true` and `aspectRatio: "16:9"` on first use and is
-not tracked by Git. Selecting a project only updates manifest state; Studio never copies it into a
-`.local/current/` directory. Agent-created kebab-case project folders keep their directory names
-when Studio discovers them. Presentation style and rendering engine remain properties of
-`body.html`. The built-in `starter` project is read-only and cannot be deleted through Studio.
+not tracked by Git. Selecting a project only updates manifest state. Agent-created kebab-case
+project folders keep their directory names when Studio discovers them. Presentation style and
+rendering engine remain properties of `body.html`. The built-in `starter` project is read-only and
+cannot be deleted through Studio.
 
 Voice previews are independent of project selection and live under `.local/voice-preview/`.
-On first Studio startup after upgrading, legacy `.local/current/assets` are copied back to their
-recorded project `generated/` directory and `.local/current/` is removed. Existing
-`.local/assets/voice-preview/` content moves to the independent voice-preview directory.
 
 ## Checks and diagnostics
 
