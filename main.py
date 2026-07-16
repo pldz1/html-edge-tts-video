@@ -8,9 +8,23 @@ import os
 import shutil
 import subprocess
 import sys
+import time
+import urllib.request
 from pathlib import Path
 
-from pipeline.factory import CURRENT_SOURCE, LOCAL_WORK, ROOT, SHELL, STARTER_SOURCE, load_source
+from pipeline.factory import (
+    LOCAL_WORK,
+    PLAYWRIGHT_BROWSERS,
+    PROJECT_MANIFEST_FILE,
+    ROOT,
+    SHELL,
+    STARTER_SOURCE,
+    ensure_starter_manifest,
+    iter_project_roots,
+    load_source,
+    project_paths,
+    read_json,
+)
 from pipeline.prompt_composer import compose_prompt, detect_language
 
 
@@ -56,7 +70,9 @@ def install(args: argparse.Namespace) -> None:
         print(f"Using one-time Python package index: {args.pip_index_url}")
     run(pip_command)
 
-    playwright_env = os.environ.copy()
+    from pipeline.toolchain import configure_playwright_environment
+
+    playwright_env = configure_playwright_environment(os.environ.copy())
     if args.playwright_download_host:
         playwright_env["PLAYWRIGHT_DOWNLOAD_HOST"] = args.playwright_download_host
         print(f"Using one-time Playwright download host: {args.playwright_download_host}")
@@ -68,7 +84,7 @@ def tts(args: argparse.Namespace) -> None:
     validate_source(args.source)
     voice = args.voice
     if not voice:
-        scenes = json.loads((CURRENT_SOURCE / "scenes.json").read_text(encoding="utf-8"))
+        scenes = json.loads(project_paths(Path(args.source) if args.source else None).scenes.read_text(encoding="utf-8"))
         language = detect_language(" ".join(str(scene.get("narration") or "") for scene in scenes if isinstance(scene, dict)))
         voice = {
             "zh-CN": "zh-CN-XiaoxiaoNeural",
@@ -186,8 +202,7 @@ def prompt(args: argparse.Namespace) -> None:
 
 def check(args: argparse.Namespace) -> None:
     command = [PYTHON, "pipeline/validate_sources.py"]
-    if args.source:
-        command.extend(["--source", args.source])
+    command.extend(["--source", args.source or str(STARTER_SOURCE)])
     run(command)
     run(["node", "--check", str(SHELL / "runtime.js")])
     run(["node", "--check", "studio/web/captions/captions.js"])
@@ -199,6 +214,111 @@ def check(args: argparse.Namespace) -> None:
         *sorted((ROOT / "studio").glob("*.py")),
     ]
     run([PYTHON, "-m", "py_compile", *map(str, python_files)])
+    validate_project_manifests()
+
+
+def validate_project_manifests() -> None:
+    ensure_starter_manifest()
+    ids: set[str] = set()
+    active: list[str] = []
+    for root in iter_project_roots():
+        manifest = read_json(root / PROJECT_MANIFEST_FILE)
+        if not isinstance(manifest, dict):
+            continue  # Agent-authored projects receive a manifest when Studio first discovers them.
+        if manifest.get("version") != 5 or not isinstance(manifest.get("active"), bool):
+            raise SystemExit(f"Project manifest must use version 5 and a boolean active field: {root}")
+        project_id = str(manifest.get("id") or "").strip().lower()
+        if not project_id:
+            raise SystemExit(f"Project manifest is missing id: {root}")
+        if project_id in ids:
+            raise SystemExit(f"Duplicate project manifest id: {project_id}")
+        ids.add(project_id)
+        if manifest.get("active") is True:
+            active.append(project_id)
+        if root.resolve() == STARTER_SOURCE.resolve():
+            if project_id != "starter" or manifest.get("system") is not True or manifest.get("readOnly") is not True:
+                raise SystemExit("Starter manifest must use id=starter, system=true, and readOnly=true")
+    if len(active) != 1:
+        raise SystemExit(f"Expected exactly one active project manifest; found {len(active)}")
+    print(f"Project manifest validation passed: active={active[0]}")
+
+
+def doctor(args: argparse.Namespace) -> None:
+    del args
+    from pipeline.toolchain import configure_playwright_environment, ffmpeg_executable
+
+    configure_playwright_environment()
+    ffmpeg = Path(ffmpeg_executable())
+    print(f"FFmpeg: {ffmpeg}")
+    print(f"Playwright browser cache: {PLAYWRIGHT_BROWSERS.resolve()}")
+    try:
+        from playwright.sync_api import sync_playwright
+
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            browser.close()
+        shells = sorted(PLAYWRIGHT_BROWSERS.glob("chromium_headless_shell-*/**/chrome-headless-shell.exe"))
+        if not shells:
+            raise RuntimeError("managed chrome-headless-shell executable was not found")
+        executable = shells[-1].resolve()
+    except Exception as exc:  # noqa: BLE001 - doctor must report environment failures clearly.
+        raise SystemExit(f"Playwright Chromium Headless Shell check failed: {exc}\nRun: python main.py install") from exc
+    print(f"Chromium Headless Shell: {executable}")
+    print("Toolchain doctor passed")
+
+
+def smoke(args: argparse.Namespace) -> None:
+    from pipeline.toolchain import configure_playwright_environment
+
+    configure_playwright_environment()
+    process = subprocess.Popen(
+        [PYTHON, "studio/server.py", "--host", "127.0.0.1", "--port", str(args.port)],
+        cwd=ROOT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.STDOUT,
+    )
+    origin = f"http://127.0.0.1:{args.port}"
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    try:
+        deadline = time.time() + 12
+        state = None
+        while time.time() < deadline:
+            if process.poll() is not None:
+                raise SystemExit(f"Studio smoke server exited early; port {args.port} may already be in use")
+            try:
+                with opener.open(f"{origin}/api/studio/state", timeout=1) as response:
+                    state = json.loads(response.read().decode("utf-8"))
+                    break
+            except OSError:
+                time.sleep(0.2)
+        if not isinstance(state, dict):
+            raise SystemExit("Studio smoke server did not become ready")
+
+        from playwright.sync_api import sync_playwright
+
+        shell = str(state["urls"]["shell"])
+        separator = "&" if "?" in shell else "?"
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            page = browser.new_page(viewport={"width": 1280, "height": 720})
+            page.goto(f"{origin}/studio", wait_until="domcontentloaded")
+            page.wait_for_function(
+                "document.querySelector('#workspaceProjectId')?.textContent.trim() === 'starter'"
+            )
+            page.goto(f"{origin}{shell}{separator}render=1", wait_until="networkidle")
+            page.wait_for_function("window.compositionReady === true || Boolean(window.compositionError)")
+            error = page.evaluate("() => window.compositionError || ''")
+            browser.close()
+        if error:
+            raise SystemExit(f"Studio composition smoke failed: {error}")
+        print(f"Studio smoke passed: {state['activeProject']['id']}")
+    finally:
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=2)
 
 
 def add_source_args(parser: argparse.ArgumentParser) -> None:
@@ -264,6 +384,13 @@ def build_parser() -> argparse.ArgumentParser:
     check_parser = subparsers.add_parser("check")
     add_source_args(check_parser)
     check_parser.set_defaults(func=check)
+
+    doctor_parser = subparsers.add_parser("doctor", help="Verify managed FFmpeg and Chromium Headless Shell.")
+    doctor_parser.set_defaults(func=doctor)
+
+    smoke_parser = subparsers.add_parser("smoke", help="Load the active Studio composition in managed headless Chromium.")
+    smoke_parser.add_argument("--port", type=int, default=8876, choices=range(1, 65536), metavar="PORT")
+    smoke_parser.set_defaults(func=smoke)
 
     render_parser = subparsers.add_parser("render")
     add_source_args(render_parser)

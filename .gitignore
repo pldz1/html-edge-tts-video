@@ -12,8 +12,9 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Factory workspace, local projects, generated media, and render outputs.
-# The two-file Studio starter is the only tracked exception under .local/.
+# Local projects, manifests, project generated media, voice previews, Playwright
+# browsers/recordings, and render outputs. The starter's two authored source
+# files are the only tracked exception under .local/; its manifest is generated.
 .local/*
 !.local/work/
 .local/work/*

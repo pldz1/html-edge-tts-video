@@ -27,7 +27,7 @@ never place a video's `scenes.json` or `body.html` directly in `.local/work/`.
 `scenes.json` must be a non-empty array. Start with `id: "intro"`. Require:
 
 - `id`: unique lowercase letters, numbers, and hyphens.
-- `category`: a short chapter label, at most 12 characters.
+- `category`: a short chapter label, within 12 CJK characters or about 24 Latin characters.
 - `narration`: natural spoken content.
 
 Visible titles, summaries, labels, charts, and diagrams belong in `body.html`, not duplicated scene
@@ -71,11 +71,10 @@ source. Let the resolved language choose the default edge-tts voice.
 ## Build
 
 ```bash
-python main.py load --source .local/work/<project-slug>
-python main.py check
+python main.py check --source .local/work/<project-slug>
 python main.py tts --source .local/work/<project-slug>
-python main.py studio
-python main.py render --output video.mp4
+python main.py studio --source .local/work/<project-slug>
+python main.py render --source .local/work/<project-slug> --output video.mp4
 ```
 
 Use `python main.py offline --source <source-folder>` for a silent estimated timeline. Use
@@ -93,6 +92,8 @@ transition system to source files.
 
 - Install dependencies only with `python main.py install`.
 - Use Python Playwright's Chromium Headless Shell installed with `--only-shell chromium`.
+- Keep the managed browser, recordings, profiles, screenshots, traces, and temporary Playwright
+  files under `.local/playwright/`; never use Playwright's user-level cache or a system browser.
 - Use only the FFmpeg binary bundled by `imageio-ffmpeg`.
 - Let actual audio and WordBoundary metadata determine the final timeline.
 - Render captions as shell DOM.
@@ -100,3 +101,5 @@ transition system to source files.
   starter at `.local/work/starter/`.
 - Never modify the tracked starter while creating a video. Create and work in a separate
   `.local/work/<project-slug>/` directory.
+- Pipeline commands read the project directly and store timeline/audio under its `generated/`
+  directory. Do not create or depend on `.local/current/`.

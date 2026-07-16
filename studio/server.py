@@ -16,7 +16,7 @@ if str(APP_ROOT) not in sys.path:
     sys.path.insert(0, str(APP_ROOT))
 
 from pipeline.captions import default_doc, load_effective_doc, load_timeline, save_doc
-from pipeline.factory import CURRENT_SOURCE, ROOT, active_source_root, shell_path
+from pipeline.factory import ROOT, active_source_root, project_web_base, shell_relative_url
 from studio.api import ApiError, handle_get, handle_post
 
 
@@ -141,13 +141,6 @@ class FactoryHandler(SimpleHTTPRequestHandler):
             super().do_GET()
             return
 
-        # captions.json is optional until the user saves manual edits. Return
-        # JSON null so the shell can use generated timeline cues without a
-        # noisy missing-resource error in every preview iframe.
-        if path == "/.local/current/source/captions.json" and not (CURRENT_SOURCE / "captions.json").exists():
-            self.send_json(200, None)
-            return
-
         try:
             studio_response = handle_get(path, query)
         except ApiError as exc:
@@ -166,6 +159,7 @@ class FactoryHandler(SimpleHTTPRequestHandler):
                 self.send_error_json(409, str(exc))
                 return
             source_root = active_source_root()
+            web_base = project_web_base(source_root)
             self.send_json(
                 200,
                 {
@@ -174,9 +168,10 @@ class FactoryHandler(SimpleHTTPRequestHandler):
                     "saved": saved,
                     "duration": timeline.get("duration"),
                     "scenes": timeline.get("scenes", []),
-                    "previewUrl": shell_path(),
-                    "audioUrl": "/.local/current/assets/narration.mp3",
+                    "previewUrl": shell_relative_url(source_root),
+                    "audioUrl": f"{web_base}/generated/narration.mp3",
                     "sourcePath": str(source_root / "captions.json") if source_root else None,
+                    "sourceUrl": f"{web_base}/",
                 },
             )
             return

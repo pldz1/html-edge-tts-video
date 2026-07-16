@@ -18,9 +18,7 @@ from typing import Any
 from urllib.parse import quote
 
 from pipeline.factory import (
-    CURRENT_ASSETS,
-    CURRENT_META,
-    CURRENT_SOURCE,
+    LOCAL,
     LOCAL_ASSETS,
     LOCAL_OUTPUT,
     LOCAL_WORK,
@@ -28,15 +26,18 @@ from pipeline.factory import (
     PROJECT_OUTPUT_DIR,
     ROOT,
     STARTER_SOURCE,
+    activate_source,
     active_source_root,
+    atomic_write_json,
+    atomic_write_text,
     is_local_project,
-    load_source,
-    output_path,
-    persist_current_assets,
+    migrate_legacy_current,
+    project_paths,
+    reconcile_active_project,
     rel,
     resolve_source,
     slug,
-    shell_path,
+    shell_relative_url,
 )
 from pipeline.validate_sources import (
     has_embedded_visual,
@@ -54,7 +55,7 @@ JOB_LOG_LIMIT = 500
 RENDER_SIZES = {"480p", "720p", "1080p", "2k", "1440p", "4k", "2160p"}
 CAPTURE_MODES = {"auto", "video", "frames"}
 RENDER_PROGRESS_PREFIX = "RENDER_PROGRESS "
-VOICE_PREVIEW_DIR = LOCAL_ASSETS / "voice-preview"
+VOICE_PREVIEW_DIR = LOCAL / "voice-preview"
 VOICE_OPTIONS = [
     {"id": "zh-CN-XiaoxiaoNeural", "label": "晓晓", "locale": "zh-CN", "gender": "Female"},
     {"id": "zh-CN-YunxiNeural", "label": "云希", "locale": "zh-CN", "gender": "Male"},
@@ -196,9 +197,15 @@ def voice_matches_language(voice: str, language: str) -> bool:
 
 
 def new_project_id() -> str:
+    existing_ids = set()
+    if LOCAL_WORK.exists():
+        for child in LOCAL_WORK.iterdir():
+            manifest = read_json_file(child / PROJECT_MANIFEST_FILE) if child.is_dir() else None
+            if isinstance(manifest, dict):
+                existing_ids.add(str(manifest.get("id") or "").lower())
     while True:
         value = uuid.uuid4().hex[:8]
-        if not (LOCAL_WORK / value).exists():
+        if value not in existing_ids and not (LOCAL_WORK / value).exists():
             return value
 
 
@@ -246,57 +253,44 @@ def ensure_project_manifest(
     ) if isinstance(scenes, list) else ""
     resolved_language = detect_language(language_text) if requested_language == "auto" else requested_language
     retained = {key: value for key, value in data.items() if key not in {"contentTheme", "engine", "theme"}}
+    starter = source_root.resolve() == STARTER_SOURCE.resolve()
     manifest = {
         **retained,
-        "version": 4,
+        "version": 5,
         "id": current_id,
-        "name": str(name or data.get("name") or project_name_from_source(source_root)).strip() or "Untitled project",
+        "name": (
+            "Starter"
+            if starter
+            else str(name or data.get("name") or project_name_from_source(source_root)).strip() or "Untitled project"
+        ),
+        "active": bool(data.get("active", starter and not data)),
+        "system": starter,
+        "readOnly": starter,
         "language": requested_language,
         "resolvedLanguage": resolved_language,
         "createdAt": str(data.get("createdAt") or now),
         "updatedAt": str(data.get("updatedAt") or now),
+        "activatedAt": data.get("activatedAt") or (now if bool(data.get("active", starter and not data)) else None),
         "tts": normalize_tts_settings(data.get("tts") or legacy_settings.get("tts"), resolved_language),
     }
     if is_local_project(source_root):
         source_root.mkdir(parents=True, exist_ok=True)
-        manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        if manifest != existing:
+            atomic_write_json(manifest_path, manifest)
         legacy_path = source_root / PROJECT_SETTINGS_FILE
         if legacy_path.exists():
             legacy_path.unlink()
     return manifest
 
 
-def update_active_source_path(old_path: Path, new_path: Path) -> None:
-    meta = read_json_file(CURRENT_META)
-    if not isinstance(meta, dict):
-        return
-    source = str(meta.get("source") or "").strip()
-    if not source or Path(source).resolve() != old_path.resolve():
-        return
-    meta["source"] = str(new_path.resolve())
-    CURRENT_META.write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-
-
 def migrate_local_projects() -> None:
+    migrate_legacy_current()
     LOCAL_WORK.mkdir(parents=True, exist_ok=True)
     for child in list(LOCAL_WORK.iterdir()):
-        if not child.is_dir() or not (child / "scenes.json").exists() or not (child / "body.html").exists():
+        if child.name.startswith(".") or not child.is_dir() or not (child / "scenes.json").exists() or not (child / "body.html").exists():
             continue
-        if child.resolve() == STARTER_SOURCE.resolve():
-            continue
-        manifest = ensure_project_manifest(child)
-        target = LOCAL_WORK / manifest["id"]
-        if child.resolve() == target.resolve():
-            continue
-        if target.exists():
-            manifest = ensure_project_manifest(child, project_id=new_project_id())
-            target = LOCAL_WORK / manifest["id"]
-        old_path = child.resolve()
-        child.rename(target)
-        update_active_source_path(old_path, target.resolve())
-        active = active_source_root()
-        if active and active.resolve() == target.resolve():
-            persist_current_assets(target)
+        ensure_project_manifest(child)
+    reconcile_active_project(repair=True)
 
 
 def read_project_settings(source_root: Path) -> dict[str, Any]:
@@ -312,10 +306,7 @@ def write_project_settings(source_root: Path, settings: dict[str, Any]) -> None:
         )
     manifest["updatedAt"] = utc_now()
     if is_local_project(source_root):
-        (source_root / PROJECT_MANIFEST_FILE).write_text(
-            json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
-            encoding="utf-8",
-        )
+        atomic_write_json(source_root / PROJECT_MANIFEST_FILE, manifest)
 
 
 def active_source_settings() -> dict[str, Any]:
@@ -332,8 +323,13 @@ def safe_project_path(value: str) -> Path:
         return STARTER_SOURCE.resolve()
     if not re.fullmatch(r"[0-9a-f]{8}", project_id):
         raise ApiError(400, "project id must be 8 hexadecimal characters")
-    path = (LOCAL_WORK / project_id).resolve()
-    return path
+    for child in LOCAL_WORK.iterdir():
+        if not child.is_dir():
+            continue
+        manifest = read_json_file(child / PROJECT_MANIFEST_FILE)
+        if isinstance(manifest, dict) and str(manifest.get("id") or "").lower() == project_id:
+            return child.resolve()
+    return (LOCAL_WORK / project_id).resolve()
 
 
 def source_summary(source_root: Path) -> dict[str, Any]:
@@ -373,7 +369,7 @@ def list_projects() -> list[dict[str, Any]]:
     migrate_local_projects()
     projects = []
     for child in sorted(LOCAL_WORK.iterdir(), key=lambda item: item.name.lower()):
-        if not child.is_dir():
+        if child.name.startswith(".") or not child.is_dir():
             continue
         try:
             projects.append(source_summary(child))
@@ -383,7 +379,6 @@ def list_projects() -> list[dict[str, Any]]:
 
 
 def list_outputs(limit: int | None = None, project_slug: str | None = None, project_path: str | None = None) -> list[dict[str, Any]]:
-    LOCAL_OUTPUT.mkdir(parents=True, exist_ok=True)
     files: list[Path] = []
     if project_path:
         project_outputs = Path(project_path) / PROJECT_OUTPUT_DIR
@@ -392,11 +387,15 @@ def list_outputs(limit: int | None = None, project_slug: str | None = None, proj
                 item for item in project_outputs.iterdir()
                 if item.is_file() and item.suffix.lower() in OUTPUT_EXTENSIONS
             )
-    legacy_files = [
-        item
-        for item in LOCAL_OUTPUT.iterdir()
-        if item.is_file() and item.suffix.lower() in OUTPUT_EXTENSIONS
-    ]
+    legacy_files = (
+        [
+            item
+            for item in LOCAL_OUTPUT.iterdir()
+            if item.is_file() and item.suffix.lower() in OUTPUT_EXTENSIONS
+        ]
+        if LOCAL_OUTPUT.exists()
+        else []
+    )
     if project_slug or project_path:
         legacy_files = [item for item in legacy_files if output_belongs_to_project(item, project_slug, project_path)]
     files.extend(legacy_files)
@@ -406,9 +405,10 @@ def list_outputs(limit: int | None = None, project_slug: str | None = None, proj
     return [output_record(item) for item in files]
 
 
-def current_scenes_summary() -> dict[str, Any]:
-    scenes_path = CURRENT_SOURCE / "scenes.json"
-    body_path = CURRENT_SOURCE / "body.html"
+def active_scenes_summary() -> dict[str, Any]:
+    paths = project_paths()
+    scenes_path = paths.scenes
+    body_path = paths.body
     scenes = read_json_file(scenes_path) if scenes_path.exists() else None
     scene_count = len(scenes) if isinstance(scenes, list) else 0
     narration_chars = 0
@@ -435,8 +435,9 @@ def current_scenes_summary() -> dict[str, Any]:
 
 
 def timeline_summary() -> dict[str, Any]:
-    timeline_path = CURRENT_ASSETS / "timeline.json"
-    narration_path = CURRENT_ASSETS / "narration.mp3"
+    paths = project_paths()
+    timeline_path = paths.generated / "timeline.json"
+    narration_path = paths.generated / "narration.mp3"
     result: dict[str, Any] = {
         "exists": timeline_path.exists(),
         "hasNarration": narration_path.exists(),
@@ -452,7 +453,7 @@ def timeline_summary() -> dict[str, Any]:
         result["error"] = "timeline.json is invalid"
         return result
 
-    source_scenes = read_json_file(CURRENT_SOURCE / "scenes.json")
+    source_scenes = read_json_file(paths.scenes)
     source_signature = [
         (scene.get("id"), scene.get("narration"))
         for scene in source_scenes
@@ -466,15 +467,12 @@ def timeline_summary() -> dict[str, Any]:
     result["matchesSource"] = bool(source_signature and source_signature == timeline_signature)
     result["duration"] = timeline.get("duration")
     if not result["matchesSource"]:
-        result["error"] = "timeline/audio do not match current scenes"
+        result["error"] = "timeline/audio do not match the active project source"
     return result
 
 
-def active_project_meta() -> dict[str, Any] | None:
-    source = active_source_root()
-    meta = read_json_file(CURRENT_META) if CURRENT_META.exists() else {}
-    if not source:
-        return None
+def active_project_meta(source_root: Path | None = None) -> dict[str, Any] | None:
+    source = source_root or active_source_root()
     manifest = ensure_project_manifest(source)
     return {
         "id": manifest["id"],
@@ -484,13 +482,13 @@ def active_project_meta() -> dict[str, Any] | None:
         "language": manifest.get("language", "auto"),
         "resolvedLanguage": manifest.get("resolvedLanguage", "zh-CN"),
         "settings": read_project_settings(source),
-        "loadedAt": meta.get("loaded_at") if isinstance(meta, dict) else None,
+        "loadedAt": manifest.get("activatedAt"),
     }
 
 
 def guide_state(state: dict[str, Any]) -> dict[str, str]:
     has_projects = bool(state["projectCount"])
-    has_source = bool(state["current"]["hasSource"])
+    has_source = bool(state["projectSummary"]["hasSource"])
     timeline = state["timeline"]
     has_ready_timeline = bool(timeline["exists"] and timeline["hasNarration"] and timeline["matchesSource"])
     has_outputs = bool(state["outputs"])
@@ -504,13 +502,13 @@ def guide_state(state: dict[str, Any]) -> dict[str, str]:
         return {
             "stage": "load",
             "title": "Choose a local project",
-            "body": "Load source files from the project list. Studio will place them in the current factory workspace.",
+            "body": "Choose a project from the list. Studio previews it directly from its project folder.",
         }
     if not has_ready_timeline:
         return {
             "stage": "build",
             "title": "Generate TTS and the timeline next",
-            "body": "The current source is loaded. Run Check first, then TTS or Silent Preview.",
+            "body": "The active project is ready. Run Check first, then TTS or Silent Preview.",
         }
     if not has_outputs:
         return {
@@ -526,20 +524,21 @@ def guide_state(state: dict[str, Any]) -> dict[str, str]:
 
 
 def studio_state() -> dict[str, Any]:
+    migrate_local_projects()
     active_project = active_project_meta()
     output_project_id = active_project["id"] if active_project else None
     output_path = active_project["path"] if active_project else None
     state: dict[str, Any] = {
         "activeProject": active_project,
         "hasStarter": STARTER_SOURCE.exists(),
-        "current": current_scenes_summary(),
+        "projectSummary": active_scenes_summary(),
         "settings": active_source_settings(),
         "timeline": timeline_summary(),
         "projectCount": len(list_projects()),
         "outputs": list_outputs(limit=5, project_slug=output_project_id, project_path=output_path),
         "urls": {
             "studio": "/studio",
-            "shell": shell_path(),
+            "shell": shell_relative_url(active_source_root()),
             "captions": "/captions",
             "voices": "/voices",
         },
@@ -618,30 +617,35 @@ def create_project(payload: dict[str, Any]) -> dict[str, Any]:
         target = LOCAL_WORK / project_id
     name = name or "Untitled project"
 
-    target.mkdir(parents=True, exist_ok=True)
-    (target / "scenes.json").write_text(scenes_json.strip() + "\n", encoding="utf-8")
-    (target / "body.html").write_text(body_html.strip() + "\n", encoding="utf-8")
+    write_target = target
+    if not overwrite:
+        write_target = LOCAL_WORK / f".{project_id}.creating"
+        shutil.rmtree(write_target, ignore_errors=True)
+    write_target.mkdir(parents=True, exist_ok=True)
+    atomic_write_text(write_target / "scenes.json", scenes_json.strip() + "\n")
+    atomic_write_text(write_target / "body.html", body_html.strip() + "\n")
     existing = existing_manifest if overwrite else {}
     language = str(payload.get("language") or existing.get("language") or "auto")
     ensure_project_manifest(
-        target,
+        write_target,
         name=name,
         project_id=project_id,
         language=language,
     )
     if payload.get("tts") is not None:
-        write_project_settings(target, {"tts": payload.get("tts")})
-    active = active_source_root()
-    if active and active.resolve() == target.resolve():
-        shutil.rmtree(CURRENT_ASSETS, ignore_errors=True)
-        CURRENT_ASSETS.mkdir(parents=True, exist_ok=True)
+        write_project_settings(write_target, {"tts": payload.get("tts")})
+    if not overwrite:
+        write_target.replace(target)
+    if overwrite:
+        shutil.rmtree(project_paths(target).generated, ignore_errors=True)
     captions = target / "captions.json"
     if overwrite and captions.exists():
         captions.unlink()
-    return {"project": source_summary(target), "validation": validation}
+    activate_source(target)
+    return {"project": source_summary(target), "validation": validation, "state": studio_state()}
 
 
-def load_project(payload: dict[str, Any]) -> dict[str, Any]:
+def activate_project(payload: dict[str, Any]) -> dict[str, Any]:
     value = str(payload.get("project") or payload.get("id") or "").strip()
     if value in {"starter", ".local/work/starter", "templates/starter"}:
         source_root = STARTER_SOURCE
@@ -649,7 +653,8 @@ def load_project(payload: dict[str, Any]) -> dict[str, Any]:
         source_root = safe_project_path(value)
     ensure_project_manifest(source_root)
     try:
-        load_source(source_root)
+        resolve_source(source_root)
+        activate_source(source_root)
     except SystemExit as exc:
         raise ApiError(422, str(exc)) from exc
     return {"project": source_summary(source_root), "state": studio_state()}
@@ -677,7 +682,7 @@ def save_project_settings(payload: dict[str, Any]) -> dict[str, Any]:
     value = str(payload.get("project") or payload.get("id") or "").strip()
     source_root = safe_project_path(value) if value else active_source_root()
     if not source_root:
-        raise ApiError(409, "no loaded source; load or create a project first")
+        raise ApiError(409, "no active project; activate or create a project first")
     if not source_root.exists() or not source_root.is_dir():
         raise ApiError(404, f"project not found: {source_root.name}")
     write_project_settings(source_root, {"tts": payload.get("tts") or payload})
@@ -698,10 +703,7 @@ def update_project_metadata(payload: dict[str, Any]) -> dict[str, Any]:
         raise ApiError(404, f"project not found: {value}")
     manifest = ensure_project_manifest(source_root, name=name)
     manifest["updatedAt"] = utc_now()
-    (source_root / PROJECT_MANIFEST_FILE).write_text(
-        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
+    atomic_write_json(source_root / PROJECT_MANIFEST_FILE, manifest)
     return {"project": source_summary(source_root)}
 
 
@@ -717,17 +719,8 @@ def delete_project(payload: dict[str, Any]) -> dict[str, Any]:
     active = active_source_root()
     was_active = bool(active and active.resolve() == target.resolve())
     shutil.rmtree(target)
-    if was_active and CURRENT_META.exists():
-        CURRENT_META.unlink()
     if was_active:
-        remaining = [LOCAL_WORK / item["id"] for item in list_projects()]
-        if remaining:
-            load_source(remaining[0])
-        else:
-            for generated in [CURRENT_SOURCE, CURRENT_ASSETS]:
-                if generated.exists():
-                    shutil.rmtree(generated)
-                generated.mkdir(parents=True, exist_ok=True)
+        activate_source(STARTER_SOURCE)
     return {"deleted": target.name, "wasActive": was_active, "state": studio_state()}
 
 
@@ -859,7 +852,7 @@ def run_job(job_id: str) -> None:
             if output_name:
                 project_path = str(job.get("projectPath") or "").strip()
                 output_file = (Path(project_path) / PROJECT_OUTPUT_DIR / output_name) if project_path else LOCAL_OUTPUT / output_name
-                if output_file.exists():
+                if output_file.exists() and not project_path:
                     register_output(
                         output_file,
                         str(job.get("projectId") or "").strip() or None,
@@ -878,7 +871,7 @@ def clean_output_name(value: str) -> str:
     return f"{name}.mp4"
 
 
-def command_for_job(payload: dict[str, Any]) -> tuple[str, list[str]]:
+def command_for_job(payload: dict[str, Any], source_root: Path | None = None) -> tuple[str, list[str]]:
     task = str(payload.get("task") or "").strip().lower()
     if task not in {"tts", "offline", "check", "render", "voice-preview"}:
         raise ApiError(400, "unknown job task")
@@ -910,8 +903,10 @@ def command_for_job(payload: dict[str, Any]) -> tuple[str, list[str]]:
             pitch,
         ]
 
+    source = source_root or active_source_root()
+    source_args = ["--source", str(source)]
+
     if task == "tts":
-        source = active_source_root()
         if source and source.exists() and source.is_dir():
             manifest = ensure_project_manifest(source)
             language = str(manifest.get("resolvedLanguage") or "en-US")
@@ -941,16 +936,17 @@ def command_for_job(payload: dict[str, Any]) -> tuple[str, list[str]]:
             tts_settings["pitch"],
             "--gap",
             tts_settings["gap"],
+            *source_args,
         ]
         if payload.get("force"):
             command.append("--force")
         return task, command
 
     if task == "offline":
-        return task, [PYTHON, "main.py", "offline"]
+        return task, [PYTHON, "main.py", "offline", *source_args]
 
     if task == "check":
-        return task, [PYTHON, "main.py", "check"]
+        return task, [PYTHON, "main.py", "check", *source_args]
 
     size = str(payload.get("size") or "720p").lower()
     capture = str(payload.get("capture") or "auto").lower()
@@ -980,6 +976,7 @@ def command_for_job(payload: dict[str, Any]) -> tuple[str, list[str]]:
         clean_output_name(str(payload.get("output") or "studio-render.mp4")),
         "--transition",
         f"{transition:g}",
+        *source_args,
     ]
 
 
@@ -987,12 +984,17 @@ def start_job(payload: dict[str, Any]) -> dict[str, Any]:
     running = active_job()
     if running:
         raise ApiError(409, f"{running['task']} is already running")
-    task, command = command_for_job(payload)
-    if task in {"tts", "offline", "check", "render"} and not (CURRENT_SOURCE / "scenes.json").exists():
-        raise ApiError(409, "no loaded source; load or create a project first")
+    requested_task = str(payload.get("task") or "").strip().lower()
+    source_snapshot = None if requested_task == "voice-preview" else active_source_root()
+    task, command = command_for_job(payload, source_snapshot)
+    if task in {"tts", "offline", "check", "render"}:
+        try:
+            project_paths(source_snapshot)
+        except SystemExit as exc:
+            raise ApiError(409, str(exc)) from exc
 
     job_id = uuid.uuid4().hex[:12]
-    active_project = active_project_meta()
+    active_project = None if task == "voice-preview" else active_project_meta(source_snapshot)
     output_name = ""
     if task == "render":
         output_name = clean_output_name(str(payload.get("output") or "studio-render.mp4"))
@@ -1036,10 +1038,25 @@ def get_job(query: dict[str, list[str]]) -> dict[str, Any]:
 
 
 def voice_preview_state() -> dict[str, Any]:
+    legacy = LOCAL_ASSETS / "voice-preview"
+    if legacy.exists() and not VOICE_PREVIEW_DIR.exists():
+        legacy.rename(VOICE_PREVIEW_DIR)
     VOICE_PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
     manifest = read_json_file(VOICE_PREVIEW_DIR / "manifest.json")
     if not isinstance(manifest, dict):
         manifest = {"samples": [], "history": []}
+    changed = False
+    for key in ["samples", "history"]:
+        entries = manifest.get(key)
+        if not isinstance(entries, list):
+            continue
+        for entry in entries:
+            if isinstance(entry, dict) and isinstance(entry.get("audio"), str):
+                migrated = entry["audio"].replace("/.local/assets/voice-preview/", "/.local/voice-preview/")
+                changed = changed or migrated != entry["audio"]
+                entry["audio"] = migrated
+    if changed:
+        atomic_write_json(VOICE_PREVIEW_DIR / "manifest.json", manifest)
     history = manifest.get("history")
     if not isinstance(history, list):
         history = manifest.get("samples") if isinstance(manifest.get("samples"), list) else []
@@ -1047,7 +1064,7 @@ def voice_preview_state() -> dict[str, Any]:
         "voices": VOICE_OPTIONS,
         "manifest": manifest,
         "history": history[:20],
-        "outputUrl": "/.local/assets/voice-preview/",
+        "outputUrl": "/.local/voice-preview/",
     }
 
 
@@ -1081,8 +1098,8 @@ def handle_post(path: str, payload: dict[str, Any]) -> tuple[int, Any] | None:
             raise ApiError(422, str(exc)) from exc
     if path == "/api/projects":
         return 201, create_project(payload)
-    if path == "/api/projects/load":
-        return 200, load_project(payload)
+    if path in {"/api/projects/activate", "/api/projects/load"}:
+        return 200, activate_project(payload)
     if path == "/api/projects/settings":
         return 200, save_project_settings(payload)
     if path == "/api/projects/update":

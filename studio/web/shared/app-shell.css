@@ -129,6 +129,13 @@
   content: "";
 }
 
+.app-sidebar .product-nav .nav-separator {
+  display: block;
+  height: 1px;
+  margin: 8px 10px;
+  background: rgba(148, 163, 184, 0.28);
+}
+
 .app-sidebar [data-lucide],
 .app-sidebar .lucide {
   width: 15px;

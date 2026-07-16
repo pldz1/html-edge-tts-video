@@ -9,9 +9,9 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from .factory import CURRENT_ASSETS, CURRENT_SOURCE, active_source_root, ensure_current, load_scenes
+    from .factory import STARTER_SOURCE, active_source_root, ensure_current, load_scenes, project_paths
 except ImportError:  # Direct script execution: python pipeline/captions.py
-    from factory import CURRENT_ASSETS, CURRENT_SOURCE, active_source_root, ensure_current, load_scenes
+    from factory import STARTER_SOURCE, active_source_root, ensure_current, load_scenes, project_paths
 
 
 KIND = "html-edge-tts-captions"
@@ -34,23 +34,23 @@ def write_json(path: Path, value: Any) -> None:
 
 
 def timeline_path() -> Path:
-    return CURRENT_ASSETS / "timeline.json"
+    return project_paths().generated / "timeline.json"
 
 
 def captions_path() -> Path:
-    return CURRENT_SOURCE / "captions.json"
+    return project_paths().captions
 
 
 def source_captions_path() -> Path | None:
     """Return the authored captions path for the loaded project, when available."""
     source_root = active_source_root()
-    if not source_root or not source_root.exists() or not source_root.is_dir():
+    if not source_root.exists() or not source_root.is_dir():
         return None
     return source_root / "captions.json"
 
 
 def caption_storage_paths() -> list[Path]:
-    """List caption targets with the authored source first and workspace mirror second."""
+    """List the direct authored caption target."""
     paths = [path for path in [source_captions_path(), captions_path()] if path is not None]
     unique: list[Path] = []
     for path in paths:
@@ -237,9 +237,6 @@ def captions_match_timeline(doc: dict, timeline: dict) -> bool:
 def load_effective_doc(timeline: dict | None = None) -> tuple[dict, bool]:
     ensure_current()
     timeline = timeline or load_timeline()
-    # The project source is authoritative. The current workspace is only a
-    # renderer mirror and remains a fallback for legacy workspaces without a
-    # recorded source directory.
     paths = caption_storage_paths()
     path = next((candidate for candidate in paths if candidate.exists()), None)
     if path is None:
@@ -256,6 +253,8 @@ def load_effective_doc(timeline: dict | None = None) -> tuple[dict, bool]:
 
 def save_doc(value: Any, timeline: dict | None = None) -> dict:
     ensure_current()
+    if active_source_root().resolve() == STARTER_SOURCE.resolve():
+        raise ValueError("starter is read-only; activate an editable project before saving captions")
     timeline = timeline or load_timeline()
     doc = coerce_doc(value, timeline, stamp_signature=True)
     if not captions_match_timeline(doc, timeline):
@@ -266,9 +265,6 @@ def save_doc(value: Any, timeline: dict | None = None) -> dict:
         raise ValueError("loaded project source folder is unavailable; reload the project before saving captions")
     targets = caption_storage_paths()
 
-    # Write the authored project file first so a failed source write can never
-    # be reported as a successful save merely because the renderer mirror was
-    # writable. Then keep .local/current in sync for the live preview.
     for path in targets:
         write_json(path, doc)
 

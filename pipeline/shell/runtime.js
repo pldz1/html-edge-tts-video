@@ -1,5 +1,7 @@
-const SOURCE_BASE = '/.local/current/source';
-const ASSET_BASE = '/.local/current/assets';
+const RUNTIME_PARAMS = new URLSearchParams(window.location.search);
+const PROJECT_BASE = RUNTIME_PARAMS.get('projectBase') || '/.local/work/starter';
+const SOURCE_BASE = PROJECT_BASE.replace(/\/$/, '');
+const ASSET_BASE = `${SOURCE_BASE}/generated`;
 const NARRATION_SRC = `${ASSET_BASE}/narration.mp3`;
 const DEFAULT_SCENE_TRANSITION_SECONDS = 0.4;
 const MAX_SCENE_TRANSITION_SECONDS = 2;
@@ -24,8 +26,8 @@ const state = {
   startedAt: 0,
   startOffset: 0,
   hasNarrationAudio: false,
-  renderMode: new URLSearchParams(location.search).has('render'),
-  embedMode: new URLSearchParams(location.search).has('embed'),
+  renderMode: RUNTIME_PARAMS.has('render'),
+  embedMode: RUNTIME_PARAMS.has('embed'),
   projectMeta: {},
   visualModule: null,
 };
@@ -598,7 +600,7 @@ if (scrubber) {
 
 async function init() {
   state.scenes = await fetchJson(`${SOURCE_BASE}/scenes.json`);
-  state.projectMeta = await fetchOptionalJson('/.local/current/project.json') || {};
+  state.projectMeta = await fetchOptionalJson(`${SOURCE_BASE}/manifest.json`) || {};
   const embeddedScripts = await loadBodyDocument(await fetchText(`${SOURCE_BASE}/body.html`));
 
   try {

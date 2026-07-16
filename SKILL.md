@@ -48,11 +48,10 @@ python main.py prompt --topic "<topic>" --language auto --target web-ai
 Build and verify:
 
 ```bash
-python main.py load --source .local/work/<project-slug>
+python main.py check --source .local/work/<project-slug>
 python main.py tts --source .local/work/<project-slug>
-python main.py check
-python main.py studio
-python main.py render --output video.mp4
+python main.py studio --source .local/work/<project-slug>
+python main.py render --source .local/work/<project-slug> --output video.mp4
 ```
 
 Infer `zh-CN` or `en-US` when the user does not specify a language. Preserve imported source
@@ -60,5 +59,6 @@ language unless the user requests translation. The stable shell owns narration t
 the compact chapter rail, playback, and deterministic dip-to-background transitions.
 
 Treat `.local/`, `assets/`, and `output/` as generated state, except for the tracked two-file starter
-at `.local/work/starter/`. The starter must remain unchanged; all authored videos belong in their own
-`.local/work/<project-slug>/` folder.
+at `.local/work/starter/`. Studio adds an untracked `manifest.json` and writes generated media beside
+each project; it does not create a global current workspace. The starter must remain unchanged; all
+authored videos belong in their own `.local/work/<project-slug>/` folder.

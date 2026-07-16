@@ -2,14 +2,29 @@
 """Resolve the Python-managed binaries used by the video pipeline."""
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 from pathlib import Path
 
 import imageio_ffmpeg
 
+try:
+    from .factory import LOCAL_PLAYWRIGHT, PLAYWRIGHT_BROWSERS
+except ImportError:  # Direct script execution
+    from factory import LOCAL_PLAYWRIGHT, PLAYWRIGHT_BROWSERS
+
 
 _DURATION_RE = re.compile(r"Duration:\s*(\d{2}):(\d{2}):(\d{2}(?:\.\d+)?)")
+
+
+def configure_playwright_environment(env: dict[str, str] | None = None) -> dict[str, str]:
+    """Pin Python Playwright's managed browser store to the project-local cache."""
+    LOCAL_PLAYWRIGHT.mkdir(parents=True, exist_ok=True)
+    PLAYWRIGHT_BROWSERS.mkdir(parents=True, exist_ok=True)
+    target = os.environ if env is None else env
+    target["PLAYWRIGHT_BROWSERS_PATH"] = str(PLAYWRIGHT_BROWSERS.resolve())
+    return target
 
 
 def ffmpeg_executable() -> str:

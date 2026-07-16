@@ -10,11 +10,11 @@ from pathlib import Path
 
 try:
     from .build_tts import group_words
-    from .factory import CURRENT_ASSETS, load_scenes, load_source, persist_current_assets
+    from .factory import load_scenes, project_paths
     from .toolchain import ffmpeg_executable
 except ImportError:  # Direct script execution: python pipeline/build_offline_preview.py
     from build_tts import group_words
-    from factory import CURRENT_ASSETS, load_scenes, load_source, persist_current_assets
+    from factory import load_scenes, project_paths
     from toolchain import ffmpeg_executable
 
 
@@ -41,10 +41,9 @@ def main() -> None:
     parser.add_argument("--source")
     args = parser.parse_args()
 
-    if args.source:
-        load_source(Path(args.source))
-
-    scenes = load_scenes()
+    paths = project_paths(Path(args.source) if args.source else None)
+    assets = paths.generated
+    scenes = load_scenes(paths.root)
     timeline_scenes = []
     cues = []
     cursor = 0.0
@@ -56,8 +55,8 @@ def main() -> None:
         cues.extend(group_words(words, scene["id"], cursor, scene["narration"]))
         cursor += duration + (0 if index == len(scenes) - 1 else 0.28)
 
-    CURRENT_ASSETS.mkdir(parents=True, exist_ok=True)
-    (CURRENT_ASSETS / "timeline.json").write_text(
+    assets.mkdir(parents=True, exist_ok=True)
+    (assets / "timeline.json").write_text(
         json.dumps(
             {
                 "duration": round(cursor, 3),
@@ -82,13 +81,12 @@ def main() -> None:
             str(cursor),
             "-q:a",
             "9",
-            str(CURRENT_ASSETS / "narration.mp3"),
+            str(assets / "narration.mp3"),
         ],
         check=True,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    persist_current_assets()
     print(f"Offline timeline created: {cursor:.2f}s (silent audio)")
 
 

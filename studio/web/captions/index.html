@@ -22,8 +22,9 @@
       <nav class="product-nav" aria-label="产品工具">
         <p class="nav-label">产品工具</p>
         <a href="/studio"><i data-lucide="folder"></i><span>工作室</span></a>
-        <a href="/voices"><i data-lucide="audio-lines"></i><span>语音试听</span></a>
         <a class="active" href="/captions" aria-current="page"><i data-lucide="captions"></i><span>字幕</span></a>
+        <span class="nav-separator" aria-hidden="true"></span>
+        <a href="/voices"><i data-lucide="audio-lines"></i><span>语音试听</span></a>
       </nav>
       <div class="sidebar-spacer"></div>
       <section class="engine-card">
@@ -39,7 +40,7 @@
       <label class="caption-project-picker"><span>项目</span><select id="captionProjectSelect"></select></label>
       <div class="tool-top-actions">
         <button id="captionGuideButton" style="display: flex; align-items: center; gap:8px" type="button"><i data-lucide="circle-help"></i><span>指南</span></button>
-        <a class="open-output-button" href="/.local/current/source/" target="_blank" rel="noreferrer"><i data-lucide="folder-open"></i><span>打开源文件夹</span></a>
+        <a id="openSourceButton" class="open-output-button" href="/.local/work/starter/" target="_blank" rel="noreferrer"><i data-lucide="folder-open"></i><span>打开源文件夹</span></a>
       </div>
     </header>
 
@@ -77,7 +78,7 @@
           <button id="nextCueButton" type="button"><i data-lucide="arrow-down"></i><span>下一片段</span></button>
           <button id="locateCueButton" type="button"><i data-lucide="locate-fixed"></i><span>定位当前片段</span></button>
         </div>
-        <audio id="narrationAudio" preload="metadata" src="/.local/current/assets/narration.mp3"></audio>
+        <audio id="narrationAudio" preload="metadata"></audio>
       </section>
 
       <section class="panel cue-list-panel">

@@ -14,16 +14,17 @@ import time
 from dataclasses import dataclass
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import unquote, urlparse
 
 from playwright.async_api import async_playwright
 from playwright.async_api import Error as PlaywrightError
 
 try:
-    from .factory import CURRENT_ASSETS, LOCAL_PLAYWRIGHT, ROOT, load_scenes, load_source, output_path, shell_url
-    from .toolchain import ffmpeg_executable
+    from .factory import PLAYWRIGHT_RECORDINGS, ROOT, load_scenes, output_path, project_paths, shell_url
+    from .toolchain import configure_playwright_environment, ffmpeg_executable
 except ImportError:  # Direct script execution: python pipeline/render_video.py
-    from factory import CURRENT_ASSETS, LOCAL_PLAYWRIGHT, ROOT, load_scenes, load_source, output_path, shell_url
-    from toolchain import ffmpeg_executable
+    from factory import PLAYWRIGHT_RECORDINGS, ROOT, load_scenes, output_path, project_paths, shell_url
+    from toolchain import configure_playwright_environment, ffmpeg_executable
 
 
 SIZES = {
@@ -39,6 +40,7 @@ SIZES = {
 DESIGN_WIDTH = 1280
 DESIGN_HEIGHT = 720
 PROGRESS_PREFIX = "RENDER_PROGRESS "
+RENDER_PROJECT_ROOT: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -283,6 +285,20 @@ class QuietHandler(SimpleHTTPRequestHandler):
     def log_message(self, *_: object) -> None:
         pass
 
+    def translate_path(self, path: str) -> str:
+        parsed = urlparse(path)
+        if parsed.path == "/__project__" or parsed.path.startswith("/__project__/"):
+            if RENDER_PROJECT_ROOT is None:
+                return str(ROOT / ".missing-project")
+            relative = unquote(parsed.path.removeprefix("/__project__/")).replace("/", os.sep)
+            target = (RENDER_PROJECT_ROOT / relative).resolve()
+            try:
+                target.relative_to(RENDER_PROJECT_ROOT.resolve())
+            except ValueError:
+                return str(ROOT / ".invalid-project-path")
+            return str(target)
+        return super().translate_path(path)
+
 
 def serve() -> None:
     os.chdir(ROOT)
@@ -316,9 +332,9 @@ def parse_args() -> argparse.Namespace:
     return args
 
 
-def ensure_render_assets_match_source() -> None:
-    timeline_file = CURRENT_ASSETS / "timeline.json"
-    narration = CURRENT_ASSETS / "narration.mp3"
+def ensure_render_assets_match_source(source: Path, assets: Path) -> None:
+    timeline_file = assets / "timeline.json"
+    narration = assets / "narration.mp3"
     if not timeline_file.exists() or not narration.exists():
         raise SystemExit("Run: python main.py tts --source <folder>")
 
@@ -327,7 +343,7 @@ def ensure_render_assets_match_source() -> None:
     except json.JSONDecodeError as exc:
         raise SystemExit(f"timeline.json is invalid; rerun python main.py tts --source <folder> ({exc})") from exc
 
-    source_signature = [(scene.get("id"), scene.get("narration")) for scene in load_scenes()]
+    source_signature = [(scene.get("id"), scene.get("narration")) for scene in load_scenes(source)]
     timeline_signature = [
         (scene.get("id"), scene.get("narration"))
         for scene in timeline.get("scenes", [])
@@ -394,7 +410,7 @@ async def wait_for_composition(page: object) -> None:
 
 
 def render_page_url(transition: float) -> str:
-    return f"{shell_url()}?render=1&transition={transition:g}"
+    return f"{shell_url(RENDER_PROJECT_ROOT)}&render=1&transition={transition:g}"
 
 
 async def load_render_page(
@@ -509,7 +525,7 @@ async def capture_video(
     output: Path,
     args: argparse.Namespace,
 ) -> None:
-    tmp = LOCAL_PLAYWRIGHT
+    tmp = PLAYWRIGHT_RECORDINGS
     tmp.mkdir(parents=True, exist_ok=True)
 
     context = await browser.new_context(
@@ -594,21 +610,23 @@ async def capture_video(
 
 
 async def main() -> None:
+    global RENDER_PROJECT_ROOT
     args = parse_args()
-    if args.source:
-        load_source(Path(args.source))
+    paths = project_paths(Path(args.source) if args.source else None)
+    RENDER_PROJECT_ROOT = paths.root
+    configure_playwright_environment()
 
     width, height = (args.width, args.height) if args.width is not None else SIZES[args.size]
     geometry = resolve_render_geometry(width, height)
-    narration = CURRENT_ASSETS / "narration.mp3"
-    ensure_render_assets_match_source()
+    narration = paths.generated / "narration.mp3"
+    ensure_render_assets_match_source(paths.root, paths.generated)
 
     thread = threading.Thread(target=serve, daemon=True)
     thread.start()
 
     async with async_playwright() as p:
         browser = await launch_browser(p)
-        output = output_path(args.output)
+        output = output_path(args.output, paths.root)
         output.parent.mkdir(parents=True, exist_ok=True)
         mode = resolved_capture_mode(args.capture, width, height)
         print(f"Capture mode: {mode}")

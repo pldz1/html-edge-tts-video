@@ -1,25 +1,33 @@
-﻿#!/usr/bin/env python3
-"""Shared helpers for loading video source folders into the factory workspace."""
+#!/usr/bin/env python3
+"""Shared project and runtime path helpers for the HTML video factory."""
 from __future__ import annotations
 
 import json
+import hashlib
+import os
 import re
 import shutil
+import time
+import threading
+import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import quote
 
 
 ROOT = Path(__file__).resolve().parents[1]
 LOCAL = ROOT / ".local"
 LOCAL_WORK = LOCAL / "work"
-LOCAL_OUTPUT = LOCAL / "output"
-LOCAL_ASSETS = LOCAL / "assets"
+LOCAL_OUTPUT = LOCAL / "output"  # Legacy output location; new renders are project-local.
+LOCAL_ASSETS = LOCAL / "assets"  # Legacy generated state used only during migration.
 LOCAL_PLAYWRIGHT = LOCAL / "playwright"
-FACTORY = LOCAL
-CURRENT = LOCAL / "current"
-CURRENT_SOURCE = CURRENT / "source"
-CURRENT_ASSETS = CURRENT / "assets"
-CURRENT_META = CURRENT / "project.json"
+PLAYWRIGHT_BROWSERS = LOCAL_PLAYWRIGHT / "browsers"
+PLAYWRIGHT_RECORDINGS = LOCAL_PLAYWRIGHT / "recordings"
+PLAYWRIGHT_PROFILES = LOCAL_PLAYWRIGHT / "profiles"
+PLAYWRIGHT_SCREENSHOTS = LOCAL_PLAYWRIGHT / "screenshots"
+PLAYWRIGHT_TRACES = LOCAL_PLAYWRIGHT / "traces"
+PLAYWRIGHT_TMP = LOCAL_PLAYWRIGHT / "tmp"
 PROJECT_MANIFEST_FILE = "manifest.json"
 PROJECT_GENERATED_DIR = "generated"
 PROJECT_OUTPUT_DIR = "output"
@@ -27,12 +35,30 @@ STARTER_SOURCE = LOCAL_WORK / "starter"
 SHELL = Path(__file__).resolve().parent / "shell"
 SHELL_PATH = "/pipeline/shell/index.html"
 
+# Kept only so an older workspace can be migrated once. Runtime code must not use these paths.
+LEGACY_CURRENT = LOCAL / "current"
+LEGACY_CURRENT_ASSETS = LEGACY_CURRENT / "assets"
+LEGACY_CURRENT_META = LEGACY_CURRENT / "project.json"
+ACTIVE_PROJECT_LOCK = threading.RLock()
+
+
+@dataclass(frozen=True)
+class ProjectPaths:
+    root: Path
+    scenes: Path
+    body: Path
+    media: Path
+    captions: Path
+    manifest: Path
+    generated: Path
+    output: Path
+
 
 def rel(path: Path) -> str:
     try:
-        return path.relative_to(ROOT).as_posix()
+        return path.resolve().relative_to(ROOT.resolve()).as_posix()
     except ValueError:
-        return str(path)
+        return str(path.resolve())
 
 
 def slug(value: str) -> str:
@@ -40,10 +66,37 @@ def slug(value: str) -> str:
     return out or "video"
 
 
-def clean_dir(path: Path) -> None:
-    if path.exists():
-        shutil.rmtree(path)
-    path.mkdir(parents=True, exist_ok=True)
+def atomic_write_json(path: Path, value: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_name(f".{path.name}.{os.getpid()}.{uuid.uuid4().hex[:8]}.tmp")
+    temp.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    replace_with_retry(temp, path)
+
+
+def atomic_write_text(path: Path, value: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_name(f".{path.name}.{os.getpid()}.{uuid.uuid4().hex[:8]}.tmp")
+    temp.write_text(value, encoding="utf-8")
+    replace_with_retry(temp, path)
+
+
+def replace_with_retry(temp: Path, target: Path) -> None:
+    for attempt in range(6):
+        try:
+            temp.replace(target)
+            return
+        except PermissionError:
+            if attempt == 5:
+                temp.unlink(missing_ok=True)
+                raise
+            time.sleep(0.04 * (attempt + 1))
+
+
+def read_json(path: Path) -> object | None:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return None
 
 
 def is_local_project(path: Path) -> bool:
@@ -54,31 +107,132 @@ def is_local_project(path: Path) -> bool:
         return False
 
 
-def project_generated_dir(path: Path) -> Path | None:
-    return path.resolve() / PROJECT_GENERATED_DIR if is_local_project(path) else None
+def project_generated_dir(path: Path) -> Path:
+    return path.resolve() / PROJECT_GENERATED_DIR
 
 
-def project_output_dir(path: Path) -> Path | None:
-    return path.resolve() / PROJECT_OUTPUT_DIR if is_local_project(path) else None
+def project_output_dir(path: Path) -> Path:
+    return path.resolve() / PROJECT_OUTPUT_DIR
 
 
-def persist_current_assets(source: Path | None = None) -> None:
-    source_root = source or active_source_root()
-    if not source_root or not CURRENT_ASSETS.exists():
-        return
-    target = project_generated_dir(source_root)
-    if not target:
-        return
-    clean_dir(target)
-    shutil.copytree(CURRENT_ASSETS, target, dirs_exist_ok=True)
+def default_manifest(source_root: Path, *, active: bool = False) -> dict:
+    starter = source_root.resolve() == STARTER_SOURCE.resolve()
+    now = datetime.now(timezone.utc).isoformat()
+    folder_id = source_root.name.lower()
+    project_id = (
+        folder_id
+        if re.fullmatch(r"[0-9a-f]{8}", folder_id)
+        else hashlib.sha256(str(source_root.resolve()).encode("utf-8")).hexdigest()[:8]
+    )
+    return {
+        "version": 5,
+        "id": "starter" if starter else project_id,
+        "name": "Starter" if starter else source_root.name,
+        "active": active,
+        "system": starter,
+        "readOnly": starter,
+        "language": "auto",
+        "resolvedLanguage": "zh-CN" if starter else "en-US",
+        "createdAt": now,
+        "updatedAt": now,
+        "activatedAt": now if active else None,
+        "tts": {
+            "voice": "zh-CN-XiaoxiaoNeural" if starter else "en-US-JennyNeural",
+            "rate": "+12%",
+            "pitch": "+0Hz",
+            "gap": "0.28",
+        },
+    }
 
 
-def find_first(source: Path, candidates: list[str]) -> Path | None:
-    for candidate in candidates:
-        path = source / candidate
-        if path.exists():
-            return path
-    return None
+def ensure_starter_manifest() -> dict:
+    if not STARTER_SOURCE.exists():
+        raise SystemExit(f"starter source is missing: {STARTER_SOURCE}")
+    path = STARTER_SOURCE / PROJECT_MANIFEST_FILE
+    existing = read_json(path)
+    if isinstance(existing, dict):
+        manifest = {**default_manifest(STARTER_SOURCE), **existing}
+        manifest.update({"id": "starter", "system": True, "readOnly": True, "version": 5})
+    else:
+        other_active = False
+        if LOCAL_WORK.exists():
+            other_active = any(
+                isinstance(data := read_json(child / PROJECT_MANIFEST_FILE), dict)
+                and data.get("active") is True
+                for child in LOCAL_WORK.iterdir()
+                if child.is_dir() and child.resolve() != STARTER_SOURCE.resolve()
+            )
+        manifest = default_manifest(STARTER_SOURCE, active=not other_active)
+    if manifest != existing:
+        atomic_write_json(path, manifest)
+    return manifest
+
+
+def iter_project_roots() -> list[Path]:
+    LOCAL_WORK.mkdir(parents=True, exist_ok=True)
+    roots = [
+        child
+        for child in LOCAL_WORK.iterdir()
+        if not child.name.startswith(".")
+        and child.is_dir()
+        and (child / "scenes.json").exists()
+        and (child / "body.html").exists()
+    ]
+    return sorted(roots, key=lambda item: (item.resolve() != STARTER_SOURCE.resolve(), item.name.lower()))
+
+
+def active_source_root() -> Path:
+    """Return the selected project without creating a mirrored workspace."""
+    ensure_starter_manifest()
+    candidates: list[tuple[str, Path]] = []
+    for root in iter_project_roots():
+        manifest = read_json(root / PROJECT_MANIFEST_FILE)
+        if isinstance(manifest, dict) and manifest.get("active") is True:
+            candidates.append((str(manifest.get("activatedAt") or ""), root))
+    if not candidates:
+        activate_source(STARTER_SOURCE)
+        return STARTER_SOURCE.resolve()
+    return max(candidates, key=lambda item: item[0])[1].resolve()
+
+
+def activate_source(source: Path) -> Path:
+    """Persist one active project. A later reconciliation repairs interrupted multi-file writes."""
+    with ACTIVE_PROJECT_LOCK:
+        target = resolve_source_root(source)
+        if not is_local_project(target):
+            return target
+        now = datetime.now(timezone.utc).isoformat()
+        roots = iter_project_roots()
+        if target not in [item.resolve() for item in roots]:
+            roots.append(target)
+        for root in roots:
+            path = root / PROJECT_MANIFEST_FILE
+            existing = read_json(path)
+            manifest = existing if isinstance(existing, dict) else default_manifest(root)
+            selected = root.resolve() == target.resolve()
+            changed = manifest.get("active") is not selected
+            manifest["active"] = selected
+            if selected:
+                manifest["activatedAt"] = now
+            if changed or not path.exists():
+                atomic_write_json(path, manifest)
+        return target
+
+
+def reconcile_active_project(*, repair: bool = True) -> Path:
+    """Ensure Studio has exactly one active project, falling back to starter."""
+    with ACTIVE_PROJECT_LOCK:
+        ensure_starter_manifest()
+        roots = iter_project_roots()
+        active: list[tuple[str, Path]] = []
+        for root in roots:
+            data = read_json(root / PROJECT_MANIFEST_FILE)
+            if isinstance(data, dict) and data.get("active") is True:
+                active.append((str(data.get("activatedAt") or ""), root))
+        winner = max(active, key=lambda item: item[0])[1] if active else STARTER_SOURCE
+        if repair and len(active) != 1:
+            activate_source(winner)
+        return winner.resolve()
 
 
 def resolve_source_root(source: Path) -> Path:
@@ -96,34 +250,49 @@ def resolve_source_root(source: Path) -> Path:
         resolved = candidate.resolve()
         if resolved.exists() and resolved.is_dir():
             return resolved
-
     return candidates[0].resolve()
 
 
 def resolve_source(source: Path) -> dict[str, Path | None]:
-    source = resolve_source_root(source)
-    if not source.exists() or not source.is_dir():
-        raise SystemExit(f"source folder does not exist: {source}")
-
-    scenes = find_first(source, ["scenes.json"])
-    body = find_first(source, ["body.html"])
-    media = find_first(source, ["media"])
-    captions = find_first(source, ["captions.json"])
-
-    if not scenes:
-        raise SystemExit(f"source is missing scenes.json: {source}")
-    if not body:
-        raise SystemExit(f"source is missing body.html: {source}")
-    if media and not media.is_dir():
+    root = resolve_source_root(source)
+    if not root.exists() or not root.is_dir():
+        raise SystemExit(f"source folder does not exist: {root}")
+    scenes = root / "scenes.json"
+    body = root / "body.html"
+    media = root / "media"
+    captions = root / "captions.json"
+    if not scenes.exists():
+        raise SystemExit(f"source is missing scenes.json: {root}")
+    if not body.exists():
+        raise SystemExit(f"source is missing body.html: {root}")
+    if media.exists() and not media.is_dir():
         raise SystemExit(f"media path must be a directory: {media}")
-
     return {
-        "root": source,
+        "root": root,
         "scenes": scenes,
         "body": body,
-        "media": media,
-        "captions": captions,
+        "media": media if media.exists() else None,
+        "captions": captions if captions.exists() else None,
+        "manifest": root / PROJECT_MANIFEST_FILE,
+        "generated": project_generated_dir(root),
+        "output": project_output_dir(root),
     }
+
+
+def project_paths(source: Path | None = None) -> ProjectPaths:
+    resolved = resolve_source(source or active_source_root())
+    root = resolved["root"]
+    assert isinstance(root, Path)
+    return ProjectPaths(
+        root=root,
+        scenes=resolved["scenes"],
+        body=resolved["body"],
+        media=root / "media",
+        captions=root / "captions.json",
+        manifest=root / PROJECT_MANIFEST_FILE,
+        generated=root / PROJECT_GENERATED_DIR,
+        output=root / PROJECT_OUTPUT_DIR,
+    )
 
 
 def ensure_shell() -> Path:
@@ -133,95 +302,26 @@ def ensure_shell() -> Path:
     return SHELL
 
 
-def load_source(
-    source: Path,
-    *,
-    language: str | None = None,
-) -> None:
+def load_source(source: Path, *, language: str | None = None) -> None:
+    """Compatibility command: validate and select a source without copying it."""
+    del language
     resolved = resolve_source(source)
+    root = resolved["root"]
+    assert isinstance(root, Path)
     ensure_shell()
-    source_manifest = resolved["root"] / PROJECT_MANIFEST_FILE
-    try:
-        manifest = json.loads(source_manifest.read_text(encoding="utf-8")) if source_manifest.exists() else {}
-    except json.JSONDecodeError:
-        manifest = {}
-    language = language or str(manifest.get("resolvedLanguage") or manifest.get("language") or "auto")
-    previous_source = active_source_root()
-    same_source = bool(previous_source and previous_source.resolve() == resolved["root"].resolve())
-
-    if previous_source and not same_source:
-        persist_current_assets(previous_source)
-
-    clean_dir(CURRENT_SOURCE)
-    if same_source:
-        CURRENT_ASSETS.mkdir(parents=True, exist_ok=True)
-    else:
-        clean_dir(CURRENT_ASSETS)
-        generated = project_generated_dir(resolved["root"])
-        if generated and generated.exists():
-            shutil.copytree(generated, CURRENT_ASSETS, dirs_exist_ok=True)
-
-    shutil.copy2(resolved["scenes"], CURRENT_SOURCE / "scenes.json")
-    shutil.copy2(resolved["body"], CURRENT_SOURCE / "body.html")
-    if resolved["captions"]:
-        shutil.copy2(resolved["captions"], CURRENT_SOURCE / "captions.json")
-    if resolved["media"]:
-        shutil.copytree(resolved["media"], CURRENT_SOURCE / "media", dirs_exist_ok=True)
-
-    CURRENT_META.parent.mkdir(parents=True, exist_ok=True)
-    CURRENT_META.write_text(
-        json.dumps(
-            {
-                "source": str(resolved["root"]),
-                "language": language,
-                "loaded_at": datetime.now(timezone.utc).isoformat(),
-            },
-            ensure_ascii=False,
-            indent=2,
-        ),
-        encoding="utf-8",
-    )
-    print(f"Loaded source: {resolved['root']}")
-    print(f"Language: {language}")
-    print(f"Factory workspace: {rel(CURRENT)}")
+    if is_local_project(root):
+        activate_source(root)
+    print(f"Selected source: {root}")
+    print("Runtime mode: direct project paths (no .local/current mirror)")
 
 
-def ensure_current() -> None:
-    missing = []
-    for path in [CURRENT_SOURCE / "scenes.json", CURRENT_SOURCE / "body.html"]:
-        if not path.exists():
-            missing.append(rel(path))
-    if missing:
-        raise SystemExit(
-            "no loaded source; run: python main.py load --source .local/work/starter "
-            f"(missing {', '.join(missing)})"
-        )
+def ensure_current(source: Path | None = None) -> None:
+    """Legacy name retained for callers; now validates the direct project source."""
+    project_paths(source)
 
 
-def active_source_root() -> Path | None:
-    if not CURRENT_META.exists():
-        return None
-    try:
-        meta = json.loads(CURRENT_META.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return None
-    source = meta.get("source")
-    if not isinstance(source, str) or not source:
-        return None
-    path = Path(source)
-    if path.exists():
-        return path
-    try:
-        legacy_relative = path.resolve().relative_to((ROOT / "work").resolve())
-    except ValueError:
-        return path
-    migrated = LOCAL_WORK / legacy_relative
-    return migrated if migrated.exists() else path
-
-
-def load_scenes() -> list[dict]:
-    ensure_current()
-    return json.loads((CURRENT_SOURCE / "scenes.json").read_text(encoding="utf-8"))
+def load_scenes(source: Path | None = None) -> list[dict]:
+    return json.loads(project_paths(source).scenes.read_text(encoding="utf-8"))
 
 
 def shell_path() -> str:
@@ -229,12 +329,28 @@ def shell_path() -> str:
     return SHELL_PATH
 
 
-def shell_url() -> str:
-    """Return the private renderer URL used by the local capture pipeline."""
-    return f"http://127.0.0.1:8765{shell_path()}"
+def project_web_base(source: Path) -> str:
+    try:
+        relative = source.resolve().relative_to(ROOT.resolve()).as_posix()
+    except ValueError:
+        return "/__project__"
+    return f"/{quote(relative, safe='/')}"
 
 
-def output_path(value: str) -> Path:
+def shell_url(source: Path | None = None) -> str:
+    """Return the renderer URL with an explicit project base."""
+    root = project_paths(source).root
+    base = quote(project_web_base(root), safe="")
+    return f"http://127.0.0.1:8765{shell_path()}?projectBase={base}"
+
+
+def shell_relative_url(source: Path | None = None) -> str:
+    root = project_paths(source).root
+    base = quote(project_web_base(root), safe="")
+    return f"{shell_path()}?projectBase={base}"
+
+
+def output_path(value: str, source: Path | None = None) -> Path:
     path = Path(value).expanduser()
     if path.is_absolute():
         return path
@@ -243,6 +359,22 @@ def output_path(value: str) -> Path:
         return ROOT / path
     if parts and parts[0] == "output":
         return LOCAL_OUTPUT.joinpath(*parts[1:])
-    source = active_source_root()
-    project_output = project_output_dir(source) if source else None
-    return (project_output or LOCAL_OUTPUT) / path
+    return project_paths(source).output / path
+
+
+def migrate_legacy_current() -> Path | None:
+    """Move the last mirrored assets back once, then remove .local/current."""
+    if not LEGACY_CURRENT.exists():
+        return None
+    meta = read_json(LEGACY_CURRENT_META)
+    source_value = meta.get("source") if isinstance(meta, dict) else None
+    source = Path(source_value).resolve() if isinstance(source_value, str) and source_value else None
+    if source and source.exists() and source.is_dir():
+        target = project_generated_dir(source)
+        if LEGACY_CURRENT_ASSETS.exists():
+            target.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(LEGACY_CURRENT_ASSETS, target, dirs_exist_ok=True)
+        if is_local_project(source):
+            activate_source(source)
+    shutil.rmtree(LEGACY_CURRENT)
+    return source

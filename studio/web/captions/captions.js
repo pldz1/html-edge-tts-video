@@ -28,6 +28,7 @@ const els = {
   startEarlierButton: $('#startEarlierButton'), startLaterButton: $('#startLaterButton'), endEarlierButton: $('#endEarlierButton'), endLaterButton: $('#endLaterButton'),
   autoWrapToggle: $('#autoWrapToggle'), restoreButton: $('#restoreButton'), saveButton: $('#saveButton'), jumpListButton: $('#jumpListButton'),
   sourceSaveHint: $('#sourceSaveHint'), notification: $('#notification'),
+  openSourceButton: $('#openSourceButton'),
   captionGuideButton: $('#captionGuideButton'), captionGuideDialog: $('#captionGuideDialog'),
 };
 
@@ -145,7 +146,7 @@ async function switchCaptionProject(projectIdValue) {
     return;
   }
   setStatus('正在切换项目');
-  await apiJson('/api/projects/load', { method: 'POST', body: JSON.stringify({ project: projectId }) });
+  await apiJson('/api/projects/activate', { method: 'POST', body: JSON.stringify({ project: projectId }) });
   state.dirty = false;
   state.previewReady = false;
   els.narrationAudio.pause();
@@ -407,6 +408,9 @@ async function loadCaptions() {
     els.narrationAudio.pause();
     els.narrationAudio.src = audioUrl.href;
     els.narrationAudio.load();
+  }
+  if (payload.sourceUrl && els.openSourceButton) {
+    els.openSourceButton.href = payload.sourceUrl;
   }
   if (payload.previewUrl) {
     const previewUrl = new URL(payload.previewUrl, window.location.origin);

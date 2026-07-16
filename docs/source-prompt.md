@@ -23,7 +23,9 @@ that directory. Never edit `.local/work/starter/`; it is the tracked template, n
 project.
 
 - Make `scenes.json` a non-empty array. Start with `id: "intro"`.
-- Give every scene a unique lowercase `id`, a short `category`, and natural `narration`.
+- Give every scene a unique lowercase `id`, a short `category`, and natural `narration`. Keep a
+  category within 12 CJK characters or about 24 Latin characters; use a compact chapter label such
+  as `示例`, `核心流程`, `Example`, or `Application` rather than a sentence.
 - Put every visible title, label, diagram, chart, and explanatory element in `body.html`.
 - Add one `<section class="content-scene" data-scene="id">` for every scene. Do not hard-code an
   initial `active` or `is-active` class; the stable shell controls scene visibility.

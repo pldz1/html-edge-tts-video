@@ -531,13 +531,13 @@ function renderHeader() {
   const active = appState?.activeProject;
   const timeline = appState?.timeline || {};
   const activeProject = projects.find((project) => project.active) || null;
-  const current = appState?.current || {};
-  const sceneCount = current.sceneCount ?? activeProject?.sceneCount ?? 0;
+  const projectSummary = appState?.projectSummary || {};
+  const sceneCount = projectSummary.sceneCount ?? activeProject?.sceneCount ?? 0;
   const narrationChars =
-    current.narrationChars ?? activeProject?.narrationChars ?? 0;
+    projectSummary.narrationChars ?? activeProject?.narrationChars ?? 0;
   const activeId = active?.id || activeProject?.id || "";
   const currentTitle =
-    active?.name || activeProject?.name || current.title || "未选择项目";
+    active?.name || activeProject?.name || projectSummary.title || "未选择项目";
   const timelineLabel = timeline.matchesSource
     ? formatDuration(timeline.duration)
     : timeline.exists
@@ -546,8 +546,8 @@ function renderHeader() {
   els.currentProjectName.textContent = currentTitle;
   els.timelineStatus.textContent = timelineLabel;
   els.outputStatus.textContent = `共 ${outputs.length} 个`;
-  els.currentSourcePath.textContent = active?.relativePath || "没有当前源文件";
-  els.currentSourcePath.title = active?.relativePath || "没有当前源文件";
+  els.currentSourcePath.textContent = active?.relativePath || "没有活动项目";
+  els.currentSourcePath.title = active?.relativePath || "没有活动项目";
   els.workspaceProjectTitle.textContent = currentTitle;
   els.workspaceProjectTitle.title = currentTitle;
   els.workspaceProjectId.textContent = activeId || "未加载";
@@ -604,7 +604,9 @@ function renderPreviewControls() {
     els.previewFrame &&
     (els.previewFrame.src === "about:blank" || !els.previewFrame.src)
   ) {
-    els.previewFrame.src = `${previewUrl}?embed=1`;
+    const url = new URL(previewUrl, window.location.origin);
+    url.searchParams.set("embed", "1");
+    els.previewFrame.src = url.href;
   }
 }
 
@@ -717,9 +719,11 @@ function renderOutputs() {
 function reloadPreview() {
   const base = appState?.urls?.shell || "/pipeline/shell/index.html";
   const transition = els.renderTransitionInput?.value || "0.4";
-  els.previewFrame.src = `${base}?embed=1&transition=${encodeURIComponent(
-    transition
-  )}&studio=${Date.now()}`;
+  const url = new URL(base, window.location.origin);
+  url.searchParams.set("embed", "1");
+  url.searchParams.set("transition", transition);
+  url.searchParams.set("studio", String(Date.now()));
+  els.previewFrame.src = url.href;
 }
 
 function fitPreviewViewport() {
@@ -1109,8 +1113,8 @@ async function loadProject(
   { view = "compose", closeDrawer = true } = {}
 ) {
   try {
-    setStatus("正在加载项目…");
-    const data = await postJson("/api/projects/load", { project });
+    setStatus("正在激活项目…");
+    const data = await postJson("/api/projects/activate", { project });
     appState = data.state;
     resetWorkspaceUi({
       name: data.project?.name || "",
@@ -1121,7 +1125,7 @@ async function loadProject(
     setStudioRoute("main");
     reloadPreview();
     await refreshAll();
-    setStatus("项目已加载。", "success");
+    setStatus("项目已激活。", "success");
     return data.project;
   } catch (error) {
     setStatus(error.message, "error");
@@ -1209,7 +1213,7 @@ async function saveProject() {
       language: els.languageInput.value,
       overwrite: Boolean(importProjectId),
     });
-    await postJson("/api/projects/load", { project: created.project.id });
+    appState = created.state;
     resetWorkspaceUi({
       name: created.project.name,
       resetPrompt: false,
@@ -1218,7 +1222,7 @@ async function saveProject() {
     setStudioRoute("main");
     reloadPreview();
     await refreshAll();
-    setStatus(`已保存并加载：${created.project.name}`, "success");
+    setStatus(`已保存并激活：${created.project.name}`, "success");
   } catch (error) {
     setStatus(error.message, "error");
   }

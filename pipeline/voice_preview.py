@@ -12,11 +12,11 @@ from pathlib import Path
 import edge_tts
 
 try:
-    from .factory import LOCAL_ASSETS
+    from .factory import LOCAL
 except ImportError:  # Direct script execution: python pipeline/voice_preview.py
-    from factory import LOCAL_ASSETS
+    from factory import LOCAL
 
-PREVIEW_DIR = LOCAL_ASSETS / "voice-preview"
+PREVIEW_DIR = LOCAL / "voice-preview"
 DEFAULT_TEXT = "This is an English voice preview for comparing voices, rate, and overall delivery."
 DEFAULT_VOICES = [
     "en-US-JennyNeural",
@@ -111,7 +111,7 @@ async def build_preview(args: argparse.Namespace) -> None:
                 "text": args.text,
                 "rate": args.rate,
                 "pitch": args.pitch,
-                "audio": f"/.local/assets/voice-preview/{audio_path.name}",
+                "audio": f"/.local/voice-preview/{audio_path.name}",
                 "createdAt": created_at.isoformat(),
             }
         )

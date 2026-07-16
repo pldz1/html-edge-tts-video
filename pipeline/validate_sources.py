@@ -8,12 +8,13 @@ import re
 from pathlib import Path
 
 try:
-    from .factory import CURRENT_SOURCE, SHELL, ensure_shell, load_source
+    from .factory import SHELL, ensure_shell, project_paths
 except ImportError:  # Direct script execution: python pipeline/validate_sources.py
-    from factory import CURRENT_SOURCE, SHELL, ensure_shell, load_source
+    from factory import SHELL, ensure_shell, project_paths
 
 
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+CATEGORY_UNIT_LIMIT = 12.0
 FORBIDDEN_BODY_MARKERS = {
     "topbar": "body.html must not include template chrome such as headers",
     "transport": "body.html must not include playback controls",
@@ -69,6 +70,19 @@ def fail(message: str) -> None:
     raise SystemExit(f"source validation failed: {message}")
 
 
+def short_label_units(value: str) -> float:
+    """Measure compact chapter labels without penalizing Latin text like CJK text."""
+    units = 0.0
+    for char in value.strip():
+        if char.isspace():
+            units += 0.25
+        elif char.isascii():
+            units += 0.5
+        else:
+            units += 1.0
+    return units
+
+
 def validate_scenes(scenes_file: Path) -> list[dict]:
     if not scenes_file.exists():
         fail("missing scenes.json; run python main.py load --source <folder>")
@@ -100,8 +114,11 @@ def validate_scenes(scenes_file: Path) -> list[dict]:
         category = scene.get("category")
         if not isinstance(category, str) or not category.strip():
             fail(f"scene {scene_id} must include a short category for the generated chapter rail")
-        if len(category.strip()) > 12:
-            fail(f"scene {scene_id} category is too long; keep it to 12 characters or fewer")
+        if short_label_units(category) > CATEGORY_UNIT_LIMIT:
+            fail(
+                f"scene {scene_id} category is too long; keep it within 12 CJK characters "
+                "or about 24 Latin characters"
+            )
 
     if scenes[0]["id"] != "intro":
         fail("the first scene must use id 'intro' and introduce what the video will cover")
@@ -202,12 +219,10 @@ def main() -> None:
     parser.add_argument("--source")
     args = parser.parse_args()
 
-    if args.source:
-        load_source(Path(args.source))
-
-    scenes_file = CURRENT_SOURCE / "scenes.json"
-    body_file = CURRENT_SOURCE / "body.html"
-    captions_file = CURRENT_SOURCE / "captions.json"
+    paths = project_paths(Path(args.source) if args.source else None)
+    scenes_file = paths.scenes
+    body_file = paths.body
+    captions_file = paths.captions
     scenes = validate_scenes(scenes_file)
     validate_body(body_file, scenes)
     validate_captions(captions_file)

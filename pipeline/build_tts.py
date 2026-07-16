@@ -13,14 +13,14 @@ from pathlib import Path
 import edge_tts
 
 try:
-    from .factory import CURRENT_ASSETS, load_scenes, load_source, persist_current_assets
+    from .factory import load_scenes, project_paths
     from .toolchain import ffmpeg_executable, media_duration
 except ImportError:  # Direct script execution: python pipeline/build_tts.py
-    from factory import CURRENT_ASSETS, load_scenes, load_source, persist_current_assets
+    from factory import load_scenes, project_paths
     from toolchain import ffmpeg_executable, media_duration
 
 
-SCENE_AUDIO = CURRENT_ASSETS / "scenes"
+SCENE_AUDIO = Path()
 TICKS = 10_000_000
 HARD_BREAK_RE = re.compile(r"[\u3002\uff01\uff1f\uff1b.!?;][\u201d\u2019\"'\uff09\u3011\u300b]*\s*$")
 SOFT_BREAK_RE = re.compile(r"[\uff0c\u3001\uff1a,:][\u201d\u2019\"'\uff09\u3011\u300b]*\s*$")
@@ -259,12 +259,13 @@ def write_gap_audio(path: Path, duration: float) -> None:
 
 
 async def main_async(args: argparse.Namespace) -> None:
-    if args.source:
-        load_source(Path(args.source))
-
-    scenes = load_scenes()
+    global SCENE_AUDIO
+    paths = project_paths(Path(args.source) if args.source else None)
+    assets = paths.generated
+    SCENE_AUDIO = assets / "scenes"
+    scenes = load_scenes(paths.root)
     validate_scenes(scenes)
-    CURRENT_ASSETS.mkdir(parents=True, exist_ok=True)
+    assets.mkdir(parents=True, exist_ok=True)
     SCENE_AUDIO.mkdir(parents=True, exist_ok=True)
 
     timeline_scenes: list[dict] = []
@@ -288,9 +289,9 @@ async def main_async(args: argparse.Namespace) -> None:
         else:
             cursor += duration
 
-    concat_file = CURRENT_ASSETS / "concat.txt"
+    concat_file = assets / "concat.txt"
     concat_file.write_text("\n".join(concat), encoding="utf-8")
-    narration = CURRENT_ASSETS / "narration.mp3"
+    narration = assets / "narration.mp3"
     subprocess.run(
         [ffmpeg_executable(), "-y", "-f", "concat", "-safe", "0", "-i", str(concat_file), "-c:a", "libmp3lame", "-q:a", "2", str(narration)],
         check=True,
@@ -303,9 +304,9 @@ async def main_async(args: argparse.Namespace) -> None:
         "scenes": timeline_scenes,
         "cues": all_cues,
     }
-    (CURRENT_ASSETS / "timeline.json").write_text(json.dumps(timeline, ensure_ascii=False, indent=2), encoding="utf-8")
-    persist_current_assets()
-    print(f"\nCreated: {narration}\nCreated: {CURRENT_ASSETS / 'timeline.json'}\nDuration: {timeline['duration']:.2f}s")
+    timeline_path = assets / "timeline.json"
+    timeline_path.write_text(json.dumps(timeline, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"\nCreated: {narration}\nCreated: {timeline_path}\nDuration: {timeline['duration']:.2f}s")
 
 
 def main() -> None:

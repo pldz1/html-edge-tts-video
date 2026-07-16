@@ -161,11 +161,12 @@
             <a class="active" href="/studio" aria-current="page"
               ><i data-lucide="folder"></i><span>工作室</span></a
             >
-            <a href="/voices"
-              ><i data-lucide="audio-lines"></i><span>语音试听</span></a
-            >
             <a href="/captions"
               ><i data-lucide="captions"></i><span>字幕</span></a
+            >
+            <span class="nav-separator" aria-hidden="true"></span>
+            <a href="/voices"
+              ><i data-lucide="audio-lines"></i><span>语音试听</span></a
             >
           </nav>
           <div class="sidebar-spacer"></div>
@@ -213,7 +214,7 @@
                     >
                     <span class="preview-source-path"
                       >路径
-                      <code id="currentSourcePath">没有当前源文件</code></span
+                      <code id="currentSourcePath">没有活动项目</code></span
                     >
                   </div>
                 </div>
@@ -473,7 +474,7 @@
             </button>
           </div>
           <footer class="new-project-dialog-note">
-            保存并加载前不会在 <code>.local/work</code> 创建项目。
+            保存并激活前不会在 <code>.local/work</code> 创建项目。
           </footer>
         </dialog>
 
@@ -672,7 +673,7 @@
                   class="primary-button"
                   type="button"
                 >
-                  <i data-lucide="save"></i><span>保存并加载</span>
+                  <i data-lucide="save"></i><span>保存并激活</span>
                 </button>
               </div>
             </section>
@@ -680,7 +681,7 @@
               <div class="panel-heading">
                 <div>
                   <p class="section-label">02 · 检查</p>
-                  <h2>当前源文件</h2>
+                  <h2>项目源文件</h2>
                 </div>
               </div>
               <div class="extract-grid workflow-extract-grid">
