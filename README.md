@@ -27,6 +27,8 @@ timing, captions, playback, chapter progress, scene transitions, and MP4 renderi
 Each manifest fixes `aspectRatio` to `16:9` (default landscape) or `9:16` (portrait) when the
 project is created. Create a new project to change orientation.
 
+![preview](./docs/preview.gif)
+
 ## Install
 
 ```bash
