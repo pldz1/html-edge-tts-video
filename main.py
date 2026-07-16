@@ -13,15 +13,20 @@ import urllib.request
 from pathlib import Path
 
 from pipeline.factory import (
+    ASPECT_RATIOS,
+    DEFAULT_ASPECT_RATIO,
     LOCAL_WORK,
     PLAYWRIGHT_BROWSERS,
     PROJECT_MANIFEST_FILE,
     ROOT,
     SHELL,
     STARTER_SOURCE,
+    atomic_write_json,
+    default_manifest,
     ensure_starter_manifest,
     iter_project_roots,
     load_source,
+    normalize_aspect_ratio,
     project_paths,
     read_json,
 )
@@ -43,11 +48,29 @@ def run(command: list[str], env: dict[str, str] | None = None) -> None:
 
 def copy_source_template(args: argparse.Namespace) -> None:
     target = Path(args.target).expanduser().resolve()
+    if target == STARTER_SOURCE.resolve():
+        raise SystemExit("starter is read-only; choose a new project folder")
     if target.exists() and any(target.iterdir()) and not args.force:
         raise SystemExit(f"Refusing to overwrite non-empty target: {target}; use --force")
+    existing = read_json(target / PROJECT_MANIFEST_FILE)
+    requested_aspect_ratio = normalize_aspect_ratio(args.aspect_ratio)
+    if isinstance(existing, dict) and existing.get("aspectRatio"):
+        if normalize_aspect_ratio(existing.get("aspectRatio")) != requested_aspect_ratio:
+            raise SystemExit("Project aspect ratio is fixed after creation; choose a new target folder")
     target.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(STARTER_SOURCE, target, dirs_exist_ok=True)
+    shutil.copy2(STARTER_SOURCE / "scenes.json", target / "scenes.json")
+    shutil.copy2(STARTER_SOURCE / "body.html", target / "body.html")
+    manifest = default_manifest(target, active=False)
+    if isinstance(existing, dict):
+        manifest = {**manifest, **existing}
+    manifest.update({
+        "aspectRatio": requested_aspect_ratio,
+        "system": False,
+        "readOnly": False,
+    })
+    atomic_write_json(target / PROJECT_MANIFEST_FILE, manifest)
     print(f"Created editable source folder: {target}")
+    print(f"Aspect ratio: {requested_aspect_ratio}")
     print("Edit scenes.json and body.html, then run:")
     print(f"python main.py tts --source {target}")
 
@@ -196,6 +219,7 @@ def prompt(args: argparse.Namespace) -> None:
         "notes": args.notes,
         "language": args.language,
         "target": args.target,
+        "aspectRatio": args.aspect_ratio,
     })
     print(result["prompt"], end="")
 
@@ -227,6 +251,10 @@ def validate_project_manifests() -> None:
             continue  # Agent-authored projects receive a manifest when Studio first discovers them.
         if manifest.get("version") != 5 or not isinstance(manifest.get("active"), bool):
             raise SystemExit(f"Project manifest must use version 5 and a boolean active field: {root}")
+        try:
+            aspect_ratio = normalize_aspect_ratio(manifest.get("aspectRatio"))
+        except ValueError as exc:
+            raise SystemExit(f"Invalid project aspect ratio in {root}: {exc}") from exc
         project_id = str(manifest.get("id") or "").strip().lower()
         if not project_id:
             raise SystemExit(f"Project manifest is missing id: {root}")
@@ -238,6 +266,8 @@ def validate_project_manifests() -> None:
         if root.resolve() == STARTER_SOURCE.resolve():
             if project_id != "starter" or manifest.get("system") is not True or manifest.get("readOnly") is not True:
                 raise SystemExit("Starter manifest must use id=starter, system=true, and readOnly=true")
+            if aspect_ratio != DEFAULT_ASPECT_RATIO:
+                raise SystemExit("Starter manifest must use aspectRatio=16:9")
     if len(active) != 1:
         raise SystemExit(f"Expected exactly one active project manifest; found {len(active)}")
     print(f"Project manifest validation passed: active={active[0]}")
@@ -303,7 +333,8 @@ def smoke(args: argparse.Namespace) -> None:
             page = browser.new_page(viewport={"width": 1280, "height": 720})
             page.goto(f"{origin}/studio", wait_until="domcontentloaded")
             page.wait_for_function(
-                "document.querySelector('#workspaceProjectId')?.textContent.trim() === 'starter'"
+                "expected => document.querySelector('#workspaceProjectId')?.textContent.trim() === expected",
+                arg=str(state["activeProject"]["id"]),
             )
             page.goto(f"{origin}{shell}{separator}render=1", wait_until="networkidle")
             page.wait_for_function("window.compositionReady === true || Boolean(window.compositionError)")
@@ -332,6 +363,12 @@ def build_parser() -> argparse.ArgumentParser:
     init_parser = subparsers.add_parser("init")
     init_parser.add_argument("--target", default=str(LOCAL_WORK / "new-video"))
     init_parser.add_argument("--force", action="store_true")
+    init_parser.add_argument(
+        "--aspect-ratio",
+        choices=ASPECT_RATIOS,
+        default=DEFAULT_ASPECT_RATIO,
+        help="Immutable project canvas orientation (default: 16:9).",
+    )
     init_parser.set_defaults(func=copy_source_template)
 
     load_parser = subparsers.add_parser("load")
@@ -434,6 +471,7 @@ def build_parser() -> argparse.ArgumentParser:
     prompt_parser.add_argument("--notes", default="")
     prompt_parser.add_argument("--language", choices=["auto", "zh-CN", "en-US"], default="auto")
     prompt_parser.add_argument("--target", choices=["agent", "web-ai"], default="agent")
+    prompt_parser.add_argument("--aspect-ratio", choices=ASPECT_RATIOS, default=DEFAULT_ASPECT_RATIO)
     prompt_parser.set_defaults(func=prompt)
 
     tts_parser = subparsers.add_parser("tts")

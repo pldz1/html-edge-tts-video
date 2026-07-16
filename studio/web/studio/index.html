@@ -547,6 +547,12 @@
                   </select></label
                 >
                 <label
+                  >画面方向<select id="aspectRatioInput">
+                    <option value="16:9">16:9 横屏（默认）</option>
+                    <option value="9:16">9:16 竖屏</option>
+                  </select></label
+                >
+                <label
                   >提示词目标<select id="promptTargetInput">
                     <option value="web-ai">网页 AI（复制代码块）</option>
                     <option value="agent">智能体（直接创建文件）</option>
@@ -655,6 +661,12 @@
                 </label>
               </div>
               <div class="save-row workflow-save-row">
+                <label
+                  >画面方向<select id="projectAspectRatioInput">
+                    <option value="16:9">16:9 横屏</option>
+                    <option value="9:16">9:16 竖屏</option>
+                  </select></label
+                >
                 <label
                   >项目名称<input
                     id="projectNameInput"

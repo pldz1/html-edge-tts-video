@@ -15,10 +15,13 @@ edited as a project.
   captions.json optional after manual subtitle edits
 ```
 
-Choose a unique kebab-case `<project-slug>` before writing any source. Create the project with:
+Choose a unique kebab-case `<project-slug>` and orientation before writing any source. The manifest
+stores an immutable `aspectRatio`; use a new project instead of changing an existing orientation.
+Create a landscape project (the default) or a portrait project with:
 
 ```bash
 python main.py init --target .local/work/<project-slug>
+python main.py init --target .local/work/<portrait-slug> --aspect-ratio 9:16
 ```
 
 Then edit only the copied files in that new project folder. Never target `.local/work/starter/` and
@@ -30,6 +33,11 @@ never place a video's `scenes.json` or `body.html` directly in `.local/work/`.
 - `category`: a short chapter label, within 12 CJK characters or about 24 Latin characters.
 - `narration`: natural spoken content.
 
+For `9:16`, use 2-3 CJK characters or one short English word of at most 8 letters for every
+`category`. The shell retains one horizontal chapter rail and omits only the redundant scene number
+in portrait mode. Author portrait scenes as a vertical reading flow with stacked visuals and short
+copy; do not rely on a responsive landscape-to-portrait conversion.
+
 Visible titles, summaries, labels, charts, and diagrams belong in `body.html`, not duplicated scene
 metadata. Write `body.html` as a complete document from `<!doctype html>` through `</html>`. Use one
 `<section class="content-scene" data-scene="id">` per scene, do not hard-code an
@@ -40,7 +48,7 @@ controls, captions, or chapter elements from `body.html`.
 
 Use a bright editorial blackboard/newspaper palette: pale blue, mint, seafoam, warm white, and dark
 teal ink, with one restrained warm or medium-blue accent. Avoid dark full-frame backgrounds, neon,
-and glassmorphism. Let the stable shell supply the subtle grid and 16:9 frame border; keep source
+and glassmorphism. Let the stable shell supply the subtle grid and selected-canvas frame border; keep source
 backgrounds transparent or lightly tinted. Prefer one idea per slide, strong hierarchy, whitespace,
 controlled typography, and an explanatory visual. Keep ordinary titles at or below
 64px, multi-column titles at or below 56px, and reserve up to 88px for short intro headlines. Build
@@ -78,7 +86,7 @@ python main.py render --source .local/work/<project-slug> --output video.mp4
 ```
 
 Use `python main.py offline --source <source-folder>` for a silent estimated timeline. Use
-`python main.py prompt --topic "<topic>" --target agent` to compose the single canonical source
+`python main.py prompt --topic "<topic>" --target agent --aspect-ratio 16:9` to compose the single canonical source
 prompt from `docs/source-prompt.md`.
 
 The shell URL `http://127.0.0.1:8765/pipeline/shell/index.html` is an internal Studio/rendering

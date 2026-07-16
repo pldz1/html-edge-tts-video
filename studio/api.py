@@ -18,6 +18,7 @@ from typing import Any
 from urllib.parse import quote
 
 from pipeline.factory import (
+    DEFAULT_ASPECT_RATIO,
     LOCAL,
     LOCAL_ASSETS,
     LOCAL_OUTPUT,
@@ -32,6 +33,7 @@ from pipeline.factory import (
     atomic_write_text,
     is_local_project,
     migrate_legacy_current,
+    normalize_aspect_ratio,
     project_paths,
     reconcile_active_project,
     rel,
@@ -224,6 +226,7 @@ def ensure_project_manifest(
     name: str | None = None,
     project_id: str | None = None,
     language: str | None = None,
+    aspect_ratio: str | None = None,
 ) -> dict[str, Any]:
     manifest_path = source_root / PROJECT_MANIFEST_FILE
     existing = read_json_file(manifest_path)
@@ -254,6 +257,15 @@ def ensure_project_manifest(
     resolved_language = detect_language(language_text) if requested_language == "auto" else requested_language
     retained = {key: value for key, value in data.items() if key not in {"contentTheme", "engine", "theme"}}
     starter = source_root.resolve() == STARTER_SOURCE.resolve()
+    stored_aspect_ratio = data.get("aspectRatio")
+    if stored_aspect_ratio is not None and aspect_ratio is not None:
+        if normalize_aspect_ratio(stored_aspect_ratio) != normalize_aspect_ratio(aspect_ratio):
+            raise ApiError(409, "project aspect ratio is fixed after creation")
+    resolved_aspect_ratio = (
+        DEFAULT_ASPECT_RATIO
+        if starter
+        else normalize_aspect_ratio(stored_aspect_ratio or aspect_ratio)
+    )
     manifest = {
         **retained,
         "version": 5,
@@ -266,6 +278,7 @@ def ensure_project_manifest(
         "active": bool(data.get("active", starter and not data)),
         "system": starter,
         "readOnly": starter,
+        "aspectRatio": resolved_aspect_ratio,
         "language": requested_language,
         "resolvedLanguage": resolved_language,
         "createdAt": str(data.get("createdAt") or now),
@@ -360,6 +373,7 @@ def source_summary(source_root: Path) -> dict[str, Any]:
         "hasMedia": bool(resolved["media"]),
         "language": str(manifest.get("language") or "auto"),
         "resolvedLanguage": str(manifest.get("resolvedLanguage") or "zh-CN"),
+        "aspectRatio": normalize_aspect_ratio(manifest.get("aspectRatio")),
         "settings": read_project_settings(resolved["root"]),
         "active": bool(active and active.resolve() == resolved["root"].resolve()),
     }
@@ -481,6 +495,7 @@ def active_project_meta(source_root: Path | None = None) -> dict[str, Any] | Non
         "relativePath": rel(source),
         "language": manifest.get("language", "auto"),
         "resolvedLanguage": manifest.get("resolvedLanguage", "zh-CN"),
+        "aspectRatio": normalize_aspect_ratio(manifest.get("aspectRatio")),
         "settings": read_project_settings(source),
         "loadedAt": manifest.get("activatedAt"),
     }
@@ -550,6 +565,7 @@ def studio_state() -> dict[str, Any]:
 def validate_source_text(
     scenes_json: str,
     body_html: str,
+    aspect_ratio: str = DEFAULT_ASPECT_RATIO,
 ) -> dict[str, Any]:
     if not scenes_json.strip():
         raise ApiError(400, "scenesJson is required")
@@ -562,7 +578,7 @@ def validate_source_text(
         scenes_path.write_text(scenes_json, encoding="utf-8")
         body_path.write_text(body_html, encoding="utf-8")
         try:
-            scenes = validate_scenes(scenes_path)
+            scenes = validate_scenes(scenes_path, aspect_ratio=aspect_ratio)
             validate_body(body_path, scenes)
             validate_shell()
         except SystemExit as exc:
@@ -580,7 +596,11 @@ def validate_source_text(
 def validate_project(source_root: Path) -> dict[str, Any]:
     try:
         resolved = resolve_source(source_root)
-        scenes = validate_scenes(resolved["scenes"])
+        manifest = ensure_project_manifest(resolved["root"])
+        scenes = validate_scenes(
+            resolved["scenes"],
+            aspect_ratio=normalize_aspect_ratio(manifest.get("aspectRatio")),
+        )
         validate_body(resolved["body"], scenes)
         if resolved["captions"]:
             validate_captions(resolved["captions"])
@@ -600,10 +620,12 @@ def create_project(payload: dict[str, Any]) -> dict[str, Any]:
     scenes_json = str(payload.get("scenesJson") or "")
     body_html = str(payload.get("bodyHtml") or "")
     overwrite = bool(payload.get("overwrite"))
+    try:
+        aspect_ratio = normalize_aspect_ratio(payload.get("aspectRatio"))
+    except ValueError as exc:
+        raise ApiError(400, str(exc)) from exc
     if overwrite and project_id == "starter":
         raise ApiError(400, "starter is read-only; save the source as a new project")
-    validation = validate_source_text(scenes_json, body_html)
-
     if overwrite:
         if not project_id:
             raise ApiError(400, "project id is required when replacing a project")
@@ -611,11 +633,16 @@ def create_project(payload: dict[str, Any]) -> dict[str, Any]:
         if not target.exists():
             raise ApiError(404, f"project not found: {project_id}")
         existing_manifest = ensure_project_manifest(target)
+        existing_aspect_ratio = normalize_aspect_ratio(existing_manifest.get("aspectRatio"))
+        if "aspectRatio" in payload and aspect_ratio != existing_aspect_ratio:
+            raise ApiError(409, "project aspect ratio is fixed after creation")
+        aspect_ratio = existing_aspect_ratio
         name = name or str(existing_manifest["name"])
     else:
         project_id = new_project_id()
         target = LOCAL_WORK / project_id
     name = name or "Untitled project"
+    validation = validate_source_text(scenes_json, body_html, aspect_ratio)
 
     write_target = target
     if not overwrite:
@@ -631,6 +658,7 @@ def create_project(payload: dict[str, Any]) -> dict[str, Any]:
         name=name,
         project_id=project_id,
         language=language,
+        aspect_ratio=aspect_ratio,
     )
     if payload.get("tts") is not None:
         write_project_settings(write_target, {"tts": payload.get("tts")})
@@ -1109,9 +1137,14 @@ def handle_post(path: str, payload: dict[str, Any]) -> tuple[int, Any] | None:
     if path == "/api/source/validate":
         if payload.get("project") or payload.get("id"):
             return 200, validate_project(safe_project_path(str(payload.get("project") or payload.get("id"))))
+        try:
+            aspect_ratio = normalize_aspect_ratio(payload.get("aspectRatio"))
+        except ValueError as exc:
+            raise ApiError(400, str(exc)) from exc
         return 200, validate_source_text(
             str(payload.get("scenesJson") or ""),
             str(payload.get("bodyHtml") or ""),
+            aspect_ratio,
         )
     if path == "/api/jobs":
         return 202, start_job(payload)

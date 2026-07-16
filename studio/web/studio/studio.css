@@ -2617,7 +2617,7 @@ dialog[open] > .studio-toast {
   position: relative;
   width: 100%;
   max-width: 100%;
-  aspect-ratio: 16 / 9;
+  aspect-ratio: var(--preview-aspect-ratio, 16 / 9);
   overflow: hidden;
   border: 1px solid #a9c8c5;
   border-radius: 10px;
@@ -2629,8 +2629,8 @@ dialog[open] > .studio-toast {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 1920px;
-  height: 1080px;
+  width: var(--preview-width, 1280px);
+  height: var(--preview-height, 720px);
   overflow: hidden;
   transform: translate(-50%, -50%) scale(var(--preview-scale, 0.25));
   transform-origin: center;
@@ -2638,8 +2638,8 @@ dialog[open] > .studio-toast {
 
 .preview-panel .preview-frame-wrap iframe {
   display: block;
-  width: 1920px;
-  height: 1080px;
+  width: var(--preview-width, 1280px);
+  height: var(--preview-height, 720px);
   min-height: 0;
   margin: 0;
   border: 0;

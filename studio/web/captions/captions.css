@@ -253,8 +253,8 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .current-dot { background: #764df2; }
 
 .preview-frame-wrap { position: relative; min-height: 0; flex: 1 1 auto; overflow: hidden; border-radius: 8px; background: #071426; }
-.preview-viewport { position: absolute; top: 50%; left: 50%; width: 1920px; height: 1080px; overflow: hidden; background: #071426; transform: translate(-50%, -50%) scale(var(--preview-scale, .1)); transform-origin: center; }
-#previewFrame { display: block; width: 1920px; height: 1080px; border: 0; pointer-events: none; }
+.preview-viewport { position: absolute; top: 50%; left: 50%; width: var(--preview-width, 1280px); height: var(--preview-height, 720px); overflow: hidden; background: #071426; transform: translate(-50%, -50%) scale(var(--preview-scale, .1)); transform-origin: center; }
+#previewFrame { display: block; width: var(--preview-width, 1280px); height: var(--preview-height, 720px); border: 0; pointer-events: none; }
 .scene-badge { position: absolute; top: 32px; left: 32px; padding: 12px 22px; border: 2px solid rgba(255,255,255,.26); border-radius: 999px; background: rgba(8,20,39,.58); color: #fff; font-size: 24px; }
 .live-caption { position: absolute; right: 7%; bottom: 15%; left: 7%; overflow-wrap: anywhere; color: #fff; font-size: 48px; font-weight: 650; line-height: 1.4; text-align: center; text-shadow: 0 6px 18px rgba(0,0,0,.92), 0 0 4px #000; }
 .preview-controls { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 6px; margin-top: 7px; }

@@ -48,6 +48,7 @@ const els = {
   toneInput: $("#toneInput"),
   sceneCountInput: $("#sceneCountInput"),
   languageInput: $("#languageInput"),
+  aspectRatioInput: $("#aspectRatioInput"),
   promptTargetInput: $("#promptTargetInput"),
   promptResolution: $("#promptResolution"),
   notesInput: $("#notesInput"),
@@ -59,6 +60,7 @@ const els = {
   directImportGrid: $("#directImportGrid"),
   extractButton: $("#extractButton"),
   projectNameInput: $("#projectNameInput"),
+  projectAspectRatioInput: $("#projectAspectRatioInput"),
   validateExtractedButton: $("#validateExtractedButton"),
   saveProjectButton: $("#saveProjectButton"),
   scenesOutput: $("#scenesOutput"),
@@ -114,6 +116,7 @@ const INITIAL_FORM_VALUES = Object.freeze({
   tone: els.toneInput?.value || "",
   sceneCount: els.sceneCountInput?.value || "",
   language: els.languageInput?.value || "auto",
+  aspectRatio: els.aspectRatioInput?.value || "16:9",
   promptTarget: els.promptTargetInput?.value || "web-ai",
   notes: els.notesInput?.value || "",
   projectName: els.projectNameInput?.value || "新视频项目",
@@ -164,6 +167,12 @@ async function initImportProjectContext() {
     if (els.directBodyInput) els.directBodyInput.value = body;
     if (els.languageInput)
       els.languageInput.value = data?.project?.language || "auto";
+    if (els.projectAspectRatioInput) {
+      els.projectAspectRatioInput.value = normalizeAspectRatio(
+        data?.project?.aspectRatio
+      );
+      els.projectAspectRatioInput.disabled = true;
+    }
     setStatus(`正在编辑项目：${data?.project?.name || projectId}`, "success");
   } catch (error) {
     setStatus(error.message || "无法加载项目源文件。", "error");
@@ -259,6 +268,8 @@ function resetPromptComposer() {
   els.toneInput.value = INITIAL_FORM_VALUES.tone;
   els.sceneCountInput.value = INITIAL_FORM_VALUES.sceneCount;
   els.languageInput.value = INITIAL_FORM_VALUES.language;
+  if (els.aspectRatioInput)
+    els.aspectRatioInput.value = INITIAL_FORM_VALUES.aspectRatio;
   els.promptTargetInput.value = INITIAL_FORM_VALUES.promptTarget;
   els.notesInput.value = INITIAL_FORM_VALUES.notes;
   refreshPrompt();
@@ -279,6 +290,12 @@ function resetImportComposer(name = INITIAL_FORM_VALUES.projectName) {
   if (els.directScenesInput) els.directScenesInput.value = "";
   if (els.directBodyInput) els.directBodyInput.value = "";
   els.projectNameInput.value = name || INITIAL_FORM_VALUES.projectName;
+  if (els.projectAspectRatioInput) {
+    els.projectAspectRatioInput.disabled = false;
+    els.projectAspectRatioInput.value = normalizeAspectRatio(
+      els.aspectRatioInput?.value || INITIAL_FORM_VALUES.aspectRatio
+    );
+  }
 }
 
 function resetBuildState(name = "") {
@@ -407,6 +424,59 @@ function formatPreviewTime(value) {
   return `${minutes}:${seconds}`;
 }
 
+function normalizeAspectRatio(value) {
+  return value === "9:16" ? "9:16" : "16:9";
+}
+
+function aspectGeometry(value) {
+  const aspectRatio = normalizeAspectRatio(value);
+  return aspectRatio === "9:16"
+    ? { aspectRatio, width: 720, height: 1280, cssRatio: "9 / 16" }
+    : { aspectRatio, width: 1280, height: 720, cssRatio: "16 / 9" };
+}
+
+function activeAspectRatio() {
+  return normalizeAspectRatio(appState?.activeProject?.aspectRatio);
+}
+
+function applyRenderSizeLabels(aspectRatio = activeAspectRatio()) {
+  if (!els.renderSizeInput) return;
+  const portrait = normalizeAspectRatio(aspectRatio) === "9:16";
+  const sizes = {
+    "720p": [1280, 720],
+    "1080p": [1920, 1080],
+    "2k": [2560, 1440],
+    "4k": [3840, 2160],
+  };
+  [...els.renderSizeInput.options].forEach((option) => {
+    const dimensions = sizes[option.value];
+    if (!dimensions) return;
+    const [baseWidth, baseHeight] = dimensions;
+    const width = portrait ? baseHeight : baseWidth;
+    const height = portrait ? baseWidth : baseHeight;
+    const label = option.value === "2k" || option.value === "4k"
+      ? option.value.toUpperCase()
+      : option.value;
+    option.textContent = `${label} · ${width} × ${height}`;
+  });
+}
+
+function applyPreviewAspect(aspectRatio = activeAspectRatio()) {
+  const geometry = aspectGeometry(aspectRatio);
+  document.body.dataset.aspectRatio = geometry.aspectRatio;
+  if (els.previewFrameWrap) {
+    els.previewFrameWrap.style.setProperty(
+      "--preview-aspect-ratio",
+      geometry.cssRatio
+    );
+  }
+  if (els.previewViewport) {
+    els.previewViewport.style.setProperty("--preview-width", `${geometry.width}px`);
+    els.previewViewport.style.setProperty("--preview-height", `${geometry.height}px`);
+  }
+  applyRenderSizeLabels(geometry.aspectRatio);
+}
+
 function promptPayload() {
   return {
     topic: els.topicInput.value.trim(),
@@ -415,6 +485,7 @@ function promptPayload() {
     sceneCount: els.sceneCountInput.value.trim(),
     notes: els.notesInput.value.trim(),
     language: els.languageInput.value,
+    aspectRatio: normalizeAspectRatio(els.aspectRatioInput?.value),
     target: els.promptTargetInput.value,
   };
 }
@@ -426,7 +497,8 @@ async function refreshPrompt() {
     if (requestId !== promptRequestId) return;
     els.promptOutput.value = result.prompt;
     if (els.promptResolution) {
-      els.promptResolution.textContent = `已解析：${result.language} · ${result.target} · 浅蓝绿色讲义风格`;
+      const orientation = result.aspectRatio === "9:16" ? "竖屏" : "横屏";
+      els.promptResolution.textContent = `已解析：${result.language} · ${result.target} · ${result.aspectRatio} ${orientation}`;
     }
   } catch (error) {
     if (requestId !== promptRequestId) return;
@@ -538,6 +610,7 @@ function renderHeader() {
   const activeId = active?.id || activeProject?.id || "";
   const currentTitle =
     active?.name || activeProject?.name || projectSummary.title || "未选择项目";
+  applyPreviewAspect(active?.aspectRatio || activeProject?.aspectRatio);
   const timelineLabel = timeline.matchesSource
     ? formatDuration(timeline.duration)
     : timeline.exists
@@ -625,7 +698,7 @@ function projectCard(project) {
 
   const meta = document.createElement("span");
   meta.className = "project-meta";
-  meta.textContent = `${project.sceneCount} 个场景 · ${
+  meta.textContent = `${normalizeAspectRatio(project.aspectRatio)} · ${project.sceneCount} 个场景 · ${
     project.narrationChars
   } 个字符 · ${formatDate(project.updatedAt)}`;
   button.title = project.relativePath;
@@ -736,16 +809,18 @@ function fitPreviewViewport() {
     parseFloat(areaStyle.paddingTop) + parseFloat(areaStyle.paddingBottom);
   const availableWidth = els.previewFrameArea.clientWidth - horizontalPadding;
   const availableHeight = els.previewFrameArea.clientHeight - verticalPadding;
-  if (!availableWidth) return;
-  const width = availableHeight
-    ? Math.min(availableWidth, (availableHeight * 16) / 9)
-    : availableWidth;
-  const height = (width * 9) / 16;
+  if (!availableWidth || !availableHeight) return;
+  const geometry = aspectGeometry(activeAspectRatio());
+  const width = Math.min(
+    availableWidth,
+    (availableHeight * geometry.width) / geometry.height
+  );
+  const height = (width * geometry.height) / geometry.width;
   els.previewFrameWrap.style.width = `${width}px`;
   els.previewFrameWrap.style.height = `${height}px`;
   els.previewViewport.style.setProperty(
     "--preview-scale",
-    String(width / 1920)
+    String(width / geometry.width)
   );
 }
 
@@ -1186,6 +1261,7 @@ async function validateExtracted() {
     const result = await postJson("/api/source/validate", {
       scenesJson: els.scenesOutput.value,
       bodyHtml: els.bodyOutput.value,
+      aspectRatio: normalizeAspectRatio(els.projectAspectRatioInput?.value),
     });
     setStatus(
       `验证通过：${result.sceneCount} 个场景，${result.narrationChars} 个旁白字符。`,
@@ -1211,6 +1287,7 @@ async function saveProject() {
       scenesJson: els.scenesOutput.value,
       bodyHtml: els.bodyOutput.value,
       language: els.languageInput.value,
+      aspectRatio: normalizeAspectRatio(els.projectAspectRatioInput?.value),
       overwrite: Boolean(importProjectId),
     });
     appState = created.state;
@@ -1411,11 +1488,26 @@ function bindEvents() {
     .forEach((input) => {
       input.addEventListener("input", schedulePromptRefresh);
     });
-  [els.languageInput, els.promptTargetInput]
+  [els.languageInput, els.aspectRatioInput, els.promptTargetInput]
     .filter(Boolean)
     .forEach((input) => {
       input.addEventListener("change", schedulePromptRefresh);
     });
+  els.aspectRatioInput?.addEventListener("change", () => {
+    if (!importProjectId && els.projectAspectRatioInput) {
+      els.projectAspectRatioInput.value = normalizeAspectRatio(
+        els.aspectRatioInput.value
+      );
+    }
+  });
+  els.projectAspectRatioInput?.addEventListener("change", () => {
+    if (!importProjectId && els.aspectRatioInput) {
+      els.aspectRatioInput.value = normalizeAspectRatio(
+        els.projectAspectRatioInput.value
+      );
+      schedulePromptRefresh();
+    }
+  });
   els.copyPromptButton?.addEventListener("click", copyPrompt);
   els.tourButton.addEventListener("click", startTour);
   document.querySelectorAll("[data-studio-route]").forEach((link) => {
@@ -1502,6 +1594,8 @@ function bindEvents() {
       closeNewProjectDialog();
       if (route === "prompt") {
         resetPromptComposer();
+      } else if (els.aspectRatioInput) {
+        els.aspectRatioInput.value = INITIAL_FORM_VALUES.aspectRatio;
       }
       resetImportComposer();
       setStudioRoute(route);

@@ -20,10 +20,10 @@ from playwright.async_api import async_playwright
 from playwright.async_api import Error as PlaywrightError
 
 try:
-    from .factory import PLAYWRIGHT_RECORDINGS, ROOT, load_scenes, output_path, project_paths, shell_url
+    from .factory import PLAYWRIGHT_RECORDINGS, ROOT, load_scenes, normalize_aspect_ratio, output_path, project_paths, read_json, shell_url
     from .toolchain import configure_playwright_environment, ffmpeg_executable
 except ImportError:  # Direct script execution: python pipeline/render_video.py
-    from factory import PLAYWRIGHT_RECORDINGS, ROOT, load_scenes, output_path, project_paths, shell_url
+    from factory import PLAYWRIGHT_RECORDINGS, ROOT, load_scenes, normalize_aspect_ratio, output_path, project_paths, read_json, shell_url
     from toolchain import configure_playwright_environment, ffmpeg_executable
 
 
@@ -37,8 +37,18 @@ SIZES = {
     "2160p": (3840, 2160),
 }
 
-DESIGN_WIDTH = 1280
-DESIGN_HEIGHT = 720
+
+def output_dimensions(size: str, aspect_ratio: str) -> tuple[int, int]:
+    width, height = SIZES[size]
+    return (height, width) if normalize_aspect_ratio(aspect_ratio) == "9:16" else (width, height)
+
+
+def dimensions_match_aspect(width: int, height: int, aspect_ratio: str) -> bool:
+    expected = 16 / 9 if normalize_aspect_ratio(aspect_ratio) == "16:9" else 9 / 16
+    return abs((width / height) - expected) <= 0.01
+
+LANDSCAPE_DESIGN_SIZE = (1280, 720)
+PORTRAIT_DESIGN_SIZE = (720, 1280)
 PROGRESS_PREFIX = "RENDER_PROGRESS "
 RENDER_PROJECT_ROOT: Path | None = None
 
@@ -254,7 +264,7 @@ def ffmpeg_progress_args() -> list[str]:
 
 
 def resolve_render_geometry(width: int, height: int) -> RenderGeometry:
-    """Keep common output sizes on the 1280x720 design canvas.
+    """Keep common output sizes on a direction-matched 720p design canvas.
 
     A larger browser viewport triggers responsive re-layout instead of producing a
     sharper version of the same frame.  Prefer the largest integer CSS viewport
@@ -267,7 +277,10 @@ def resolve_render_geometry(width: int, height: int) -> RenderGeometry:
     common = math.gcd(width, height)
     aspect_width = width // common
     aspect_height = height // common
-    multiplier = min(DESIGN_WIDTH // aspect_width, DESIGN_HEIGHT // aspect_height)
+    design_width, design_height = (
+        PORTRAIT_DESIGN_SIZE if height > width else LANDSCAPE_DESIGN_SIZE
+    )
+    multiplier = min(design_width // aspect_width, design_height // aspect_height)
 
     if multiplier > 0:
         viewport_width = aspect_width * multiplier
@@ -616,7 +629,20 @@ async def main() -> None:
     RENDER_PROJECT_ROOT = paths.root
     configure_playwright_environment()
 
-    width, height = (args.width, args.height) if args.width is not None else SIZES[args.size]
+    manifest = read_json(paths.manifest)
+    aspect_ratio = normalize_aspect_ratio(
+        manifest.get("aspectRatio") if isinstance(manifest, dict) else None
+    )
+    width, height = (
+        (args.width, args.height)
+        if args.width is not None
+        else output_dimensions(args.size, aspect_ratio)
+    )
+    if not dimensions_match_aspect(width, height, aspect_ratio):
+        raise SystemExit(
+            f"Requested {width}x{height} does not match this project's immutable "
+            f"{aspect_ratio} aspect ratio"
+        )
     geometry = resolve_render_geometry(width, height)
     narration = paths.generated / "narration.mp3"
     ensure_render_assets_match_source(paths.root, paths.generated)

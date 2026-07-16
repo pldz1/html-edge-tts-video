@@ -36,6 +36,10 @@ from the subject. Do not ask users or web AI to generate `app.js`.
 Source folders put project CSS and optional deterministic JavaScript inside `body.html`. They must
 start with an `intro` scene, include a short `category` per scene, and keep playback controls,
 progress bars, headers, footers, timecodes, and transport UI out of `body.html`.
+Choose `16:9` (default) or `9:16` when creating a project and persist it as the manifest's immutable
+`aspectRatio`; never retrofit orientation by changing render dimensions. Create portrait agent
+projects with `python main.py init --target <folder> --aspect-ratio 9:16`. For portrait projects,
+keep each `category` to 2-3 CJK characters or one short English word of at most 8 letters.
 
 Before finishing code changes, run:
 

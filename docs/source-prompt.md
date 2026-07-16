@@ -5,6 +5,7 @@ Audience: {{AUDIENCE}}
 Tone: {{TONE}}
 Preferred scene count: {{SCENE_COUNT}}
 Language: {{LANGUAGE_INSTRUCTION}}
+Aspect ratio: {{ASPECT_RATIO}}. {{ASPECT_RATIO_INSTRUCTION}}
 Additional requirements: {{NOTES}}
 
 ## Output contract
@@ -25,7 +26,8 @@ project.
 - Make `scenes.json` a non-empty array. Start with `id: "intro"`.
 - Give every scene a unique lowercase `id`, a short `category`, and natural `narration`. Keep a
   category within 12 CJK characters or about 24 Latin characters; use a compact chapter label such
-  as `示例`, `核心流程`, `Example`, or `Application` rather than a sentence.
+  as `示例`, `核心流程`, `Example`, or `Application` rather than a sentence. For a 9:16 project,
+  use only 2-3 CJK characters or one short English word of at most 8 letters.
 - Put every visible title, label, diagram, chart, and explanatory element in `body.html`.
 - Add one `<section class="content-scene" data-scene="id">` for every scene. Do not hard-code an
   initial `active` or `is-active` class; the stable shell controls scene visibility.
@@ -83,11 +85,15 @@ comparisons, timelines, editorial illustrations, compact SVG, or local media whe
 subject. Vary layouts across scenes. Avoid dashboards, settings panels, card walls, deeply nested
 boxes, and decorative UI chrome.
 
-The stable shell already draws the subtle grid and the 16:9 frame border over the finished video.
+The stable shell already draws the subtle grid and the selected-canvas frame border over the
+finished video.
 Keep source scene backgrounds transparent or use a very light translucent blue/green paper wash.
 Do not recreate the outer border, full-frame grid, captions, or chapter rail in `body.html`.
 
-Design against a 16:9 stage and make the same CSS fit smaller Studio previews. Treat typography as
+Design only for the selected immutable `{{ASPECT_RATIO}}` stage; do not add a responsive orientation
+switch. A 9:16 project should use a single vertical reading flow, stacked diagrams, shorter visible
+copy, and at most two compact columns when the content truly needs them. A 16:9 project may use
+wider presentation layouts. Make the same CSS fit smaller Studio previews. Treat typography as
 presentation text, not poster lettering:
 
 - Keep a normal scene title at or below `clamp(36px, 4vw, 64px)`. A title sharing the frame with two

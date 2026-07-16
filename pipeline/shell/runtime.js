@@ -29,6 +29,7 @@ const state = {
   renderMode: RUNTIME_PARAMS.has('render'),
   embedMode: RUNTIME_PARAMS.has('embed'),
   projectMeta: {},
+  aspectRatio: '16:9',
   visualModule: null,
 };
 
@@ -46,6 +47,14 @@ const sceneTransition = document.querySelector('#sceneTransition');
 document.documentElement.classList.toggle('render-mode', state.renderMode);
 document.documentElement.classList.toggle('preview-mode', !state.renderMode);
 document.documentElement.classList.toggle('embed-mode', state.embedMode);
+
+function applyProjectAspectRatio(value) {
+  state.aspectRatio = value === '9:16' ? '9:16' : '16:9';
+  document.documentElement.dataset.aspectRatio = state.aspectRatio;
+  document.body.dataset.aspectRatio = state.aspectRatio;
+}
+
+applyProjectAspectRatio('16:9');
 
 const pad = (value, width = 2) => String(value).padStart(width, '0');
 
@@ -599,8 +608,9 @@ if (scrubber) {
 }
 
 async function init() {
-  state.scenes = await fetchJson(`${SOURCE_BASE}/scenes.json`);
   state.projectMeta = await fetchOptionalJson(`${SOURCE_BASE}/manifest.json`) || {};
+  applyProjectAspectRatio(state.projectMeta.aspectRatio);
+  state.scenes = await fetchJson(`${SOURCE_BASE}/scenes.json`);
   const embeddedScripts = await loadBodyDocument(await fetchText(`${SOURCE_BASE}/body.html`));
 
   try {

@@ -13,6 +13,7 @@ const state = {
   previewReady: false,
   previewRetries: 0,
   previewVersion: 0,
+  aspectRatio: '16:9',
   raf: 0,
 };
 
@@ -110,7 +111,12 @@ function fitPreviewViewport() {
   const width = els.previewFrameWrap.clientWidth;
   const height = els.previewFrameWrap.clientHeight;
   if (!width || !height) return;
-  const scale = Math.min(width / 1920, height / 1080);
+  const portrait = state.aspectRatio === '9:16';
+  const designWidth = portrait ? 720 : 1280;
+  const designHeight = portrait ? 1280 : 720;
+  const scale = Math.min(width / designWidth, height / designHeight);
+  els.previewViewport.style.setProperty('--preview-width', `${designWidth}px`);
+  els.previewViewport.style.setProperty('--preview-height', `${designHeight}px`);
   els.previewViewport.style.setProperty('--preview-scale', String(scale));
 }
 
@@ -387,6 +393,9 @@ async function loadCaptions() {
     throw new Error(error.error || response.statusText);
   }
   const payload = await response.json();
+  state.aspectRatio = payload.aspectRatio === '9:16' ? '9:16' : '16:9';
+  document.body.dataset.aspectRatio = state.aspectRatio;
+  fitPreviewViewport();
   els.captionProjectName.textContent = els.captionProjectSelect.selectedOptions[0]?.textContent || '字幕编辑器';
   state.captions = payload.captions;
   state.generated = payload.generated;

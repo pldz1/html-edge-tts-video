@@ -31,6 +31,8 @@ PLAYWRIGHT_TMP = LOCAL_PLAYWRIGHT / "tmp"
 PROJECT_MANIFEST_FILE = "manifest.json"
 PROJECT_GENERATED_DIR = "generated"
 PROJECT_OUTPUT_DIR = "output"
+DEFAULT_ASPECT_RATIO = "16:9"
+ASPECT_RATIOS = ("16:9", "9:16")
 STARTER_SOURCE = LOCAL_WORK / "starter"
 SHELL = Path(__file__).resolve().parent / "shell"
 SHELL_PATH = "/pipeline/shell/index.html"
@@ -115,6 +117,21 @@ def project_output_dir(path: Path) -> Path:
     return path.resolve() / PROJECT_OUTPUT_DIR
 
 
+def normalize_aspect_ratio(value: object = None) -> str:
+    """Return the canonical immutable project aspect ratio."""
+    raw = str(value or DEFAULT_ASPECT_RATIO).strip().replace(" ", "")
+    aliases = {
+        "landscape": "16:9",
+        "horizontal": "16:9",
+        "portrait": "9:16",
+        "vertical": "9:16",
+    }
+    normalized = aliases.get(raw.lower(), raw)
+    if normalized not in ASPECT_RATIOS:
+        raise ValueError("aspectRatio must be 16:9 or 9:16")
+    return normalized
+
+
 def default_manifest(source_root: Path, *, active: bool = False) -> dict:
     starter = source_root.resolve() == STARTER_SOURCE.resolve()
     now = datetime.now(timezone.utc).isoformat()
@@ -131,6 +148,7 @@ def default_manifest(source_root: Path, *, active: bool = False) -> dict:
         "active": active,
         "system": starter,
         "readOnly": starter,
+        "aspectRatio": DEFAULT_ASPECT_RATIO,
         "language": "auto",
         "resolvedLanguage": "zh-CN" if starter else "en-US",
         "createdAt": now,
@@ -152,7 +170,13 @@ def ensure_starter_manifest() -> dict:
     existing = read_json(path)
     if isinstance(existing, dict):
         manifest = {**default_manifest(STARTER_SOURCE), **existing}
-        manifest.update({"id": "starter", "system": True, "readOnly": True, "version": 5})
+        manifest.update({
+            "id": "starter",
+            "system": True,
+            "readOnly": True,
+            "aspectRatio": DEFAULT_ASPECT_RATIO,
+            "version": 5,
+        })
     else:
         other_active = False
         if LOCAL_WORK.exists():

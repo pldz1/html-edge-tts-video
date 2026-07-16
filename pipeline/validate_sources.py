@@ -8,13 +8,14 @@ import re
 from pathlib import Path
 
 try:
-    from .factory import SHELL, ensure_shell, project_paths
+    from .factory import DEFAULT_ASPECT_RATIO, SHELL, ensure_shell, normalize_aspect_ratio, project_paths, read_json
 except ImportError:  # Direct script execution: python pipeline/validate_sources.py
-    from factory import SHELL, ensure_shell, project_paths
+    from factory import DEFAULT_ASPECT_RATIO, SHELL, ensure_shell, normalize_aspect_ratio, project_paths, read_json
 
 
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 CATEGORY_UNIT_LIMIT = 12.0
+PORTRAIT_CATEGORY_UNIT_LIMIT = 4.0
 FORBIDDEN_BODY_MARKERS = {
     "topbar": "body.html must not include template chrome such as headers",
     "transport": "body.html must not include playback controls",
@@ -83,7 +84,11 @@ def short_label_units(value: str) -> float:
     return units
 
 
-def validate_scenes(scenes_file: Path) -> list[dict]:
+def validate_scenes(
+    scenes_file: Path,
+    *,
+    aspect_ratio: str = DEFAULT_ASPECT_RATIO,
+) -> list[dict]:
     if not scenes_file.exists():
         fail("missing scenes.json; run python main.py load --source <folder>")
 
@@ -114,7 +119,17 @@ def validate_scenes(scenes_file: Path) -> list[dict]:
         category = scene.get("category")
         if not isinstance(category, str) or not category.strip():
             fail(f"scene {scene_id} must include a short category for the generated chapter rail")
-        if short_label_units(category) > CATEGORY_UNIT_LIMIT:
+        category_limit = (
+            PORTRAIT_CATEGORY_UNIT_LIMIT
+            if normalize_aspect_ratio(aspect_ratio) == "9:16"
+            else CATEGORY_UNIT_LIMIT
+        )
+        if short_label_units(category) > category_limit:
+            if category_limit == PORTRAIT_CATEGORY_UNIT_LIMIT:
+                fail(
+                    f"scene {scene_id} category is too long for a portrait chapter rail; "
+                    "use 2-3 CJK characters or one short English word (8 Latin characters maximum)"
+                )
             fail(
                 f"scene {scene_id} category is too long; keep it within 12 CJK characters "
                 "or about 24 Latin characters"
@@ -223,7 +238,11 @@ def main() -> None:
     scenes_file = paths.scenes
     body_file = paths.body
     captions_file = paths.captions
-    scenes = validate_scenes(scenes_file)
+    manifest = read_json(paths.manifest)
+    aspect_ratio = normalize_aspect_ratio(
+        manifest.get("aspectRatio") if isinstance(manifest, dict) else DEFAULT_ASPECT_RATIO
+    )
+    scenes = validate_scenes(scenes_file, aspect_ratio=aspect_ratio)
     validate_body(body_file, scenes)
     validate_captions(captions_file)
     validate_shell()

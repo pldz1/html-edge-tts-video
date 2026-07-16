@@ -17,15 +17,17 @@ Create every video in its own project folder under `.local/work`:
   captions.json optional after subtitle edits
 ```
 
-Before authoring, choose a unique kebab-case `<project-slug>` and create that folder. You may seed it
-with `python main.py init --target .local/work/<project-slug>`, then replace the copied source files.
+Before authoring, choose a unique kebab-case `<project-slug>` and an immutable aspect ratio. Create
+the folder with `python main.py init --target .local/work/<project-slug> --aspect-ratio 16:9` for the
+default landscape canvas or use `--aspect-ratio 9:16` for portrait, then replace the copied source
+files.
 Never edit `.local/work/starter/`; it is a read-only tracked template, not a working project. Do not
 write video source directly into `.local/work/` without a project subfolder.
 
 Write `body.html` as a complete document from `<!doctype html>` through `</html>`. Let the subject
 determine the visual composition within a bright editorial blackboard/newspaper palette: pale
 blue, mint, seafoam, warm white, and dark teal ink. Avoid dark full-frame themes and neon. Let the
-stable shell draw the subtle grid and 16:9 frame border. Build one clear idea and one dominant
+stable shell draw the subtle grid and selected-canvas frame border. Build one clear idea and one dominant
 visual composition per scene. Keep all project CSS and optional deterministic visual code inside
 `body.html`; do not create `app.js`, playback UI, captions, footers, timecodes, chapter rails, or
 scene transitions.
@@ -36,13 +38,14 @@ Keep ordinary scene titles at or below 64px, multi-column titles at or below 56p
 
 Start `scenes.json` with `id: "intro"`. Give every scene a unique lowercase `id`, a short
 `category`, and natural `narration`. Match every id with a `[data-scene="id"]` section in
-`body.html`.
+`body.html`. In portrait projects, categories must use 2-3 CJK characters or one short English word
+of at most 8 letters; the shell keeps the chapter rail to one horizontal row.
 
 Generate the canonical source prompt when helpful:
 
 ```bash
 python main.py prompt --topic "<topic>" --language auto --target agent
-python main.py prompt --topic "<topic>" --language auto --target web-ai
+python main.py prompt --topic "<topic>" --language auto --target web-ai --aspect-ratio 9:16
 ```
 
 Build and verify:
@@ -59,6 +62,6 @@ language unless the user requests translation. The stable shell owns narration t
 the compact chapter rail, playback, and deterministic dip-to-background transitions.
 
 Treat `.local/`, `assets/`, and `output/` as generated state, except for the tracked two-file starter
-at `.local/work/starter/`. Studio adds an untracked `manifest.json` and writes generated media beside
-each project; it does not create a global current workspace. The starter must remain unchanged; all
+at `.local/work/starter/`. Project creation adds an untracked `manifest.json`, and Studio writes
+generated media beside each project; it does not create a global current workspace. The starter must remain unchanged; all
 authored videos belong in their own `.local/work/<project-slug>/` folder.

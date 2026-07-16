@@ -52,8 +52,8 @@ input {
   background-image:
     linear-gradient(var(--shell-grid) 1px, transparent 1px),
     linear-gradient(90deg, var(--shell-grid) 1px, transparent 1px);
-  background-size: clamp(24px, 2.2vw, 42px) clamp(24px, 2.2vw, 42px);
-  opacity: .34;
+  background-size: clamp(24px, 2.2vmin, 42px) clamp(24px, 2.2vmin, 42px);
+  opacity: .42;
 }
 
 .composition-shell::after {
@@ -191,6 +191,25 @@ input {
 .chapter-tile.is-active { border-left-color: var(--shell-accent); color: var(--shell-ink); }
 .chapter-tile.is-active::after { background: var(--shell-accent); box-shadow: 0 0 0 5px rgba(239, 125, 97, .18); }
 .chapter-tile.is-done { color: rgba(23, 59, 61, .78); }
+
+html[data-aspect-ratio="9:16"] .chapter-rail {
+  left: 4vw;
+  right: 4vw;
+}
+
+html[data-aspect-ratio="9:16"] .chapter-tile {
+  padding-inline: 4px;
+}
+
+html[data-aspect-ratio="9:16"] .chapter-index {
+  display: none;
+}
+
+html[data-aspect-ratio="9:16"] .chapter-label {
+  text-overflow: clip;
+  font-size: clamp(9px, 1.1vmin, 12px);
+  text-align: center;
+}
 
 html.render-mode .caption,
 html.render-mode .chapter-rail-fill { transition: none; }

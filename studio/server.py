@@ -17,7 +17,7 @@ if str(APP_ROOT) not in sys.path:
 
 from pipeline.captions import default_doc, load_effective_doc, load_timeline, save_doc
 from pipeline.factory import ROOT, active_source_root, project_web_base, shell_relative_url
-from studio.api import ApiError, handle_get, handle_post
+from studio.api import ApiError, active_project_meta, handle_get, handle_post
 
 
 class FactoryHandler(SimpleHTTPRequestHandler):
@@ -159,6 +159,7 @@ class FactoryHandler(SimpleHTTPRequestHandler):
                 self.send_error_json(409, str(exc))
                 return
             source_root = active_source_root()
+            project_meta = active_project_meta(source_root)
             web_base = project_web_base(source_root)
             self.send_json(
                 200,
@@ -172,6 +173,7 @@ class FactoryHandler(SimpleHTTPRequestHandler):
                     "audioUrl": f"{web_base}/generated/narration.mp3",
                     "sourcePath": str(source_root / "captions.json") if source_root else None,
                     "sourceUrl": f"{web_base}/",
+                    "aspectRatio": project_meta.get("aspectRatio", "16:9"),
                 },
             )
             return
