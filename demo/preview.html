@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <style>
+      :root { font-family: Inter, ui-sans-serif, system-ui, "Microsoft YaHei", sans-serif; color: #123b3a; }
+      * { box-sizing: border-box; }
+      html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+      body { position: relative; background: linear-gradient(140deg, #eff9f5, #e5f3f9); }
+      body::before { position: absolute; inset: 0; opacity: .34; background-image: linear-gradient(rgba(38,91,82,.08) 1px, transparent 1px), linear-gradient(90deg, rgba(38,91,82,.08) 1px, transparent 1px); background-size: 52px 52px; content: ""; }
+      .scene { position: absolute; inset: 0; display: grid; grid-template-columns: 1.2fr .8fr; align-items: center; gap: 5%; padding: 8%; opacity: 0; transform: translateY(2%); transition: opacity .25s ease, transform .25s ease; }
+      .scene.active { opacity: 1; transform: none; }
+      .copy { position: relative; z-index: 2; }
+      .category { display: inline-block; margin-bottom: 1.3em; padding: .5em .75em; border-radius: .5em; color: #237d63; background: #cef0e2; font-size: 16px; font-weight: 850; letter-spacing: .08em; }
+      h1 { max-width: 11em; margin: 0; font-size: 68px; line-height: 1.04; letter-spacing: -.055em; }
+      p { max-width: 29em; margin: 1.2em 0 0; color: #55716d; font-size: 19px; line-height: 1.65; }
+      .visual { position: relative; z-index: 1; display: grid; place-items: center; aspect-ratio: 1; }
+      .orb { position: absolute; width: 78%; aspect-ratio: 1; border: 1px solid rgba(31,143,112,.25); border-radius: 50%; }
+      .orb::before, .orb::after { position: absolute; border-radius: 50%; background: #74d6b2; box-shadow: 0 10px 30px rgba(31,143,112,.18); content: ""; }
+      .orb::before { top: 11%; right: 4%; width: 19%; aspect-ratio: 1; }
+      .orb::after { bottom: 9%; left: 3%; width: 12%; aspect-ratio: 1; background: #f2b765; }
+      .core { display: grid; place-items: center; width: 48%; aspect-ratio: 1; border-radius: 42% 58% 55% 45%; color: white; background: #174d49; box-shadow: 0 20px 60px rgba(23,77,73,.22); font-size: 34px; font-weight: 900; transform: rotate(-8deg); }
+      .core span { transform: rotate(8deg); }
+      body[data-project="orbit"] { color: #153348; background: linear-gradient(145deg, #eef6fb, #e6f3ed); }
+      body[data-project="orbit"] .category { color: #285f89; background: #d9eafa; }
+      body[data-project="orbit"] .core { border-radius: 50%; background: #183a54; }
+      body[data-project="orbit"] .orb { border-style: dashed; transform: scaleY(.45) rotate(-16deg); }
+      body[data-project="orbit"] .orb::before { background: #f2b765; }
+    </style>
+  </head>
+  <body data-project="ocean">
+    <main id="scenes"></main>
+    <script>
+      const CONTENT = {
+        ocean: [
+          ["开场", "看不见的海洋主角", "每一滴海水，都藏着一套正在运转的生命系统。", "1 μm"],
+          ["尺度", "一滴水，一座宇宙", "从细菌到浮游动物，大小相差数千倍，却共享同一个微型空间。", "10³"],
+          ["网络", "能量如何层层传递", "光能从藻类出发，沿着食物网抵达更大的海洋生命。", "→"],
+          ["循环", "微小生命的全球作用", "它们把碳带向深海，悄悄影响整个地球的气候。", "CO₂"],
+        ],
+        orbit: [
+          ["OPEN", "A question worth launching", "Great missions begin with one useful question, not a rocket.", "01"],
+          ["DESIGN", "Turn constraints into form", "Payload, power, mass, and time become a system that can fly.", "ΔV"],
+          ["TEST", "Prove it before flight", "Shake it, heat it, cool it—then trust what the evidence says.", "✓"],
+          ["ORBIT", "A small machine, now useful", "One precise orbit turns engineering into everyday information.", "LEO"],
+        ],
+      };
+      const TIMES = { ocean: [0, 8, 17, 28, 38], orbit: [0, 10, 21, 33, 44] };
+      const params = new URLSearchParams(location.search);
+      let project = CONTENT[params.get("project")] ? params.get("project") : "ocean";
+      let current = 0;
+      let playing = false;
+      let timer = 0;
+
+      function draw() {
+        document.body.dataset.project = project;
+        document.querySelector("#scenes").innerHTML = CONTENT[project].map((item, index) => `
+          <section class="scene${index === 0 ? " active" : ""}">
+            <div class="copy"><span class="category">${item[0]}</span><h1>${item[1]}</h1><p>${item[2]}</p></div>
+            <div class="visual"><span class="orb"></span><div class="core"><span>${item[3]}</span></div></div>
+          </section>`).join("");
+        renderAtTime(0);
+      }
+
+      function duration() { return TIMES[project].at(-1); }
+      function renderAtTime(seconds) {
+        current = Math.max(0, Math.min(duration(), Number(seconds) || 0));
+        const times = TIMES[project];
+        let index = times.findIndex((time, i) => i < times.length - 1 && current >= time && current < times[i + 1]);
+        if (index < 0) index = times.length - 2;
+        document.querySelectorAll(".scene").forEach((scene, i) => scene.classList.toggle("active", i === index));
+        return current;
+      }
+
+      function stop() { clearInterval(timer); timer = 0; }
+      async function togglePlayback() {
+        playing = !playing;
+        stop();
+        if (playing) {
+          if (current >= duration()) current = 0;
+          timer = setInterval(() => {
+            renderAtTime(current + .05);
+            if (current >= duration()) { playing = false; stop(); }
+          }, 50);
+        }
+        return getPlaybackState();
+      }
+
+      function getPlaybackState() { return { current, duration: duration(), playing }; }
+      window.renderAtTime = renderAtTime;
+      window.togglePlayback = togglePlayback;
+      window.getPlaybackState = getPlaybackState;
+      window.compositionReady = true;
+      draw();
+    </script>
+  </body>
+</html>

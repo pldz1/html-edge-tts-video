@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>html-video Preview Demo</title>
+    <style>
+      * { box-sizing: border-box; }
+      html, body, #demoApp { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+      body { background: #f4f8f7; }
+      #demoApp { display: block; border: 0; background: white; }
+    </style>
+  </head>
+  <body>
+    <iframe
+      id="demoApp"
+      title="HTML Video Studio Demo"
+      sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-downloads allow-top-navigation-by-user-activation"
+    ></iframe>
+    <script>
+      (() => {
+        const frame = document.querySelector("#demoApp");
+        const routes = new Set(["studio", "captions", "voices"]);
+        let activeRoute = "";
+
+        function routeFromHash() {
+          const value = location.hash.replace(/^#\/?/, "").split(/[?&]/, 1)[0];
+          return routes.has(value) ? value : "studio";
+        }
+
+        function renderRoute() {
+          const route = routeFromHash();
+          if (location.hash !== `#/${route}`) {
+            history.replaceState(null, "", `#/${route}`);
+          }
+          if (route === activeRoute) return;
+          activeRoute = route;
+          document.title = `${route === "studio" ? "Studio" : route === "captions" ? "Captions" : "Voices"} · Demo`;
+          frame.src = `./web/${route === "voices" ? "voices" : route}/index.html?preview-demo=1`;
+        }
+
+        window.addEventListener("hashchange", renderRoute);
+        window.addEventListener("message", (event) => {
+          if (event.origin !== location.origin) return;
+          if (event.data?.type !== "demo:navigate" || !routes.has(event.data.route)) return;
+          location.hash = `#/${event.data.route}`;
+        });
+        renderRoute();
+      })();
+    </script>
+  </body>
+</html>

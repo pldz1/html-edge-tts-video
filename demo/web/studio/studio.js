@@ -1,0 +1,1668 @@
+const $ = (selector) => document.querySelector(selector);
+
+const els = {
+  currentProjectName: $("#currentProjectName"),
+  timelineStatus: $("#timelineStatus"),
+  outputStatus: $("#outputStatus"),
+  currentSourcePath: $("#currentSourcePath"),
+  workspaceProjectTitle: $("#workspaceProjectTitle"),
+  workspaceProjectId: $("#workspaceProjectId"),
+  projectEditButton: $("#projectEditButton"),
+  renameProjectDialog: $("#renameProjectDialog"),
+  projectEditForm: $("#projectEditForm"),
+  projectTitleInput: $("#projectTitleInput"),
+  saveProjectMetaButton: $("#saveProjectMetaButton"),
+  workspaceSceneCount: $("#workspaceSceneCount"),
+  workspaceNarrationChars: $("#workspaceNarrationChars"),
+  workspaceTimelineState: $("#workspaceTimelineState"),
+  workspaceOutputCount: $("#workspaceOutputCount"),
+  guideTitle: $("#guideTitle"),
+  guideBody: $("#guideBody"),
+  guideBadge: $("#guideBadge"),
+  projectList: $("#projectList"),
+  projectSelect: $("#projectSelect"),
+  outputList: $("#outputList"),
+  previewFrame: $("#previewFrame"),
+  previewFrameArea: $("#previewFrameArea"),
+  previewFrameWrap: $("#previewFrameWrap"),
+  previewViewport: $("#previewViewport"),
+  previewPlayButton: $("#previewPlayButton"),
+  previewProgress: $("#previewProgress"),
+  previewCurrentTime: $("#previewCurrentTime"),
+  previewDuration: $("#previewDuration"),
+  promptDialog: $("#promptDialog"),
+  importDialog: $("#importDialog"),
+  newProjectDialog: $("#newProjectDialog"),
+  tourButton: $("#tourButton"),
+  sidebarToggle: $("#sidebarToggle"),
+  projectDrawerBackdrop: $("#projectDrawerBackdrop"),
+  refreshButton: $("#refreshButton"),
+  refreshOutputsButton: $("#refreshOutputsButton"),
+  loadStarterButton: $("#loadStarterButton"),
+  newWorkspaceProjectButton: $("#newWorkspaceProjectButton"),
+  deleteCurrentProjectButton: $("#deleteCurrentProjectButton"),
+  editCurrentProjectButton: $("#editCurrentProjectButton"),
+  openCaptionsButton: $("#openCaptionsButton"),
+  topicInput: $("#topicInput"),
+  audienceInput: $("#audienceInput"),
+  toneInput: $("#toneInput"),
+  sceneCountInput: $("#sceneCountInput"),
+  languageInput: $("#languageInput"),
+  aspectRatioInput: $("#aspectRatioInput"),
+  promptResolution: $("#promptResolution"),
+  notesInput: $("#notesInput"),
+  promptOutput: $("#promptOutput"),
+  copyPromptButton: $("#copyPromptButton"),
+  aiResponseInput: $("#aiResponseInput"),
+  directScenesInput: $("#directScenesInput"),
+  directBodyInput: $("#directBodyInput"),
+  directImportGrid: $("#directImportGrid"),
+  extractButton: $("#extractButton"),
+  projectNameInput: $("#projectNameInput"),
+  projectAspectRatioInput: $("#projectAspectRatioInput"),
+  validateExtractedButton: $("#validateExtractedButton"),
+  saveProjectButton: $("#saveProjectButton"),
+  scenesOutput: $("#scenesOutput"),
+  bodyOutput: $("#bodyOutput"),
+  checkButton: $("#checkButton"),
+  offlineButton: $("#offlineButton"),
+  ttsButton: $("#ttsButton"),
+  renderButton: $("#renderButton"),
+  renderSizeInput: $("#renderSizeInput"),
+  renderOutputInput: $("#renderOutputInput"),
+  renderTransitionInput: $("#renderTransitionInput"),
+  jobStatus: $("#jobStatus"),
+  jobLog: $("#jobLog"),
+  jobProgress: $("#jobProgress"),
+  jobProgressPhase: $("#jobProgressPhase"),
+  jobProgressPercent: $("#jobProgressPercent"),
+  jobProgressTrack: $("#jobProgressTrack"),
+  jobProgressBar: $("#jobProgressBar"),
+  jobProgressFrames: $("#jobProgressFrames"),
+  jobProgressTime: $("#jobProgressTime"),
+  jobProgressSpeed: $("#jobProgressSpeed"),
+  jobProgressEta: $("#jobProgressEta"),
+  jobOverlay: $("#jobOverlay"),
+  jobOverlayTitle: $("#jobOverlayTitle"),
+  jobOverlayMessage: $("#jobOverlayMessage"),
+  jobOverlayProgress: $("#jobOverlayProgress"),
+  jobOverlayProgressPhase: $("#jobOverlayProgressPhase"),
+  jobOverlayProgressPercent: $("#jobOverlayProgressPercent"),
+  jobOverlayProgressBar: $("#jobOverlayProgressBar"),
+  jobOverlayProgressDetail: $("#jobOverlayProgressDetail"),
+};
+
+let appState = null;
+let projects = [];
+let outputs = [];
+let currentJobId = "";
+let pollTimer = 0;
+let toastTimer = 0;
+let tourAutoStarted = false;
+let promptRefreshFrame = 0;
+let promptRequestId = 0;
+let importMode = "smart";
+let importProjectId = "";
+let previewProgressFrame = 0;
+let resumePreviewAfterScrub = false;
+
+const TOUR_STORAGE_KEY = "html-edge-tts-video:studio-tour-seen:v1";
+const PROJECT_DRAWER_STORAGE_KEY =
+  "html-edge-tts-video:studio-project-drawer-open:v1";
+const INITIAL_FORM_VALUES = Object.freeze({
+  topic: els.topicInput?.value || "",
+  audience: els.audienceInput?.value || "",
+  tone: els.toneInput?.value || "",
+  sceneCount: els.sceneCountInput?.value || "",
+  language: els.languageInput?.value || "auto",
+  aspectRatio: els.aspectRatioInput?.value || "16:9",
+  notes: els.notesInput?.value || "",
+  projectName: els.projectNameInput?.value || "新视频项目",
+  renderOutput: els.renderOutputInput?.value || "studio-render.mp4",
+});
+
+function routeKey() {
+  const dialog = new URLSearchParams(window.location.search).get("dialog");
+  if (dialog === "prompt" || dialog === "import") return dialog;
+  const path = window.location.pathname.replace(/\/+$/, "");
+  if (path.endsWith("/prompt") || path.endsWith("/create")) return "prompt";
+  if (path.endsWith("/import")) return "import";
+  if (path.endsWith("/new")) return "new";
+  return "main";
+}
+
+function setStudioRoute(route = "main", replace = false, search = "") {
+  const params = new URLSearchParams(search);
+  if (route === "prompt" || route === "import") params.set("dialog", route);
+  else params.delete("dialog");
+  const query = params.toString();
+  const nextUrl = `/studio${query ? `?${query}` : ""}`;
+  const currentUrl = `${window.location.pathname}${window.location.search}`;
+  const method = replace ? "replaceState" : "pushState";
+  if (currentUrl !== nextUrl) window.history[method]({}, "", nextUrl);
+  applyRouteFocus(route);
+}
+
+function projectFromUrl() {
+  return new URLSearchParams(window.location.search).get("project") || "";
+}
+
+async function initImportProjectContext() {
+  if (!els.projectNameInput) return;
+  const projectId = projectFromUrl();
+  importProjectId = projectId;
+  if (!projectId) return;
+  try {
+    const data = await api(
+      `/api/projects/source?project=${encodeURIComponent(projectId)}`
+    );
+    const scenes = data?.files?.scenesJson || "";
+    const body = data?.files?.bodyHtml || "";
+    els.projectNameInput.value = data?.project?.name || "";
+    els.scenesOutput.value = scenes;
+    els.bodyOutput.value = body;
+    if (els.directScenesInput) els.directScenesInput.value = scenes;
+    if (els.directBodyInput) els.directBodyInput.value = body;
+    if (els.languageInput)
+      els.languageInput.value = data?.project?.language || "auto";
+    if (els.projectAspectRatioInput) {
+      els.projectAspectRatioInput.value = normalizeAspectRatio(
+        data?.project?.aspectRatio
+      );
+      els.projectAspectRatioInput.disabled = true;
+    }
+    setStatus(`正在编辑项目：${data?.project?.name || projectId}`, "success");
+  } catch (error) {
+    setStatus(error.message || "无法加载项目源文件。", "error");
+  }
+}
+
+function applyRouteFocus(route = routeKey()) {
+  document.body.dataset.studioRoute = route;
+  document.querySelectorAll("[data-studio-route]").forEach((link) => {
+    link.classList.toggle("active", link.dataset.studioRoute === route);
+  });
+  const target =
+    route === "prompt"
+      ? els.promptDialog
+      : route === "import"
+      ? els.importDialog
+      : null;
+  [els.promptDialog, els.importDialog].filter(Boolean).forEach((dialog) => {
+    if (dialog !== target && dialog.open) dialog.close();
+  });
+  if (target && !target.open) target.showModal();
+  if (route === "new") setProjectDrawerOpen(true);
+}
+
+function cleanFileName(value) {
+  return (
+    String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9\u4e00-\u9fa5_-]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "video"
+  );
+}
+
+function outputNameForSize(value, size) {
+  const baseName = String(value || "")
+    .trim()
+    .replace(/\.mp4$/i, "")
+    .replace(/-(?:720p|1080p|2k|4k)$/i, "");
+  return `${cleanFileName(baseName)}-${size}.mp4`;
+}
+
+function setProjectEditMode(editing) {
+  if (!editing) {
+    if (els.renameProjectDialog?.open) els.renameProjectDialog.close();
+    return;
+  }
+  const active = appState?.activeProject;
+  if (!active?.id) {
+    setStatus("请先选择项目。", "error");
+    return;
+  }
+  if (active.id === "starter") {
+    setStatus("示例模板为只读，请先新建项目。", "error");
+    return;
+  }
+  const activeProject = projects.find((project) => project.active) || null;
+  const title =
+    active?.name || activeProject?.name || appState?.current?.title || "";
+  if (els.projectTitleInput) els.projectTitleInput.value = title || "";
+  if (!els.renameProjectDialog?.open) els.renameProjectDialog?.showModal();
+  window.setTimeout(() => {
+    els.projectTitleInput?.focus();
+    els.projectTitleInput?.select();
+  }, 0);
+}
+
+async function saveProjectMetaEdit() {
+  const active = appState?.activeProject;
+  if (!active?.id) {
+    setStatus("请先选择项目。", "error");
+    return;
+  }
+  const name = (els.projectTitleInput?.value || "").trim();
+  if (!name) {
+    setStatus("项目名称不能为空。", "error");
+    return;
+  }
+  try {
+    await postJson("/api/projects/update", { project: active.id, name });
+    setProjectEditMode(false);
+    await refreshAll();
+    setStatus("项目名称已更新。", "success");
+  } catch (error) {
+    setStatus(error.message, "error");
+  }
+}
+
+function resetPromptComposer() {
+  if (!els.topicInput || !els.promptOutput) return;
+  els.topicInput.value = INITIAL_FORM_VALUES.topic;
+  els.audienceInput.value = INITIAL_FORM_VALUES.audience;
+  els.toneInput.value = INITIAL_FORM_VALUES.tone;
+  els.sceneCountInput.value = INITIAL_FORM_VALUES.sceneCount;
+  els.languageInput.value = INITIAL_FORM_VALUES.language;
+  if (els.aspectRatioInput)
+    els.aspectRatioInput.value = INITIAL_FORM_VALUES.aspectRatio;
+  els.notesInput.value = INITIAL_FORM_VALUES.notes;
+  refreshPrompt();
+}
+
+function resetImportComposer(name = INITIAL_FORM_VALUES.projectName) {
+  if (
+    !els.aiResponseInput ||
+    !els.scenesOutput ||
+    !els.bodyOutput ||
+    !els.projectNameInput
+  )
+    return;
+  importProjectId = "";
+  els.aiResponseInput.value = "";
+  els.scenesOutput.value = "";
+  els.bodyOutput.value = "";
+  if (els.directScenesInput) els.directScenesInput.value = "";
+  if (els.directBodyInput) els.directBodyInput.value = "";
+  els.projectNameInput.value = name || INITIAL_FORM_VALUES.projectName;
+  if (els.projectAspectRatioInput) {
+    els.projectAspectRatioInput.disabled = false;
+    els.projectAspectRatioInput.value = normalizeAspectRatio(
+      els.aspectRatioInput?.value || INITIAL_FORM_VALUES.aspectRatio
+    );
+  }
+}
+
+function resetBuildState(name = "") {
+  window.clearTimeout(pollTimer);
+  pollTimer = 0;
+  currentJobId = "";
+  setJobBusy(false);
+  els.jobStatus.textContent = "空闲";
+  els.jobStatus.className = "job-status";
+  els.jobLog.textContent = "等待任务。";
+  renderJobProgress(null);
+  els.renderSizeInput.value = "720p";
+  els.renderOutputInput.value = outputNameForSize(
+    name || INITIAL_FORM_VALUES.renderOutput,
+    els.renderSizeInput.value
+  );
+}
+
+function resetWorkspaceUi({
+  name = "",
+  resetPrompt = false,
+  resetImport = true,
+} = {}) {
+  if (resetPrompt) resetPromptComposer();
+  if (resetImport) resetImportComposer(name);
+  resetBuildState(name);
+}
+
+function setProjectDrawerOpen(open) {
+  const isMobile = window.matchMedia("(max-width: 760px)").matches;
+  if (!isMobile) {
+    document.body.classList.remove("projects-open");
+    els.sidebarToggle.setAttribute("aria-expanded", "true");
+    const desktopLabel = els.sidebarToggle.querySelector("span");
+    if (desktopLabel) desktopLabel.textContent = "项目";
+    return;
+  }
+  document.body.classList.toggle("projects-open", open);
+  els.sidebarToggle.setAttribute("aria-expanded", String(open));
+  const label = els.sidebarToggle.querySelector("span");
+  if (label) label.textContent = open ? "关闭项目" : "项目";
+  localStorage.setItem(PROJECT_DRAWER_STORAGE_KEY, open ? "1" : "0");
+}
+
+function renderIcons() {
+  if (window.lucide) {
+    window.lucide.createIcons();
+  }
+}
+
+function setStatus(message, tone = "neutral") {
+  let toast = document.querySelector("#studioToast");
+  if (!toast) {
+    toast = document.createElement("p");
+    toast.id = "studioToast";
+    toast.className = "studio-toast";
+    toast.setAttribute("role", "status");
+    document.body.append(toast);
+  }
+  const toastHost = document.querySelector("dialog[open]") || document.body;
+  if (toast.parentElement !== toastHost) toastHost.append(toast);
+  window.clearTimeout(toastTimer);
+  toast.textContent = message;
+  toast.classList.toggle("error", tone === "error");
+  toast.classList.toggle("success", tone === "success");
+  toast.classList.add("is-visible");
+  toastTimer = window.setTimeout(
+    () => toast.classList.remove("is-visible"),
+    3600
+  );
+}
+
+async function api(path, options = {}) {
+  const response = await fetch(path, {
+    ...options,
+    headers: {
+      ...(options.headers || {}),
+      ...(options.body ? { "Content-Type": "application/json" } : {}),
+    },
+  });
+  const raw = await response.text();
+  const data = raw ? JSON.parse(raw) : {};
+  if (!response.ok) {
+    throw new Error(data.error || `请求失败：${response.status}`);
+  }
+  return data;
+}
+
+function postJson(path, payload) {
+  return api(path, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+function formatDate(value) {
+  if (!value) return "未知时间";
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+function formatBytes(value) {
+  if (!Number.isFinite(value)) return "未知大小";
+  if (value < 1024 * 1024) return `${Math.round(value / 1024)} KB`;
+  return `${(value / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function formatDuration(value) {
+  const seconds = Number(value);
+  if (!Number.isFinite(seconds)) return "已生成";
+  const minutes = Math.floor(seconds / 60);
+  const rest = Math.round(seconds % 60)
+    .toString()
+    .padStart(2, "0");
+  return `${minutes}:${rest}`;
+}
+
+function formatPreviewTime(value) {
+  const total = Math.max(0, Math.floor(Number(value) || 0));
+  const minutes = Math.floor(total / 60);
+  const seconds = String(total % 60).padStart(2, "0");
+  return `${minutes}:${seconds}`;
+}
+
+function normalizeAspectRatio(value) {
+  return value === "9:16" ? "9:16" : "16:9";
+}
+
+function aspectGeometry(value) {
+  const aspectRatio = normalizeAspectRatio(value);
+  return aspectRatio === "9:16"
+    ? { aspectRatio, width: 720, height: 1280, cssRatio: "9 / 16" }
+    : { aspectRatio, width: 1280, height: 720, cssRatio: "16 / 9" };
+}
+
+function activeAspectRatio() {
+  return normalizeAspectRatio(appState?.activeProject?.aspectRatio);
+}
+
+function applyRenderSizeLabels(aspectRatio = activeAspectRatio()) {
+  if (!els.renderSizeInput) return;
+  const portrait = normalizeAspectRatio(aspectRatio) === "9:16";
+  const sizes = {
+    "720p": [1280, 720],
+    "1080p": [1920, 1080],
+    "2k": [2560, 1440],
+    "4k": [3840, 2160],
+  };
+  [...els.renderSizeInput.options].forEach((option) => {
+    const dimensions = sizes[option.value];
+    if (!dimensions) return;
+    const [baseWidth, baseHeight] = dimensions;
+    const width = portrait ? baseHeight : baseWidth;
+    const height = portrait ? baseWidth : baseHeight;
+    const label = option.value === "2k" || option.value === "4k"
+      ? option.value.toUpperCase()
+      : option.value;
+    option.textContent = `${label} · ${width} × ${height}`;
+  });
+}
+
+function applyPreviewAspect(aspectRatio = activeAspectRatio()) {
+  const geometry = aspectGeometry(aspectRatio);
+  document.body.dataset.aspectRatio = geometry.aspectRatio;
+  if (els.previewFrameWrap) {
+    els.previewFrameWrap.style.setProperty(
+      "--preview-aspect-ratio",
+      geometry.cssRatio
+    );
+  }
+  if (els.previewViewport) {
+    els.previewViewport.style.setProperty("--preview-width", `${geometry.width}px`);
+    els.previewViewport.style.setProperty("--preview-height", `${geometry.height}px`);
+  }
+  applyRenderSizeLabels(geometry.aspectRatio);
+}
+
+function promptPayload() {
+  return {
+    topic: els.topicInput.value.trim(),
+    audience: els.audienceInput.value.trim(),
+    tone: els.toneInput.value.trim(),
+    sceneCount: els.sceneCountInput.value.trim(),
+    notes: els.notesInput.value.trim(),
+    language: els.languageInput.value,
+    aspectRatio: normalizeAspectRatio(els.aspectRatioInput?.value),
+  };
+}
+
+async function refreshPrompt() {
+  const requestId = ++promptRequestId;
+  try {
+    const result = await postJson("/api/prompt", promptPayload());
+    if (requestId !== promptRequestId) return;
+    els.promptOutput.value = result.prompt;
+    if (els.promptResolution) {
+      const orientation = result.aspectRatio === "9:16" ? "竖屏" : "横屏";
+      els.promptResolution.textContent = `已解析：${result.language} · ${result.aspectRatio} ${orientation}`;
+    }
+  } catch (error) {
+    if (requestId !== promptRequestId) return;
+    els.promptOutput.value = `提示词生成失败：${error.message}`;
+    if (els.promptResolution) els.promptResolution.textContent = error.message;
+  }
+}
+
+function schedulePromptRefresh() {
+  if (promptRefreshFrame) return;
+  promptRefreshFrame = window.requestAnimationFrame(() => {
+    promptRefreshFrame = 0;
+    refreshPrompt();
+  });
+}
+
+async function copyPrompt() {
+  await refreshPrompt();
+  try {
+    await navigator.clipboard.writeText(els.promptOutput.value);
+    setStatus("提示词已复制。", "success");
+  } catch {
+    els.promptOutput.focus();
+    els.promptOutput.select();
+    setStatus("浏览器未授予剪贴板权限，请手动复制。", "error");
+  }
+}
+
+function extractFence(text, name, language) {
+  const patterns = [
+    new RegExp(`\`\`\`${language}\\s+${name}\\s*\\n([\\s\\S]*?)\\n\`\`\``, "i"),
+    new RegExp(
+      `${name}\\s*:?\\s*\\n\`\`\`(?:${language})?\\s*\\n([\\s\\S]*?)\\n\`\`\``,
+      "i"
+    ),
+    new RegExp(`\`\`\`${language}\\s*\\n([\\s\\S]*?)\\n\`\`\``, "i"),
+  ];
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) return match[1].trim();
+  }
+  return "";
+}
+
+function extractScenes(text) {
+  const fenced = extractFence(text, "scenes.json", "json");
+  if (fenced) return fenced;
+  const match = text.match(/\[\s*\{[\s\S]*?\}\s*\]/);
+  return match ? match[0].trim() : "";
+}
+
+function extractBody(text) {
+  const fenced = extractFence(text, "body.html", "html");
+  if (fenced) return fenced;
+  const documentStart = text.search(/<!doctype\s+html|<html\b/i);
+  if (documentStart !== -1) return text.slice(documentStart).trim();
+  const firstSection = text.indexOf("<section");
+  const lastSection = text.lastIndexOf("</section>");
+  if (firstSection === -1 || lastSection === -1) return "";
+  return text.slice(firstSection, lastSection + "</section>".length).trim();
+}
+
+function extractResponse() {
+  const text = importMode === "direct" ? "" : els.aiResponseInput.value;
+  const scenes = els.directScenesInput?.value.trim() || extractScenes(text);
+  const body = els.directBodyInput?.value.trim() || extractBody(text);
+  els.scenesOutput.value = scenes;
+  els.bodyOutput.value = body;
+
+  if (!scenes || !body) {
+    setStatus("未同时找到 scenes.json 和 body.html。", "error");
+    return false;
+  }
+
+  try {
+    JSON.parse(scenes);
+  } catch {
+    setStatus("提取的 scenes.json 不是有效的 JSON。", "error");
+    return false;
+  }
+
+  setStatus("两个源文件已提取。", "success");
+  return true;
+}
+
+function setImportMode(mode) {
+  importMode = mode === "direct" ? "direct" : "smart";
+  document.querySelectorAll("[data-import-mode]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.importMode === importMode);
+  });
+  if (els.directImportGrid)
+    els.directImportGrid.hidden = importMode !== "direct";
+  if (els.aiResponseInput) els.aiResponseInput.hidden = importMode === "direct";
+}
+
+function ensureExtracted() {
+  if (els.scenesOutput.value.trim() && els.bodyOutput.value.trim()) return true;
+  return extractResponse();
+}
+
+function renderHeader() {
+  const active = appState?.activeProject;
+  const timeline = appState?.timeline || {};
+  const activeProject = projects.find((project) => project.active) || null;
+  const projectSummary = appState?.projectSummary || {};
+  const sceneCount = projectSummary.sceneCount ?? activeProject?.sceneCount ?? 0;
+  const narrationChars =
+    projectSummary.narrationChars ?? activeProject?.narrationChars ?? 0;
+  const activeId = active?.id || activeProject?.id || "";
+  const currentTitle =
+    active?.name || activeProject?.name || projectSummary.title || "未选择项目";
+  applyPreviewAspect(active?.aspectRatio || activeProject?.aspectRatio);
+  const timelineLabel = timeline.matchesSource
+    ? formatDuration(timeline.duration)
+    : timeline.exists
+    ? "需要重新构建"
+    : "未生成";
+  els.currentProjectName.textContent = currentTitle;
+  els.timelineStatus.textContent = timelineLabel;
+  els.outputStatus.textContent = `共 ${outputs.length} 个`;
+  els.currentSourcePath.textContent = active?.relativePath || "没有活动项目";
+  els.currentSourcePath.title = active?.relativePath || "没有活动项目";
+  els.workspaceProjectTitle.textContent = currentTitle;
+  els.workspaceProjectTitle.title = currentTitle;
+  els.workspaceProjectId.textContent = activeId || "未加载";
+  els.workspaceSceneCount.textContent = `${sceneCount}`;
+  els.workspaceNarrationChars.textContent = `${narrationChars}`;
+  els.workspaceTimelineState.textContent = timelineLabel;
+  els.workspaceTimelineState.classList.toggle(
+    "warning",
+    !timeline.matchesSource
+  );
+  els.workspaceTimelineState.classList.toggle(
+    "success",
+    Boolean(timeline.matchesSource)
+  );
+  els.workspaceOutputCount.textContent = `${outputs.length}`;
+  els.guideTitle.textContent = appState?.guide?.title || "正在读取状态";
+  els.guideBody.textContent =
+    appState?.guide?.body || "工作室正在连接本地工厂。";
+  els.guideBadge.textContent =
+    appState?.guide?.stage === "ready"
+      ? "就绪"
+      : appState?.guide?.stage || "就绪";
+  els.loadStarterButton.disabled = !appState?.hasStarter;
+  els.loadStarterButton.querySelector("span").textContent = appState?.hasStarter
+    ? "示例"
+    : "示例不可用";
+  els.editCurrentProjectButton.href = activeId
+    && activeId !== "starter"
+    ? `/studio?dialog=import&project=${encodeURIComponent(activeId)}`
+    : "/studio?dialog=import";
+  const sourceEditingDisabled = !activeId || activeId === "starter";
+  els.editCurrentProjectButton.classList.toggle(
+    "is-disabled",
+    sourceEditingDisabled
+  );
+  els.editCurrentProjectButton.setAttribute(
+    "aria-disabled",
+    String(sourceEditingDisabled)
+  );
+  if (els.projectEditButton) {
+    els.projectEditButton.disabled = sourceEditingDisabled;
+  }
+  els.openCaptionsButton?.classList.toggle("is-disabled", !activeId);
+  if (els.deleteCurrentProjectButton) {
+    els.deleteCurrentProjectButton.disabled =
+      !activeId || activeId === "starter";
+  }
+  renderPreviewControls();
+}
+
+function renderPreviewControls() {
+  const previewUrl = appState?.urls?.shell || "/pipeline/shell/index.html";
+  if (
+    els.previewFrame &&
+    (els.previewFrame.src === "about:blank" || !els.previewFrame.src)
+  ) {
+    const url = new URL(previewUrl, window.location.origin);
+    url.searchParams.set("embed", "1");
+    els.previewFrame.src = url.href;
+  }
+}
+
+function projectCard(project) {
+  const row = document.createElement("article");
+  row.className = `project-card${project.active ? " active" : ""}`;
+
+  const button = document.createElement("button");
+  button.className = "project-card-main";
+  button.type = "button";
+  button.dataset.project = project.id;
+
+  const title = document.createElement("span");
+  title.className = "project-title";
+  title.textContent = project.name || project.id;
+
+  const meta = document.createElement("span");
+  meta.className = "project-meta";
+  meta.textContent = `${normalizeAspectRatio(project.aspectRatio)} · ${project.sceneCount} 个场景 · ${
+    project.narrationChars
+  } 个字符 · ${formatDate(project.updatedAt)}`;
+  button.title = project.relativePath;
+  button.append(title, meta);
+  row.append(button);
+
+  if (project.id !== "starter") {
+    const remove = document.createElement("button");
+    remove.className = "project-delete-button";
+    remove.type = "button";
+    remove.dataset.deleteProject = project.id;
+    remove.title = `删除 ${project.name || project.id}`;
+    remove.setAttribute("aria-label", remove.title);
+    remove.innerHTML = '<i data-lucide="trash-2"></i>';
+    row.append(remove);
+  }
+  return row;
+}
+
+function renderProjects() {
+  els.projectList.replaceChildren();
+  els.projectSelect?.replaceChildren();
+  if (!projects.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty-text";
+    empty.textContent = "暂无 .local/work 项目。";
+    els.projectList.append(empty);
+    if (els.projectSelect) {
+      const option = document.createElement("option");
+      option.value = "";
+      option.textContent = "暂无项目";
+      els.projectSelect.append(option);
+      els.projectSelect.disabled = true;
+    }
+    return;
+  }
+  projects.forEach((project) => {
+    els.projectList.append(projectCard(project));
+    if (els.projectSelect) {
+      const option = document.createElement("option");
+      option.value = project.id;
+      option.textContent = project.name || project.id;
+      option.selected = Boolean(project.active);
+      els.projectSelect.append(option);
+    }
+  });
+  if (els.projectSelect) els.projectSelect.disabled = false;
+}
+
+function outputCard(output) {
+  const link = document.createElement("a");
+  link.className = "output-card";
+  link.href = output.url;
+  link.target = "_blank";
+  link.rel = "noreferrer";
+  link.title = `Open ${output.name}`;
+
+  const title = document.createElement("span");
+  title.className = "output-title";
+  title.textContent = output.name;
+
+  const meta = document.createElement("span");
+  meta.className = "output-meta";
+  meta.textContent = `${formatBytes(output.size)} · ${formatDate(
+    output.modifiedAt
+  )}`;
+
+  link.append(title, meta);
+  return link;
+}
+
+function renderOutputs() {
+  els.outputList.replaceChildren();
+  const isEmpty = !outputs.length;
+  els.outputList
+    .closest(".outputs-panel")
+    .classList.toggle("is-empty", isEmpty);
+  if (isEmpty) {
+    const empty = document.createElement("p");
+    empty.className = "empty-text";
+    empty.textContent = "暂无已导出的视频。";
+    els.outputList.append(empty);
+    return;
+  }
+
+  outputs.forEach((output) => {
+    els.outputList.append(outputCard(output));
+  });
+}
+
+function reloadPreview() {
+  const base = appState?.urls?.shell || "/pipeline/shell/index.html";
+  const transition = els.renderTransitionInput?.value || "0.4";
+  const url = new URL(base, window.location.origin);
+  url.searchParams.set("embed", "1");
+  url.searchParams.set("transition", transition);
+  url.searchParams.set("studio", String(Date.now()));
+  els.previewFrame.src = url.href;
+}
+
+function fitPreviewViewport() {
+  if (!els.previewFrameArea || !els.previewFrameWrap || !els.previewViewport)
+    return;
+  const areaStyle = window.getComputedStyle(els.previewFrameArea);
+  const horizontalPadding =
+    parseFloat(areaStyle.paddingLeft) + parseFloat(areaStyle.paddingRight);
+  const verticalPadding =
+    parseFloat(areaStyle.paddingTop) + parseFloat(areaStyle.paddingBottom);
+  const availableWidth = els.previewFrameArea.clientWidth - horizontalPadding;
+  const availableHeight = els.previewFrameArea.clientHeight - verticalPadding;
+  if (!availableWidth || !availableHeight) return;
+  const geometry = aspectGeometry(activeAspectRatio());
+  const width = Math.min(
+    availableWidth,
+    (availableHeight * geometry.width) / geometry.height
+  );
+  const height = (width * geometry.height) / geometry.width;
+  els.previewFrameWrap.style.width = `${width}px`;
+  els.previewFrameWrap.style.height = `${height}px`;
+  els.previewViewport.style.setProperty(
+    "--preview-scale",
+    String(width / geometry.width)
+  );
+}
+
+function previewPlaybackState() {
+  try {
+    return els.previewFrame?.contentWindow?.getPlaybackState?.() || null;
+  } catch {
+    return null;
+  }
+}
+
+function syncPreviewProgress(playback = null) {
+  const state = playback || previewPlaybackState() || {};
+  const duration = Math.max(0, Number(state.duration) || 0);
+  const current = Math.max(0, Math.min(duration, Number(state.current) || 0));
+  if (els.previewProgress) {
+    els.previewProgress.max = String(duration);
+    els.previewProgress.value = String(current);
+    els.previewProgress.disabled = duration <= 0;
+    els.previewProgress.setAttribute(
+      "aria-valuetext",
+      `${formatPreviewTime(current)} / ${formatPreviewTime(duration)}`
+    );
+    const ratio = duration ? current / duration : 0;
+    els.previewProgress.style.setProperty(
+      "--preview-progress",
+      `${ratio * 100}%`
+    );
+  }
+  if (els.previewCurrentTime)
+    els.previewCurrentTime.value = formatPreviewTime(current);
+  if (els.previewDuration)
+    els.previewDuration.value = formatPreviewTime(duration);
+}
+
+function stopPreviewProgressSync() {
+  window.cancelAnimationFrame(previewProgressFrame);
+  previewProgressFrame = 0;
+}
+
+function startPreviewProgressSync() {
+  stopPreviewProgressSync();
+  const update = () => {
+    const state = previewPlaybackState();
+    syncPreviewProgress(state);
+    if (state?.playing)
+      previewProgressFrame = window.requestAnimationFrame(update);
+    else previewProgressFrame = 0;
+  };
+  previewProgressFrame = window.requestAnimationFrame(update);
+}
+
+function syncPreviewPlayButton(playback = null) {
+  if (!els.previewPlayButton) return;
+  let state = playback;
+  if (!state) {
+    try {
+      state = els.previewFrame?.contentWindow?.getPlaybackState?.();
+    } catch {
+      state = null;
+    }
+  }
+  const playing = Boolean(state?.playing);
+  syncPreviewProgress(state);
+  const label = els.previewPlayButton.querySelector("span");
+  const icon = els.previewPlayButton.querySelector("[data-lucide]");
+  if (label) label.textContent = playing ? "暂停" : "播放";
+  if (icon) icon.setAttribute("data-lucide", playing ? "pause" : "play");
+  renderIcons();
+  if (playing) startPreviewProgressSync();
+  else stopPreviewProgressSync();
+}
+
+function connectPreviewPlayback() {
+  try {
+    const shellWindow = els.previewFrame?.contentWindow;
+    shellWindow?.addEventListener("shell-playback-state", (event) => {
+      syncPreviewPlayButton(event.detail);
+    });
+    syncPreviewPlayButton(shellWindow?.getPlaybackState?.());
+  } catch {
+    syncPreviewPlayButton();
+  }
+  fitPreviewViewport();
+}
+
+async function togglePreviewPlayback() {
+  try {
+    const shellWindow = els.previewFrame?.contentWindow;
+    if (typeof shellWindow?.togglePlayback !== "function") {
+      throw new Error("预览尚未准备好。");
+    }
+    await shellWindow.togglePlayback();
+    syncPreviewPlayButton(shellWindow.getPlaybackState?.());
+  } catch (error) {
+    setStatus(error.message || "无法控制预览播放。", "error");
+  }
+}
+
+function preparePreviewScrub() {
+  const shellWindow = els.previewFrame?.contentWindow;
+  const state = previewPlaybackState();
+  if (!state?.playing || typeof shellWindow?.togglePlayback !== "function")
+    return;
+  resumePreviewAfterScrub = true;
+  shellWindow.togglePlayback();
+}
+
+function scrubPreview() {
+  try {
+    const shellWindow = els.previewFrame?.contentWindow;
+    const targetTime = Number(els.previewProgress.value);
+    if (previewPlaybackState()?.playing) preparePreviewScrub();
+    if (typeof shellWindow?.renderAtTime !== "function") {
+      throw new Error("预览尚未准备好。");
+    }
+    shellWindow.renderAtTime(targetTime);
+    syncPreviewPlayButton(shellWindow.getPlaybackState?.());
+  } catch (error) {
+    setStatus(error.message || "无法调整预览进度。", "error");
+  }
+}
+
+async function finishPreviewScrub() {
+  if (!resumePreviewAfterScrub) return;
+  resumePreviewAfterScrub = false;
+  await togglePreviewPlayback();
+}
+
+function openNewProjectDialog() {
+  if (!els.newProjectDialog) return;
+  if (!els.newProjectDialog.open) els.newProjectDialog.showModal();
+  window.setTimeout(() => {
+    els.newProjectDialog
+      ?.querySelector("[data-new-project-route]")
+      ?.focus();
+  }, 0);
+}
+
+function closeNewProjectDialog() {
+  if (els.newProjectDialog?.open) els.newProjectDialog.close();
+}
+
+function tourSteps() {
+  return [
+    {
+      element: ".preview-panel .status-summary",
+      popover: {
+        title: "先查看当前状态",
+        description: "在预览标题旁查看场景、旁白、时间轴和导出状态。",
+        side: "bottom",
+        align: "center",
+      },
+    },
+    {
+      element: ".project-drawer",
+      popover: {
+        title: "在这里切换当前项目",
+        description: "项目列表可激活项目，选择任一项目卡片即可设为当前项目。",
+        side: "right",
+        align: "start",
+      },
+    },
+    {
+      element: ".current-project-panel",
+      popover: {
+        title: "查看当前项目工作区",
+        description: "这里汇集当前项目名称、状态、下一步及编辑入口。",
+        side: "right",
+        align: "start",
+      },
+    },
+    {
+      element: ".quick-actions-panel",
+      popover: {
+        title: "常用操作在这里",
+        description: "可在这里编辑、导入替换内容、打开字幕或创建项目。",
+        side: "bottom",
+        align: "start",
+      },
+    },
+    {
+      element: ".build-panel",
+      popover: {
+        title: "仅构建当前项目",
+        description: "选择当前项目后，可在这里执行检查、TTS 和导出。",
+        side: "top",
+        align: "center",
+      },
+    },
+    {
+      element: ".preview-panel",
+      popover: {
+        title: "右侧仅显示当前项目",
+        description: "预览和导出文件都属于当前项目，因此始终保持对应。",
+        side: "top",
+        align: "start",
+      },
+    },
+  ];
+}
+
+function availableTourSteps() {
+  return tourSteps().filter((step) => document.querySelector(step.element));
+}
+
+function rememberTourSeen() {
+  try {
+    localStorage.setItem(TOUR_STORAGE_KEY, "1");
+  } catch {
+    // Local storage may be disabled in some embedded browsers.
+  }
+}
+
+function hasSeenTour() {
+  try {
+    return localStorage.getItem(TOUR_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function driverFactory() {
+  return window.driver?.js?.driver;
+}
+
+function startDriverTour(steps) {
+  const driver = driverFactory();
+  if (!driver) return false;
+  const driverObj = driver({
+    showProgress: true,
+    animate: true,
+    allowClose: true,
+    smoothScroll: true,
+    stagePadding: 8,
+    stageRadius: 8,
+    overlayOpacity: 0.42,
+    popoverClass: "studio-tour-popover",
+    nextBtnText: "下一步",
+    prevBtnText: "上一步",
+    doneBtnText: "完成",
+    steps,
+    onHighlightStarted: (_element, step) => {
+      setProjectDrawerOpen(step?.element === ".project-drawer");
+    },
+  });
+  driverObj.drive();
+  return true;
+}
+
+function startFallbackTour(steps) {
+  let index = 0;
+  const overlay = document.createElement("div");
+  overlay.className = "tour-fallback-overlay";
+  overlay.innerHTML = `
+    <section class="tour-fallback-card" role="dialog" aria-live="polite">
+      <p class="tour-fallback-count"></p>
+      <h2></h2>
+      <p class="tour-fallback-body"></p>
+      <div class="tour-fallback-actions">
+        <button type="button" data-tour-prev>Back</button>
+        <button type="button" data-tour-next>Next</button>
+        <button type="button" data-tour-close>Done</button>
+      </div>
+    </section>
+  `;
+  document.body.append(overlay);
+
+  const card = overlay.querySelector(".tour-fallback-card");
+  const count = overlay.querySelector(".tour-fallback-count");
+  const title = overlay.querySelector("h2");
+  const body = overlay.querySelector(".tour-fallback-body");
+  const prev = overlay.querySelector("[data-tour-prev]");
+  const next = overlay.querySelector("[data-tour-next]");
+  const close = overlay.querySelector("[data-tour-close]");
+
+  function clearHighlight() {
+    document.querySelectorAll(".tour-fallback-highlight").forEach((element) => {
+      element.classList.remove("tour-fallback-highlight");
+    });
+  }
+
+  function cleanup() {
+    clearHighlight();
+    setProjectDrawerOpen(false);
+    overlay.remove();
+  }
+
+  function renderStep() {
+    clearHighlight();
+    const step = steps[index];
+    setProjectDrawerOpen(step.element === ".project-drawer");
+    const target = document.querySelector(step.element);
+    if (target) {
+      target.classList.add("tour-fallback-highlight");
+      target.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+    count.textContent = `${index + 1} / ${steps.length}`;
+    title.textContent = step.popover.title;
+    body.textContent = step.popover.description;
+    prev.disabled = index === 0;
+    next.textContent = index === steps.length - 1 ? "完成" : "下一步";
+    card.classList.toggle("is-last", index === steps.length - 1);
+  }
+
+  prev.addEventListener("click", () => {
+    index = Math.max(0, index - 1);
+    renderStep();
+  });
+  next.addEventListener("click", () => {
+    if (index === steps.length - 1) cleanup();
+    else {
+      index += 1;
+      renderStep();
+    }
+  });
+  close.addEventListener("click", cleanup);
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) cleanup();
+  });
+  renderStep();
+}
+
+function startTour() {
+  const steps = availableTourSteps();
+  if (!steps.length) return;
+  rememberTourSeen();
+  if (!startDriverTour(steps)) {
+    startFallbackTour(steps);
+  }
+}
+
+function maybeStartTour() {
+  if (tourAutoStarted) return;
+  tourAutoStarted = true;
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("tour") === "1") {
+    window.setTimeout(startTour, 650);
+  }
+}
+
+async function refreshAll() {
+  try {
+    const [stateData, projectData, outputData] = await Promise.all([
+      api("/api/studio/state"),
+      api("/api/projects"),
+      api("/api/outputs"),
+    ]);
+    appState = stateData;
+    projects = projectData.projects || [];
+    outputs = outputData.outputs || [];
+    appState.outputs = outputs;
+    renderHeader();
+    renderProjects();
+    renderOutputs();
+    renderIcons();
+    maybeStartTour();
+  } catch (error) {
+    setStatus(error.message, "error");
+  }
+}
+
+async function loadProject(
+  project,
+  { view = "compose", closeDrawer = true } = {}
+) {
+  try {
+    setStatus("正在激活项目…");
+    const data = await postJson("/api/projects/activate", { project });
+    appState = data.state;
+    resetWorkspaceUi({
+      name: data.project?.name || "",
+      resetPrompt: false,
+      resetImport: true,
+    });
+    if (closeDrawer) setProjectDrawerOpen(false);
+    setStudioRoute("main");
+    reloadPreview();
+    await refreshAll();
+    setStatus("项目已激活。", "success");
+    return data.project;
+  } catch (error) {
+    setStatus(error.message, "error");
+    return null;
+  }
+}
+
+async function deleteProject(project) {
+  const confirmed = window.confirm(
+    `要删除项目 ${project} 吗？这将移除 .local/work 中的源文件。`
+  );
+  if (!confirmed) return;
+  try {
+    setStatus(`正在删除项目：${project}…`);
+    await postJson("/api/projects/delete", { project });
+    await refreshAll();
+    reloadPreview();
+    setStatus(`项目已删除：${project}`, "success");
+  } catch (error) {
+    setStatus(error.message, "error");
+  }
+}
+
+async function previewProject(project) {
+  const loaded = await loadProject(project);
+  if (loaded) {
+    reloadPreview();
+    els.previewFrame.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+}
+
+async function manageProject(project) {
+  const loaded = await loadProject(project);
+  if (loaded) {
+    setStudioRoute("import", false, `?project=${encodeURIComponent(project)}`);
+    await initImportProjectContext();
+  }
+}
+
+async function openProjectCaptions(project) {
+  const loaded = await loadProject(project);
+  if (loaded) window.location.href = "/captions";
+}
+
+async function exportProject(project) {
+  const loaded = await loadProject(project);
+  if (!loaded) return;
+  els.renderOutputInput.value = outputNameForSize(
+    loaded.name || "video",
+    els.renderSizeInput.value
+  );
+  await startJob("render");
+}
+
+async function validateExtracted() {
+  if (!ensureExtracted()) return;
+  try {
+    const result = await postJson("/api/source/validate", {
+      scenesJson: els.scenesOutput.value,
+      bodyHtml: els.bodyOutput.value,
+      aspectRatio: normalizeAspectRatio(els.projectAspectRatioInput?.value),
+    });
+    setStatus(
+      `验证通过：${result.sceneCount} 个场景，${result.narrationChars} 个旁白字符。`,
+      "success"
+    );
+  } catch (error) {
+    setStatus(error.message, "error");
+  }
+}
+
+async function saveProject() {
+  if (!ensureExtracted()) return;
+  const name = els.projectNameInput.value.trim();
+  if (!name) {
+    setStatus("请输入项目名称。", "error");
+    return;
+  }
+  try {
+    setStatus("正在保存项目…");
+    const created = await postJson("/api/projects", {
+      project: importProjectId || undefined,
+      name,
+      scenesJson: els.scenesOutput.value,
+      bodyHtml: els.bodyOutput.value,
+      language: els.languageInput.value,
+      aspectRatio: normalizeAspectRatio(els.projectAspectRatioInput?.value),
+      overwrite: Boolean(importProjectId),
+    });
+    appState = created.state;
+    resetWorkspaceUi({
+      name: created.project.name,
+      resetPrompt: false,
+      resetImport: true,
+    });
+    setStudioRoute("main");
+    reloadPreview();
+    await refreshAll();
+    setStatus(`已保存并激活：${created.project.name}`, "success");
+  } catch (error) {
+    setStatus(error.message, "error");
+  }
+}
+
+function setJobBusy(isBusy, task = "") {
+  [els.checkButton, els.offlineButton, els.ttsButton, els.renderButton].forEach(
+    (button) => {
+      button.disabled = isBusy;
+    }
+  );
+  const showOverlay = isBusy && ["tts", "render"].includes(task);
+  if (els.jobOverlay) {
+    els.jobOverlay.hidden = !showOverlay;
+    els.jobOverlay.setAttribute("aria-hidden", String(!showOverlay));
+  }
+  if (showOverlay) {
+    const taskLabel = task === "tts" ? "旁白生成" : "MP4 导出";
+    els.jobOverlayTitle.textContent = `${taskLabel}进行中`;
+    els.jobOverlayMessage.textContent = "当前项目正在处理，请勿执行其他操作。";
+    if (els.jobOverlayProgress) {
+      els.jobOverlayProgress.hidden = task !== "render";
+    }
+  }
+}
+
+function formatProgressTime(value) {
+  if (value === null || value === undefined || value === "") return "--:--";
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "--:--";
+  const total = Math.max(0, Math.round(numeric));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = String(total % 60).padStart(2, "0");
+  return hours
+    ? `${hours}:${String(minutes).padStart(2, "0")}:${seconds}`
+    : `${String(minutes).padStart(2, "0")}:${seconds}`;
+}
+
+function renderJobProgress(progress) {
+  if (!els.jobProgress) return;
+  const visible = Boolean(progress);
+  els.jobProgress.hidden = !visible;
+  if (!visible) return;
+
+  const phaseLabels = {
+    queued: "等待渲染",
+    rendering: "页面截图与编码",
+    encoding: "视频编码",
+    finalizing: "封装 MP4",
+    completed: "导出完成",
+    failed: "导出失败",
+  };
+  const phase = phaseLabels[progress.phase] || "准备渲染";
+  const percent = Math.min(100, Math.max(0, Number(progress.percent) || 0));
+  const percentText = `${percent.toFixed(2)}%`;
+  const rendered = Math.max(0, Number(progress.renderedFrames) || 0);
+  const encoded = Math.max(0, Number(progress.encodedFrames) || 0);
+  const total = Math.max(0, Number(progress.totalFrames) || 0);
+  const duration = Number(progress.durationSeconds);
+  const encodedTime = Number(progress.encodedSeconds);
+  const renderedTime = Number(progress.renderedSeconds);
+  const currentTime =
+    progress.phase === "rendering" && !(encodedTime > 0)
+      ? renderedTime
+      : encodedTime;
+  const encodeFps = Number(progress.encodeFps) || 0;
+  const captureFps = Number(progress.captureFps) || 0;
+  const speed = Number(progress.speed) || 0;
+  const eta = progress.etaSeconds;
+
+  els.jobProgressPhase.textContent = phase;
+  els.jobProgressPercent.textContent = percentText;
+  els.jobProgressBar.style.width = percentText;
+  els.jobProgressTrack.setAttribute("aria-valuenow", percent.toFixed(2));
+  els.jobProgressFrames.textContent = total
+    ? `截图 ${rendered}/${total} · 编码 ${encoded}/${total}`
+    : "正在计算总帧数";
+  els.jobProgressTime.textContent = `视频 ${formatProgressTime(
+    currentTime
+  )} / ${formatProgressTime(duration)}`;
+  els.jobProgressSpeed.textContent = encodeFps
+    ? `编码 ${encodeFps.toFixed(1)} fps · ${speed.toFixed(3)}x`
+    : captureFps
+      ? `截图 ${captureFps.toFixed(1)} fps`
+      : "速度 --";
+  els.jobProgressEta.textContent = `剩余 ${formatProgressTime(eta)}`;
+
+  if (els.jobOverlayProgress) {
+    els.jobOverlayProgress.hidden = false;
+    els.jobOverlayProgressPhase.textContent = phase;
+    els.jobOverlayProgressPercent.textContent = percentText;
+    els.jobOverlayProgressBar.style.width = percentText;
+    els.jobOverlayProgressDetail.textContent = total
+      ? `已编码 ${encoded}/${total} 帧 · 视频 ${formatProgressTime(
+          currentTime
+        )}/${formatProgressTime(duration)} · 剩余 ${formatProgressTime(eta)}`
+      : "正在读取视频时间线。";
+    els.jobOverlayTitle.textContent = `MP4 导出 ${percentText}`;
+    els.jobOverlayMessage.textContent = "进度来自 Chromium 与 FFmpeg 的实时数据。";
+  }
+}
+
+function renderJob(job) {
+  currentJobId = job.id;
+  const labels = {
+    queued: "排队中",
+    running: "运行中",
+    succeeded: "已完成",
+    failed: "失败",
+  };
+  const progressText = job.progress
+    ? ` · ${(Number(job.progress.percent) || 0).toFixed(2)}%`
+    : "";
+  els.jobStatus.textContent = `${job.task}: ${
+    labels[job.status] || job.status
+  }${progressText}`;
+  els.jobStatus.className = `job-status ${job.status}`;
+  els.jobLog.textContent = job.log?.length
+    ? job.log.join("\n")
+    : "任务已启动，正在等待日志。";
+  els.jobLog.scrollTop = els.jobLog.scrollHeight;
+  setJobBusy(job.status === "queued" || job.status === "running", job.task);
+  renderJobProgress(job.progress);
+}
+
+async function pollJob() {
+  if (!currentJobId) return;
+  try {
+    const data = await api(`/api/jobs?id=${encodeURIComponent(currentJobId)}`);
+    renderJob(data.job);
+    if (data.job.status === "queued" || data.job.status === "running") {
+      pollTimer = window.setTimeout(pollJob, 1200);
+      return;
+    }
+    window.clearTimeout(pollTimer);
+    setJobBusy(false);
+    await refreshAll();
+    if (data.job.status === "succeeded") {
+      if (["tts", "offline"].includes(data.job.task)) reloadPreview();
+      setStatus(`${data.job.task} 已完成。`, "success");
+    } else {
+      setStatus(`${data.job.task} 失败，请查看日志。`, "error");
+    }
+  } catch (error) {
+    setJobBusy(false);
+    setStatus(error.message, "error");
+  }
+}
+
+async function startJob(task) {
+  const payload = { task };
+  if (task === "tts") {
+    Object.assign(payload, appState?.settings?.tts || {});
+  }
+  if (task === "render") {
+    payload.size = els.renderSizeInput.value;
+    payload.output = els.renderOutputInput.value;
+    payload.capture = "auto";
+    payload.transition = Number(els.renderTransitionInput?.value || 0.4);
+  }
+  setJobBusy(true, task);
+  try {
+    window.clearTimeout(pollTimer);
+    const data = await postJson("/api/jobs", payload);
+    renderJob(data.job);
+    pollTimer = window.setTimeout(pollJob, 500);
+    setStatus(`${task} 已启动。`);
+    return data.job;
+  } catch (error) {
+    setJobBusy(false);
+    setStatus(error.message, "error");
+    return null;
+  }
+}
+
+function bindEvents() {
+  [
+    els.topicInput,
+    els.audienceInput,
+    els.toneInput,
+    els.sceneCountInput,
+    els.notesInput,
+  ]
+    .filter(Boolean)
+    .forEach((input) => {
+      input.addEventListener("input", schedulePromptRefresh);
+    });
+  [els.languageInput, els.aspectRatioInput]
+    .filter(Boolean)
+    .forEach((input) => {
+      input.addEventListener("change", schedulePromptRefresh);
+    });
+  els.aspectRatioInput?.addEventListener("change", () => {
+    if (!importProjectId && els.projectAspectRatioInput) {
+      els.projectAspectRatioInput.value = normalizeAspectRatio(
+        els.aspectRatioInput.value
+      );
+    }
+  });
+  els.projectAspectRatioInput?.addEventListener("change", () => {
+    if (!importProjectId && els.aspectRatioInput) {
+      els.aspectRatioInput.value = normalizeAspectRatio(
+        els.projectAspectRatioInput.value
+      );
+      schedulePromptRefresh();
+    }
+  });
+  els.copyPromptButton?.addEventListener("click", copyPrompt);
+  els.tourButton.addEventListener("click", startTour);
+  document.querySelectorAll("[data-studio-route]").forEach((link) => {
+    link.addEventListener("click", async (event) => {
+      event.preventDefault();
+      if (link.classList.contains("is-disabled")) {
+        setStatus("请先选择一个可编辑项目。", "error");
+        return;
+      }
+      const url = new URL(link.href, window.location.origin);
+      const route = link.dataset.studioRoute || "main";
+      setStudioRoute(route, false, url.search);
+      if (route === "import") await initImportProjectContext();
+    });
+  });
+  document.querySelectorAll("[data-close-dialog]").forEach((button) => {
+    button.addEventListener("click", () => setStudioRoute("main"));
+  });
+  [els.promptDialog, els.importDialog].filter(Boolean).forEach((dialog) => {
+    dialog.addEventListener("cancel", (event) => {
+      event.preventDefault();
+      setStudioRoute("main");
+    });
+  });
+  document.querySelectorAll("dialog").forEach((dialog) => {
+    dialog.addEventListener("close", () => {
+      const toast = dialog.querySelector("#studioToast");
+      if (toast) document.body.append(toast);
+    });
+  });
+  els.sidebarToggle.addEventListener("click", () => {
+    setProjectDrawerOpen(!document.body.classList.contains("projects-open"));
+  });
+  els.projectDrawerBackdrop.addEventListener("click", () =>
+    setProjectDrawerOpen(false)
+  );
+  els.extractButton?.addEventListener("click", () => {
+    setStudioRoute("import");
+    applyRouteFocus("import");
+    extractResponse();
+  });
+  els.validateExtractedButton?.addEventListener("click", () => {
+    setStudioRoute("import");
+    applyRouteFocus("import");
+    validateExtracted();
+  });
+  els.saveProjectButton?.addEventListener("click", saveProject);
+  document.querySelectorAll("[data-import-mode]").forEach((button) => {
+    button.addEventListener("click", () =>
+      setImportMode(button.dataset.importMode)
+    );
+  });
+  [els.directScenesInput, els.directBodyInput]
+    .filter(Boolean)
+    .forEach((input) => {
+      input.addEventListener("input", () => {
+        if (importMode === "direct") extractResponse();
+      });
+    });
+  els.projectEditButton?.addEventListener("click", () => {
+    setProjectEditMode(true);
+  });
+  els.projectEditForm?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    saveProjectMetaEdit();
+  });
+  document.querySelectorAll("[data-close-rename-project]").forEach((button) => {
+    button.addEventListener("click", () => setProjectEditMode(false));
+  });
+  els.renameProjectDialog?.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    setProjectEditMode(false);
+  });
+  els.newWorkspaceProjectButton?.addEventListener(
+    "click",
+    openNewProjectDialog
+  );
+  document.querySelectorAll("[data-close-new-project]").forEach((button) => {
+    button.addEventListener("click", closeNewProjectDialog);
+  });
+  document.querySelectorAll("[data-new-project-route]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const route = button.dataset.newProjectRoute;
+      closeNewProjectDialog();
+      if (route === "prompt") {
+        resetPromptComposer();
+      } else if (els.aspectRatioInput) {
+        els.aspectRatioInput.value = INITIAL_FORM_VALUES.aspectRatio;
+      }
+      resetImportComposer();
+      setStudioRoute(route);
+    });
+  });
+  els.newProjectDialog?.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    closeNewProjectDialog();
+  });
+  els.deleteCurrentProjectButton?.addEventListener("click", () => {
+    const projectId = appState?.activeProject?.id;
+    if (projectId && projectId !== "starter") deleteProject(projectId);
+  });
+  els.openCaptionsButton?.addEventListener("click", async () => {
+    const projectId = appState?.activeProject?.id;
+    if (!projectId) {
+      setStatus("请先选择项目。", "error");
+      return;
+    }
+    await openProjectCaptions(projectId);
+  });
+  els.refreshButton.addEventListener("click", refreshAll);
+  els.refreshOutputsButton.addEventListener("click", refreshAll);
+  els.loadStarterButton.addEventListener("click", () => loadProject("starter"));
+  els.checkButton.addEventListener("click", () => startJob("check"));
+  els.offlineButton.addEventListener("click", () => startJob("offline"));
+  els.ttsButton.addEventListener("click", () => startJob("tts"));
+  els.renderButton.addEventListener("click", () => startJob("render"));
+  els.renderSizeInput.addEventListener("change", () => {
+    els.renderOutputInput.value = outputNameForSize(
+      els.renderOutputInput.value,
+      els.renderSizeInput.value
+    );
+  });
+  els.renderTransitionInput?.addEventListener("change", reloadPreview);
+  els.previewPlayButton?.addEventListener("click", togglePreviewPlayback);
+  els.previewFrame?.addEventListener("load", connectPreviewPlayback);
+  els.previewProgress?.addEventListener("pointerdown", preparePreviewScrub);
+  els.previewProgress?.addEventListener("input", scrubPreview);
+  els.previewProgress?.addEventListener("change", finishPreviewScrub);
+
+  els.projectList.addEventListener("click", (event) => {
+    const remove = event.target.closest("[data-delete-project]");
+    if (remove) {
+      deleteProject(remove.dataset.deleteProject);
+      return;
+    }
+    const card = event.target.closest("[data-project]");
+    if (card) loadProject(card.dataset.project);
+  });
+  els.projectSelect?.addEventListener("change", (event) => {
+    const projectId = event.target.value;
+    if (projectId) loadProject(projectId);
+  });
+  window.addEventListener("popstate", () => applyRouteFocus());
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      setProjectEditMode(false);
+      setProjectDrawerOpen(false);
+    }
+  });
+}
+
+bindEvents();
+if (window.ResizeObserver && els.previewFrameArea) {
+  new ResizeObserver(fitPreviewViewport).observe(els.previewFrameArea);
+}
+setProjectEditMode(false);
+setProjectDrawerOpen(false);
+setStudioRoute(routeKey(), true, window.location.search);
+if (els.promptOutput) refreshPrompt();
+initImportProjectContext();
+refreshAll();
+renderIcons();

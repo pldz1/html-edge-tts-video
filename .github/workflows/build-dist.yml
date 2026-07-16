@@ -1,0 +1,47 @@
+name: Build Demo Artifact
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build-dist:
+    name: Build demo artifact
+    runs-on: ubuntu-latest
+    environment: demo-branch
+
+    env:
+      ARTIFACT_NAME: html-edge-tts-video-demo
+      SERVER_NOTICE_URL: ${{ secrets.SERVER_NOTICE_URL }}
+      SERVER_DEPLOY_TOKEN: ${{ secrets.SERVER_DEPLOY_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate static demo
+        run: |
+          test -f demo/index.html
+          test -f demo/mock-api.js
+          test -f demo/web/studio/index.html
+
+      # upload-artifact creates the downloadable ZIP itself. Using demo/*
+      # makes the files inside demo the archive root, without a demo/ wrapper.
+      - name: Upload demo artifact
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: demo/*
+          if-no-files-found: error
+
+      - name: Notify target server
+        if: env.SERVER_NOTICE_URL != '' && env.SERVER_DEPLOY_TOKEN != ''
+        run: |
+          curl -f -X POST "$SERVER_NOTICE_URL" \
+            -H "X-Deploy-Token: ${SERVER_DEPLOY_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "folder": "html-edge-tts-video",
+              "artifact_url": "${{ steps.upload.outputs.artifact-url }}"
+            }'

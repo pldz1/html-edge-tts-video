@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>字幕编辑器</title>
+  <link rel="icon" href="../shared/favicon.ico" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.6/dist/driver.css" />
+  <link rel="stylesheet" href="./captions.css" />
+  <link rel="stylesheet" href="../shared/app-shell.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/driver.js@1.3.6/dist/driver.js.iife.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/lucide@0.513.0/dist/umd/lucide.min.js"></script>
+  <script defer src="../../mock-api.js"></script>
+  <script defer src="../../bridge.js"></script>
+  <script defer src="./captions.js"></script>
+</head>
+<body>
+  <main class="caption-app">
+    <aside class="caption-sidebar app-sidebar">
+      <div class="sidebar-brand">
+        <img class="brand-mark" src="../shared/app.svg" alt="" />
+        <div><p class="eyebrow">本地视频工厂</p><h1>视频工厂</h1></div>
+      </div>
+      <nav class="product-nav" aria-label="产品工具">
+        <p class="nav-label">产品工具</p>
+        <a href="/studio"><i data-lucide="folder"></i><span>工作室</span></a>
+        <a class="active" href="/captions" aria-current="page"><i data-lucide="captions"></i><span>字幕</span></a>
+        <span class="nav-separator" aria-hidden="true"></span>
+        <a href="/voices"><i data-lucide="audio-lines"></i><span>语音试听</span></a>
+      </nav>
+      <div class="sidebar-spacer"></div>
+      <section class="engine-card">
+        <div class="engine-row"><span id="engineDot" class="status-dot"></span><div><strong>引擎状态</strong><p id="engineStatus">连接中</p></div></div>
+        <small>TTS · LOCAL · AI ENGINE</small>
+      </section>
+    </aside>
+
+    <header class="caption-topbar">
+      <div class="project-title">
+        <i data-lucide="folder"></i><strong id="captionProjectName">字幕编辑器</strong><span class="tool-badge">当前项目</span>
+      </div>
+      <label class="caption-project-picker"><span>项目</span><select id="captionProjectSelect"></select></label>
+      <div class="tool-top-actions">
+        <button id="captionGuideButton" style="display: flex; align-items: center; gap:8px" type="button"><i data-lucide="circle-help"></i><span>指南</span></button>
+        <a id="openSourceButton" class="open-output-button" href="/.local/work/starter/" target="_blank" rel="noreferrer"><i data-lucide="folder-open"></i><span>打开源文件夹</span></a>
+      </div>
+    </header>
+
+    <section class="caption-workspace">
+      <section class="panel scene-panel">
+        <div class="section-heading">
+          <span class="step-number">01</span>
+          <div><h2>字幕片段与场景</h2><p>切换画面并定位对应的字幕场景</p></div>
+          <div class="heading-tools"><label class="search-field"><i data-lucide="search"></i><input id="sceneSearch" type="search" placeholder="搜索场景" /></label></div>
+        </div>
+        <div class="scene-strip-wrap">
+          <button id="sceneScrollLeft" class="round-button" type="button" aria-label="Scroll left"><i data-lucide="chevron-left"></i></button>
+          <div id="sceneList" class="scene-list" aria-live="polite"></div>
+          <button id="sceneScrollRight" class="round-button" type="button" aria-label="Scroll right"><i data-lucide="chevron-right"></i></button>
+        </div>
+        <div class="master-timeline">
+          <div class="timeline-labels"><span id="currentTimeText">00:00.000</span><span id="durationText">00:00.000</span></div>
+          <div class="timeline-track" id="timelineTrack"><div id="timelineProgress" class="timeline-progress"></div><div id="timelineCues" class="timeline-cues"></div><button id="timelinePlayhead" class="timeline-playhead" type="button" aria-label="Current time"></button></div>
+          <div class="timeline-actions"><button id="timelinePlayButton" class="icon-button" type="button"><i data-lucide="play"></i></button><span><i class="legend-dot cue-dot"></i>字幕片段</span><span><i class="legend-dot current-dot"></i>当前片段</span><div></div><button id="previousSceneButton" type="button"><i data-lucide="arrow-left"></i>上一场景</button><button id="nextSceneButton" type="button">下一场景<i data-lucide="arrow-right"></i></button></div>
+        </div>
+      </section>
+
+      <section class="panel preview-panel">
+        <div class="section-heading"><span class="step-number">02</span><div><h2>画面预览</h2><p>在当前画面中预览字幕</p></div></div>
+        <div class="preview-frame-wrap">
+          <div id="previewViewport" class="preview-viewport">
+            <iframe id="previewFrame" title="Current video visual" src="about:blank"></iframe>
+            <span id="sceneBadge" class="scene-badge">Scene --</span>
+            <div id="liveCaption" class="live-caption">字幕将在此处预览</div>
+          </div>
+        </div>
+        <div class="preview-controls">
+          <button id="previewPlayButton" type="button"><i data-lucide="play"></i><span>播放</span></button>
+          <button id="previousCueButton" type="button"><i data-lucide="arrow-up"></i><span>上一片段</span></button>
+          <button id="nextCueButton" type="button"><i data-lucide="arrow-down"></i><span>下一片段</span></button>
+          <button id="locateCueButton" type="button"><i data-lucide="locate-fixed"></i><span>定位当前片段</span></button>
+        </div>
+        <audio id="narrationAudio" preload="metadata"></audio>
+      </section>
+
+      <section class="panel cue-list-panel">
+        <div class="section-heading list-heading">
+          <span class="step-number">03</span><div><h2>字幕列表</h2><p>浏览并快速搜索全部字幕片段</p></div>
+          <div class="list-stats"><strong id="cueCount">-- cues</strong><span id="totalDuration">--</span></div>
+        </div>
+        <div class="list-toolbar"><label class="search-field"><i data-lucide="search"></i><input id="cueSearch" type="search" placeholder="搜索字幕" /></label><button id="filterSceneButton" type="button"><i data-lucide="list-filter"></i><span>当前场景</span></button></div>
+        <div class="cue-table-head"><span>#</span><span>开始</span><span>结束</span><span>字幕</span><span>状态</span></div>
+        <div id="cueList" class="cue-list" aria-live="polite"></div>
+        <div class="list-footer"><button id="exportButton" type="button"><i data-lucide="upload"></i><span>导出 SRT</span></button><span>共 <strong id="footerCueCount">--</strong> 条字幕</span></div>
+      </section>
+
+      <section class="panel cue-detail">
+        <div class="section-heading editor-heading"><span class="step-number">04</span><div><h2>字幕编辑器</h2><p>编辑当前字幕的文字与时间</p></div><button id="jumpListButton" type="button"><i data-lucide="list"></i><span>前往列表</span></button></div>
+        <div class="timing-editor">
+          <label>开始时间<span><input id="cueStart" type="number" min="0" step="0.01" /><button id="startEarlierButton" type="button">−0.1 秒</button><button id="startLaterButton" type="button">+0.1 秒</button></span></label>
+          <label>结束时间<span><input id="cueEnd" type="number" min="0" step="0.01" /><button id="endEarlierButton" type="button">−0.1 秒</button><button id="endLaterButton" type="button">+0.1 秒</button></span></label>
+          <label>时长<input id="cueDuration" type="text" readonly /></label>
+        </div>
+        <label class="caption-text-label">字幕文字<textarea id="cueText" maxlength="200" spellcheck="false"></textarea><span id="textCount">0 / 200</span></label>
+        <div class="editor-options"><label><span>自动换行</span><input id="autoWrapToggle" type="checkbox" checked /></label><span>成片会自动缩放过长字幕，确保文字完整显示</span></div>
+        <div class="detail-actions"><span id="sourceSaveHint" class="source-save-hint">保存后将直接写入项目源文件</span><button id="restoreButton" type="button"><i data-lucide="rotate-ccw"></i><span>恢复生成的文字</span></button><button id="saveButton" class="primary-button" type="button"><i data-lucide="save"></i><span>保存到源文件</span></button></div>
+      </section>
+
+    </section>
+
+    <div id="notification" class="notification" role="status" aria-live="polite"></div>
+    <dialog id="captionGuideDialog" class="tool-guide-dialog" aria-labelledby="captionGuideTitle">
+      <div class="guide-dialog-heading"><div><p>字幕编辑器指南</p><h2 id="captionGuideTitle">如何编辑字幕</h2></div><button type="button" data-close-guide aria-label="关闭"><i data-lucide="x"></i></button></div>
+      <ol><li><strong>先生成旁白</strong><span>编辑字幕前，请先在工作室中运行“生成旁白”，它会创建时间轴。</span></li><li><strong>定位字幕</strong><span>从场景或字幕列表选择片段，即可在预览中定位。</span></li><li><strong>编辑并保存</strong><span>编辑文字或时间，检查预览后保存 captions.json。旁白音频不会改变。</span></li></ol>
+    </dialog>
+  </main>
+</body>
+</html>
